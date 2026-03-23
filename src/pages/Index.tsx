@@ -346,226 +346,128 @@ export default function Index() {
           </p>
         </div>
 
-        {/* Main Actions Grid */}
+        {/* Main Actions Grid — Admin: R&A, Projekte, Material, Materialien, Kunden, Admin, Zeit, Stunden */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-          {/* Zeiterfassung - Für alle */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/time-tracking")}
-          >
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
-              <CardDescription className="text-sm">
-                Stunden auf Projekte buchen
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm">Stunden erfassen</Button>
-            </CardContent>
-          </Card>
 
-          {/* Projekte - Für alle */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/projects")}
-          >
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                <FolderKanban className="h-6 w-6 text-accent" />
-              </div>
-              <CardTitle className="text-lg sm:text-xl">Projekte</CardTitle>
-              <CardDescription className="text-sm">
-                {isAdmin ? "Bauvorhaben & Dokumentation" : "Pläne, Bilder, Berichte, etc. hochladen"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button>
-            </CardContent>
-          </Card>
-
-          {/* Admin: Rechnungen & Angebote — direkt nach Projekte */}
+          {/* 1. Admin: Rechnungen & Angebote */}
           {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/invoices")}
-            >
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/invoices")}>
               <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Receipt className="h-6 w-6 text-primary" />
-                </div>
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Receipt className="h-6 w-6 text-primary" /></div>
                 <CardTitle className="text-lg sm:text-xl">Rechnungen & Angebote</CardTitle>
-                <CardDescription className="text-sm">
-                  Rechnungen und Angebote erstellen & verwalten
-                </CardDescription>
+                <CardDescription className="text-sm">Rechnungen und Angebote erstellen & verwalten</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Rechnungen öffnen</Button>
-              </CardContent>
+              <CardContent><Button className="w-full" size="sm">Rechnungen öffnen</Button></CardContent>
             </Card>
           )}
 
-          {/* Material entnehmen - Für alle */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/material")}
-          >
+          {/* 2. Projekte - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/projects")}>
             <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <BoxSelect className="h-6 w-6 text-orange-600" />
-              </div>
+              <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center"><FolderKanban className="h-6 w-6 text-accent" /></div>
+              <CardTitle className="text-lg sm:text-xl">Projekte</CardTitle>
+              <CardDescription className="text-sm">{isAdmin ? "Bauvorhaben & Dokumentation" : "Pläne, Bilder, Berichte, etc. hochladen"}</CardDescription>
+            </CardHeader>
+            <CardContent><Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button></CardContent>
+          </Card>
+
+          {/* 3. Material entnehmen - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/material")}>
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><BoxSelect className="h-6 w-6 text-orange-600" /></div>
               <CardTitle className="text-lg sm:text-xl">Material entnehmen</CardTitle>
-              <CardDescription className="text-sm">
-                Material mitnehmen & zurückbringen
-              </CardDescription>
+              <CardDescription className="text-sm">Material mitnehmen & zurückbringen</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Material buchen</Button>
-            </CardContent>
+            <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Material buchen</Button></CardContent>
           </Card>
 
-          {/* Meine Stunden - Für alle */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/my-hours")}
-          >
+          {/* 4. Admin: Materialien */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/materials")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Package className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Materialien</CardTitle>
+                <CardDescription className="text-sm">Materialstamm & Preislisten verwalten</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm" variant="outline">Materialien öffnen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 5. Admin: Kunden */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/customers")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><BookUser className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Kunden</CardTitle>
+                <CardDescription className="text-sm">Kundendatenbank verwalten</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm" variant="outline">Kunden öffnen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 6. Admin: Admin-Bereich */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/admin")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Admin-Bereich</CardTitle>
+                <CardDescription className="text-sm">Benutzerverwaltung, Stunden & Verwaltung</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm" variant="outline">Verwalten</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 7. Zeiterfassung - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
             <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <BarChart3 className="h-6 w-6 text-primary" />
-              </div>
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
+              <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
+              <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
+            </CardHeader>
+            <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
+          </Card>
+
+          {/* 8. Meine Stunden - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/my-hours")}>
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><BarChart3 className="h-6 w-6 text-primary" /></div>
               <CardTitle className="text-lg sm:text-xl">Meine Stunden</CardTitle>
-              <CardDescription className="text-sm">
-                {isAdmin ? "Eigene gebuchte Zeiten anzeigen & bearbeiten" : "Übersicht gebuchter Zeiten"}
-              </CardDescription>
+              <CardDescription className="text-sm">{isAdmin ? "Eigene gebuchte Zeiten" : "Übersicht gebuchter Zeiten"}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm" variant="outline">Anzeigen</Button>
-            </CardContent>
+            <CardContent><Button className="w-full" size="sm" variant="outline">Anzeigen</Button></CardContent>
           </Card>
 
-          {/* Regieberichte - Für alle */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-            onClick={() => navigate("/disturbances")}
-          >
+          {/* Regiearbeiten - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/disturbances")}>
             <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Zap className="h-6 w-6 text-primary" />
-              </div>
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Zap className="h-6 w-6 text-primary" /></div>
               <CardTitle className="text-lg sm:text-xl">Regiearbeiten</CardTitle>
-              <CardDescription className="text-sm">
-                Service-Einsätze dokumentieren
-              </CardDescription>
+              <CardDescription className="text-sm">Service-Einsätze dokumentieren</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button>
-            </CardContent>
+            <CardContent><Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button></CardContent>
           </Card>
 
           {/* Meine Dokumente - Für Mitarbeiter */}
           {!isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/my-documents")}
-            >
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/my-documents")}>
               <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-accent" />
-                </div>
+                <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center"><FileText className="h-6 w-6 text-accent" /></div>
                 <CardTitle className="text-lg sm:text-xl">Meine Dokumente</CardTitle>
-                <CardDescription className="text-sm">
-                  Lohnzettel & Krankmeldungen
-                </CardDescription>
+                <CardDescription className="text-sm">Lohnzettel & Krankmeldungen</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Dokumente öffnen</Button>
-              </CardContent>
+              <CardContent><Button className="w-full" size="sm" variant="outline">Dokumente öffnen</Button></CardContent>
             </Card>
           )}
 
           {/* Admin: Stundenauswertung */}
           {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/hours-report")}
-            >
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/hours-report")}>
               <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <BarChart3 className="h-6 w-6 text-primary" />
-                </div>
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><BarChart3 className="h-6 w-6 text-primary" /></div>
                 <CardTitle className="text-lg sm:text-xl">Stundenauswertung</CardTitle>
-                <CardDescription className="text-sm">
-                  Auswertung der Projektstunden
-                </CardDescription>
+                <CardDescription className="text-sm">Auswertung der Projektstunden</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm">Auswerten</Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Admin: Materialien */}
-          {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/materials")}
-            >
-              <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Package className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg sm:text-xl">Materialien</CardTitle>
-                <CardDescription className="text-sm">
-                  Materialstamm & Preislisten verwalten
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Materialien öffnen</Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Admin: Kunden */}
-          {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/customers")}
-            >
-              <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <BookUser className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg sm:text-xl">Kunden</CardTitle>
-                <CardDescription className="text-sm">
-                  Kundendatenbank verwalten
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Kunden öffnen</Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Admin: Admin-Bereich */}
-          {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-              onClick={() => navigate("/admin")}
-            >
-              <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg sm:text-xl">Admin-Bereich</CardTitle>
-                <CardDescription className="text-sm">
-                  Benutzerverwaltung, Stunden & Verwaltung
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" size="sm" variant="outline">Verwalten</Button>
-              </CardContent>
+              <CardContent><Button className="w-full" size="sm">Auswerten</Button></CardContent>
             </Card>
           )}
         </div>
