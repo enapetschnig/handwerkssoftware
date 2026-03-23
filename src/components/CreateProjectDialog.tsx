@@ -105,25 +105,46 @@ export function CreateProjectDialog({
 
       let customerId = selectedCustomerId;
 
-      // Create new customer if no existing selected
+      // Find or create customer (duplicate protection by name)
       if (!customerId && customerName.trim()) {
-        const { data: newCustomer, error: custErr } = await supabase
+        // Check if customer with same name already exists
+        const { data: existing } = await supabase
           .from("customers")
-          .insert({
-            user_id: user.id,
-            name: customerName.trim(),
-            adresse: adresse.trim() || null,
-            plz: plz.trim() || null,
-            ort: ort.trim() || null,
-            land: land.trim() || null,
-            email: email.trim() || null,
-            telefon: telefon.trim() || null,
-            uid_nummer: uidNummer.trim() || null,
-          })
           .select("id")
-          .single();
-        if (custErr) throw custErr;
-        customerId = newCustomer.id;
+          .ilike("name", customerName.trim())
+          .limit(1)
+          .maybeSingle();
+
+        if (existing) {
+          customerId = existing.id;
+          // Update existing customer with new data if provided
+          await supabase.from("customers").update({
+            adresse: adresse.trim() || undefined,
+            plz: plz.trim() || undefined,
+            ort: ort.trim() || undefined,
+            email: email.trim() || undefined,
+            telefon: telefon.trim() || undefined,
+            uid_nummer: uidNummer.trim() || undefined,
+          }).eq("id", existing.id);
+        } else {
+          const { data: newCustomer, error: custErr } = await supabase
+            .from("customers")
+            .insert({
+              user_id: user.id,
+              name: customerName.trim(),
+              adresse: adresse.trim() || null,
+              plz: plz.trim() || null,
+              ort: ort.trim() || null,
+              land: land.trim() || null,
+              email: email.trim() || null,
+              telefon: telefon.trim() || null,
+              uid_nummer: uidNummer.trim() || null,
+            })
+            .select("id")
+            .single();
+          if (custErr) throw custErr;
+          customerId = newCustomer.id;
+        }
       }
 
       const { data: newProject, error } = await supabase

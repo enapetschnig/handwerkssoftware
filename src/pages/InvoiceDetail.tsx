@@ -402,21 +402,41 @@ export default function InvoiceDetail() {
             uid_nummer: form.kunde_uid || null,
           }).eq("id", customerId);
         } else {
-          const { data: newCust } = await supabase.from("customers").insert({
-            user_id: user.id,
-            name: form.kunde_name,
-            adresse: form.kunde_adresse || null,
-            plz: form.kunde_plz || null,
-            ort: form.kunde_ort || null,
-            land: form.kunde_land || null,
-            email: form.kunde_email || null,
-            telefon: form.kunde_telefon || null,
-            uid_nummer: form.kunde_uid || null,
-          }).select("id").single();
-          if (newCust) {
-            customerId = newCust.id;
-            updateField("customer_id", customerId);
+          // Check for existing customer with same name (duplicate protection)
+          const { data: existingCust } = await supabase
+            .from("customers")
+            .select("id")
+            .ilike("name", form.kunde_name.trim())
+            .limit(1)
+            .maybeSingle();
+
+          if (existingCust) {
+            customerId = existingCust.id;
+            // Update existing customer data
+            await supabase.from("customers").update({
+              adresse: form.kunde_adresse || null,
+              plz: form.kunde_plz || null,
+              ort: form.kunde_ort || null,
+              land: form.kunde_land || null,
+              email: form.kunde_email || null,
+              telefon: form.kunde_telefon || null,
+              uid_nummer: form.kunde_uid || null,
+            }).eq("id", existingCust.id);
+          } else {
+            const { data: newCust } = await supabase.from("customers").insert({
+              user_id: user.id,
+              name: form.kunde_name,
+              adresse: form.kunde_adresse || null,
+              plz: form.kunde_plz || null,
+              ort: form.kunde_ort || null,
+              land: form.kunde_land || null,
+              email: form.kunde_email || null,
+              telefon: form.kunde_telefon || null,
+              uid_nummer: form.kunde_uid || null,
+            }).select("id").single();
+            if (newCust) customerId = newCust.id;
           }
+          updateField("customer_id", customerId);
         }
         fetchCustomers();
       }

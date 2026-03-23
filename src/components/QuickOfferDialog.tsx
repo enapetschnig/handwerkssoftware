@@ -162,14 +162,21 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Nicht angemeldet");
 
-      // Get or create customer
+      // Get or create customer (with duplicate protection)
       let customerId = selectedCustomer?.id || null;
       if (!customerId && newCustomerName.trim()) {
-        const { data: newCust } = await supabase.from("customers").insert({
-          user_id: user.id,
-          name: newCustomerName.trim(),
-        }).select("id").single();
-        if (newCust) customerId = newCust.id;
+        // Check if customer already exists
+        const { data: existingCust } = await supabase
+          .from("customers").select("id").ilike("name", newCustomerName.trim()).limit(1).maybeSingle();
+        if (existingCust) {
+          customerId = existingCust.id;
+        } else {
+          const { data: newCust } = await supabase.from("customers").insert({
+            user_id: user.id,
+            name: newCustomerName.trim(),
+          }).select("id").single();
+          if (newCust) customerId = newCust.id;
+        }
       }
 
       // Generate offer number
