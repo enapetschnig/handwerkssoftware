@@ -150,12 +150,12 @@ export async function generateInvoicePdf(
 
   const tableFoot: string[][] = [];
   if (rabattWert > 0) {
-    tableFoot.push(["", "", "", "", "Zwischensumme", fmtCurrency(positionenNetto)]);
-    tableFoot.push(["", "", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, `- ${fmtCurrency(rabattWert)}`]);
+    tableFoot.push(["", "", "", "Zwischensumme", "", fmtCurrency(positionenNetto)]);
+    tableFoot.push(["", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, "", `- ${fmtCurrency(rabattWert)}`]);
   }
-  tableFoot.push(["", "", "", "", "Nettobetrag", fmtCurrency(Number(invoice.netto_summe))]);
-  tableFoot.push(["", "", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, fmtCurrency(Number(invoice.mwst_betrag))]);
-  tableFoot.push(["", "", "", "", "GESAMTBETRAG", fmtCurrency(Number(invoice.brutto_summe))]);
+  tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+  tableFoot.push(["", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag))]);
+  tableFoot.push(["", "", "", "Gesamtbetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
 
   const footerMargin = 28;
 
@@ -201,8 +201,14 @@ export async function generateInvoicePdf(
     },
     didParseCell: (data: any) => {
       if (data.section === "foot") {
-        const cellText = data.cell.raw || "";
-        const rowLabel = data.row.raw?.[4] || "";
+        const rowLabel = data.row.raw?.[3] || "";
+
+        // Footer labels in column 3 (Beschreibung) — right-aligned
+        if (data.column.index === 3) {
+          data.cell.styles.halign = "right";
+          data.cell.styles.fontStyle = "normal";
+          data.cell.styles.fontSize = 9;
+        }
 
         // First footer row: thick line above as separator from positions
         if (data.row.index === 0) {
@@ -210,8 +216,8 @@ export async function generateInvoicePdf(
           data.cell.styles.lineColor = [60, 60, 60];
         }
 
-        // GESAMTBETRAG row: bold, larger, red line above
-        if (rowLabel === "GESAMTBETRAG") {
+        // Gesamtbetrag row: bold, larger, red line above
+        if (rowLabel === "Gesamtbetrag") {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 11;
           data.cell.styles.textColor = [30, 30, 30];
