@@ -174,7 +174,7 @@ export default function InvoiceDetail() {
     nummer: "",
     laufnummer: 0,
     jahr: new Date().getFullYear(),
-    status: "entwurf",
+    status: defaultTyp === "rechnung" ? "offen" : "entwurf",
     kunde_name: "",
     kunde_adresse: "",
     kunde_plz: "",
@@ -698,7 +698,7 @@ export default function InvoiceDetail() {
           nummer,
           laufnummer,
           jahr: new Date().getFullYear(),
-          status: "entwurf",
+          status: form.typ === "rechnung" ? "offen" : "entwurf",
           kunde_name: form.kunde_name,
           kunde_adresse: form.kunde_adresse || null,
           kunde_plz: form.kunde_plz || null,
@@ -767,7 +767,7 @@ export default function InvoiceDetail() {
           nummer,
           laufnummer,
           jahr: new Date().getFullYear(),
-          status: "entwurf",
+          status: "offen",
           kunde_name: form.kunde_name,
           kunde_adresse: form.kunde_adresse || null,
           kunde_plz: form.kunde_plz || null,
@@ -1459,6 +1459,28 @@ export default function InvoiceDetail() {
             </Button>
             {canCancel && (
               <Button variant="destructive" onClick={() => setStornoDialogOpen(true)}>Stornieren</Button>
+            )}
+            {form.status === "storniert" && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
+                try {
+                  const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+                  const logoResp = await fetch("/logo-tilger.png");
+                  const logoBlob = await logoResp.blob();
+                  const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+                  const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
+                  if (!inv?.storno_nummer) return;
+                  const blob = generateStornoPdf(
+                    { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
+                    inv.storno_nummer, inv.storno_datum || form.datum, inv.storno_grund || "",
+                    undefined, logoUri
+                  );
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a"); a.href = url; a.download = `Storno_${inv.storno_nummer}.pdf`; a.click(); URL.revokeObjectURL(url);
+                } catch (e) { console.error(e); }
+              }}>
+                <Download className="w-4 h-4" />
+                Storno-Beleg
+              </Button>
             )}
             {isLocked && form.typ === "angebot" && (
               <Button variant="destructive" onClick={async () => {
