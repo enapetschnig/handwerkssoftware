@@ -155,7 +155,7 @@ export async function generateInvoicePdf(
   }
   tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
   tableFoot.push(["", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag))]);
-  tableFoot.push(["", "", "", "Gesamtbetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+  tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
 
   const footerMargin = 28;
 
@@ -216,8 +216,8 @@ export async function generateInvoicePdf(
           data.cell.styles.lineColor = [60, 60, 60];
         }
 
-        // Gesamtbetrag row: bold, larger, red line above
-        if (rowLabel === "Gesamtbetrag") {
+        // Bruttobetrag row: bold, larger, red line above
+        if (rowLabel === "Bruttobetrag") {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 11;
           data.cell.styles.textColor = [30, 30, 30];
