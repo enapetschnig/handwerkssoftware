@@ -207,20 +207,75 @@ export default function Invoices() {
     e.stopPropagation();
     setDownloadingId(invoiceId);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
-        body: { invoiceId },
-      });
-      if (error) throw error;
-      const html = decodeURIComponent(escape(atob(data.pdf)));
+      // Load invoice + items + bank data
+      const [{ data: inv }, { data: invItems }, { data: bankSettings }] = await Promise.all([
+        supabase.from("invoices").select("*").eq("id", invoiceId).single(),
+        supabase.from("invoice_items").select("*").eq("invoice_id", invoiceId).order("position"),
+        supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]),
+      ]);
+      if (!inv) throw new Error("Rechnung nicht gefunden");
 
-      // Use browser print — the only reliable way for proper page breaks,
-      // repeating table headers, and fixed footers
-      const win = window.open("", "_blank");
-      if (win) {
-        win.document.write(html);
-        win.document.close();
-        setTimeout(() => win.print(), 500);
+      const bank = { kontoinhaber: "Gottfried Tilger", iban: bankIban, bic: bankBic };
+      if (bankSettings) {
+        bankSettings.forEach((s: any) => {
+          if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
+          if (s.key === "bank_iban") bank.iban = s.value;
+          if (s.key === "bank_bic") bank.bic = s.value;
+        });
       }
+
+      // Load logo
+      let logoUri: string | undefined;
+      try {
+        const resp = await fetch("/logo-tilger.png");
+        const blob = await resp.blob();
+        logoUri = await new Promise<string>((resolve) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result as string);
+          r.readAsDataURL(blob);
+        });
+      } catch {}
+
+      // QR code for invoices
+      let qrUri: string | undefined;
+      const { generateEpcQrCode } = await import("@/lib/invoiceHtml");
+      if (inv.typ === "rechnung" && Number(inv.brutto_summe) > 0) {
+        try { qrUri = await generateEpcQrCode(Number(inv.brutto_summe), inv.nummer || "", bank); } catch {}
+      }
+
+      const { generateInvoicePdf } = await import("@/lib/pdfGenerator");
+      const pdfBlob = await generateInvoicePdf(
+        {
+          typ: inv.typ, nummer: inv.nummer, status: inv.status,
+          kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
+          kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
+          kunde_land: inv.kunde_land, kunde_email: inv.kunde_email,
+          kunde_telefon: inv.kunde_telefon, kunde_uid: inv.kunde_uid,
+          datum: inv.datum, faellig_am: inv.faellig_am,
+          leistungsdatum: inv.leistungsdatum, gueltig_bis: inv.gueltig_bis,
+          zahlungsbedingungen: inv.zahlungsbedingungen, notizen: inv.notizen,
+          netto_summe: Number(inv.netto_summe), mwst_satz: Number(inv.mwst_satz),
+          mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
+          bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
+          rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
+        },
+        (invItems || []).map((it: any) => ({
+          position: it.position, beschreibung: it.beschreibung,
+          menge: Number(it.menge), einheit: it.einheit || "Stk.",
+          einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
+        })),
+        bank, logoUri, qrUri
+      );
+
+      // Direct download
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nummer}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error("PDF download error:", err);
       toast({ variant: "destructive", title: "Fehler", description: "PDF konnte nicht erstellt werden" });

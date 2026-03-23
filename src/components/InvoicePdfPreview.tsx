@@ -11,6 +11,29 @@ import {
   type InvoiceHtmlItem,
   type BankData,
 } from "@/lib/invoiceHtml";
+import { generateInvoicePdf } from "@/lib/pdfGenerator";
+
+// Logo as base64 for jsPDF (loaded once)
+let cachedLogoDataUri: string | null = null;
+
+async function getLogoDataUri(): Promise<string | undefined> {
+  if (cachedLogoDataUri) return cachedLogoDataUri;
+  try {
+    const response = await fetch("/logo-tilger.png");
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        cachedLogoDataUri = reader.result as string;
+        resolve(cachedLogoDataUri!);
+      };
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
 
 interface InvoicePdfPreviewProps {
   open: boolean;
@@ -37,9 +60,9 @@ export function InvoicePdfPreview({
   items,
   fileName,
 }: InvoicePdfPreviewProps) {
-  const [loading, setLoading] = useState(false);
-  const [htmlContent, setHtmlContent] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [generating, setGenerating] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const formDataRef = useRef(formData);
   const itemsRef = useRef(items);
@@ -47,28 +70,32 @@ export function InvoicePdfPreview({
   itemsRef.current = items;
 
   useEffect(() => {
+    return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
+  }, [pdfUrl]);
+
+  useEffect(() => {
     if (!open) {
-      setHtmlContent(null);
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(null);
+      setError(null);
       return;
     }
-    generateHtml();
+    generatePdf();
   }, [open, invoiceId]);
 
-  // Regenerate when saved (nummer updates)
   useEffect(() => {
-    if (open && saved) generateHtml();
+    if (open && saved) generatePdf();
   }, [saved, formData?.nummer]);
 
-  const generateHtml = async () => {
-    setLoading(true);
+  const generatePdf = async () => {
+    setGenerating(true);
+    setError(null);
     try {
       // Load bank data
       let bankData: BankData = { ...DEFAULT_BANK };
       try {
         const { data: bankSettings } = await supabase
-          .from("app_settings")
-          .select("key, value")
-          .in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+          .from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
         if (bankSettings) {
           bankSettings.forEach((row: any) => {
             if (row.key === "bank_kontoinhaber") bankData.kontoinhaber = row.value;
@@ -78,65 +105,62 @@ export function InvoicePdfPreview({
         }
       } catch {}
 
-      let html: string;
-      if (formDataRef.current && itemsRef.current) {
-        let qrDataUri: string | undefined;
-        if (formDataRef.current.typ === "rechnung" && formDataRef.current.brutto_summe > 0) {
-          try {
-            qrDataUri = await generateEpcQrCode(
-              formDataRef.current.brutto_summe,
-              formDataRef.current.nummer || "Rechnung",
-              bankData
-            );
-          } catch {}
-        }
-        html = buildInvoiceHtml(formDataRef.current, itemsRef.current, qrDataUri, bankData);
-      } else if (invoiceId) {
-        const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", { body: { invoiceId } });
-        if (error) throw error;
-        html = decodeURIComponent(escape(atob(data.pdf)));
-      } else {
-        setLoading(false);
+      if (!formDataRef.current || !itemsRef.current) {
+        setGenerating(false);
         return;
       }
 
-      setHtmlContent(html);
-    } catch (err) {
-      console.error("Preview error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const logoUri = await getLogoDataUri();
 
-  const handlePrint = () => {
-    if (!htmlContent) return;
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(htmlContent);
-      win.document.close();
-      setTimeout(() => win.print(), 500);
+      // QR code for invoices
+      let qrDataUri: string | undefined;
+      if (formDataRef.current.typ === "rechnung" && formDataRef.current.brutto_summe > 0) {
+        try {
+          qrDataUri = await generateEpcQrCode(
+            formDataRef.current.brutto_summe,
+            formDataRef.current.nummer || "Rechnung",
+            bankData
+          );
+        } catch {}
+      }
+
+      const blob = await generateInvoicePdf(
+        formDataRef.current,
+        itemsRef.current,
+        bankData,
+        logoUri,
+        qrDataUri
+      );
+
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(URL.createObjectURL(blob));
+    } catch (err: any) {
+      console.error("PDF error:", err);
+      setError(`PDF-Fehler: ${err?.message || "Unbekannt"}`);
+    } finally {
+      setGenerating(false);
     }
   };
 
   const handleDownload = () => {
-    // "Save as PDF" via print dialog — the only reliable way to get
-    // proper page breaks, repeating table headers, and fixed footers
-    handlePrint();
+    if (!pdfUrl) return;
+    const a = document.createElement("a");
+    a.href = pdfUrl;
+    a.download = `${fileName || "Dokument"}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handlePrint = () => {
+    if (!pdfUrl) return;
+    const win = window.open(pdfUrl);
+    if (win) {
+      win.addEventListener("load", () => setTimeout(() => win.print(), 300));
+    }
   };
 
   const mustSaveFirst = onSave && !saved;
-
-  // For the preview iframe, inject CSS to simulate A4 pages on screen
-  const previewHtml = htmlContent ? htmlContent.replace(
-    "</style>",
-    `
-    @media screen {
-      html, body { background: #d1d5db !important; }
-      .page-wrap { background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.15); margin: 20px auto; padding: 15mm !important; max-width: 210mm; min-height: 297mm; }
-      .footer { position: relative !important; bottom: auto !important; margin-top: 30px; }
-    }
-    </style>`
-  ) : null;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { saved && onSavedClose ? onSavedClose() : onClose(); } }}>
@@ -151,18 +175,16 @@ export function InvoicePdfPreview({
                   <Save className="h-4 w-4" />
                   {saving ? "Speichert..." : "Speichern"}
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  Zuerst speichern, dann herunterladen
-                </span>
+                <span className="text-sm text-muted-foreground">Zuerst speichern, dann herunterladen</span>
               </>
             )}
             {!mustSaveFirst && (
               <>
-                <Button size="sm" onClick={handleDownload} disabled={!htmlContent} className="gap-2">
+                <Button size="sm" onClick={handleDownload} disabled={!pdfUrl} className="gap-2">
                   <Download className="h-4 w-4" />
-                  Als PDF speichern
+                  PDF herunterladen
                 </Button>
-                <Button variant="outline" size="sm" onClick={handlePrint} disabled={!htmlContent} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handlePrint} disabled={!pdfUrl} className="gap-2">
                   <Printer className="h-4 w-4" />
                   Drucken
                 </Button>
@@ -172,30 +194,33 @@ export function InvoicePdfPreview({
           <div>
             {saved && onSavedClose ? (
               <Button variant="outline" size="sm" onClick={onSavedClose}>
-                <X className="h-4 w-4 mr-2" />
-                Zurück zur Übersicht
+                <X className="h-4 w-4 mr-2" /> Zurück zur Übersicht
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={onClose}>
-                <X className="h-4 w-4 mr-2" />
-                Schließen
+                <X className="h-4 w-4 mr-2" /> Schließen
               </Button>
             )}
           </div>
         </div>
 
         <div className="flex-1 overflow-hidden bg-gray-300">
-          {loading ? (
+          {generating ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">PDF wird erstellt...</p>
+              </div>
             </div>
-          ) : previewHtml ? (
-            <iframe
-              ref={iframeRef}
-              srcDoc={previewHtml}
-              className="w-full h-full border-0"
-              title="Invoice Preview"
-            />
+          ) : error ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <p className="text-sm text-destructive mb-2">{error}</p>
+                <Button variant="outline" size="sm" onClick={generatePdf}>Nochmal versuchen</Button>
+              </div>
+            </div>
+          ) : pdfUrl ? (
+            <iframe src={pdfUrl} className="w-full h-full border-0" title="PDF Preview" />
           ) : null}
         </div>
       </DialogContent>
