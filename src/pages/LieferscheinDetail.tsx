@@ -145,6 +145,19 @@ export default function LieferscheinDetail() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUserId || !formMaterial.trim() || !id) return;
+
+    // Validate: can't return more than what was taken
+    if (formTyp === "rueckgabe" && formMenge.trim()) {
+      const returnAmount = parseFloat(formMenge) || 0;
+      const materialKey = formMaterial.toLowerCase().trim();
+      const s = summary.find(s => s.material.toLowerCase().trim() === materialKey);
+      const maxReturn = s ? s.verbraucht : 0;
+      if (returnAmount > maxReturn) {
+        toast({ variant: "destructive", title: "Zu viel", description: `Maximal ${maxReturn} ${formEinheit} können zurückgegeben werden (${s?.entnommen || 0} entnommen, ${s?.zurueck || 0} bereits zurück)` });
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     const { error } = await supabase.from("material_entries").insert({
@@ -311,7 +324,17 @@ export default function LieferscheinDetail() {
             }))}
             onAccept={async (voiceItems) => {
               if (!currentUserId || !id) return;
+              let skipped = 0;
               for (const item of voiceItems) {
+                // Validate return amount
+                if (voiceTyp === "rueckgabe") {
+                  const s = summary.find(s => s.material.toLowerCase().trim() === item.material.toLowerCase().trim());
+                  const maxReturn = s ? s.verbraucht : 0;
+                  if (item.menge > maxReturn) {
+                    skipped++;
+                    continue;
+                  }
+                }
                 await supabase.from("material_entries").insert({
                   lieferschein_id: id,
                   project_id: null,
@@ -341,11 +364,10 @@ export default function LieferscheinDetail() {
         {summary.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Materialverbrauch
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Package className="h-4 w-4" />
+                Materialübersicht
               </CardTitle>
-              <CardDescription>Zusammenfassung: Entnommen − Zurückgebracht = Verbraucht</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -397,17 +419,16 @@ export default function LieferscheinDetail() {
           </Card>
         )}
 
-        {/* Einzelne Einträge */}
+        {/* Einzelne Buchungen — kompakter */}
         <Card>
-          <CardHeader>
-            <CardTitle>Einträge</CardTitle>
-            <CardDescription>{entries.length} Materialeinträge</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Buchungen ({entries.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {entries.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-muted-foreground">Noch keine Einträge — entnimm Material oben</p>
+              <div className="text-center py-6">
+                <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Noch keine Einträge</p>
               </div>
             ) : (
               <div className="space-y-2">

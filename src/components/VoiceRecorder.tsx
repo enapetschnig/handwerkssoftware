@@ -143,12 +143,12 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
       {/* Info - always show hint and positions during idle/recording/processing */}
       {(state === "idle" || state === "recording" || state === "processing") && (
         <div className="space-y-2">
-          {state === "idle" && (
+          {(state === "idle" || state === "recording") && (
             <div className="text-xs text-muted-foreground bg-muted/50 rounded p-3">
               {typ === "entnahme" ? (
-                <>Drücke auf Aufnehmen und sag z.B.: <strong>"Ich habe 40 Quadratmeter Fliesen 60x60 und 5 Sack Fliesenkleber mitgenommen"</strong></>
+                <>Sag z.B.: <strong>"Ich habe 40 Quadratmeter Fliesen 60x60 und 5 Sack Fliesenkleber mitgenommen"</strong></>
               ) : (
-                <>Drücke auf Aufnehmen und sag z.B.: <strong>"Position 1, davon gebe ich 10 Stück zurück"</strong> oder <strong>"Ich bringe 5 Quadratmeter Fliesen zurück"</strong></>
+                <>Sag z.B.: <strong>"Position 1, davon gebe ich 10 Stück zurück"</strong> oder <strong>"Ich bringe 5 Quadratmeter Fliesen zurück"</strong></>
               )}
             </div>
           )}
