@@ -311,39 +311,43 @@ ${mahnBanner}
 <!-- Document Title -->
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
 
-<!-- Items Table -->
-<table class="items">
-  <thead>
-    <tr>
-      <th style="width:40px;text-align:center;">Pos.</th>
-      <th style="width:55px;text-align:right;">Menge</th>
-      <th style="width:45px;text-align:center;">Einh.</th>
-      <th style="text-align:left;">Beschreibung</th>
-      <th style="width:80px;text-align:right;">Preis</th>
-      <th style="width:90px;text-align:right;">Gesamt</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${(items || []).map((item, idx) => `
-    <tr>
-      <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
-      <td style="text-align:right;">${fmt(Number(item.menge))}</td>
-      <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
-      <td>${item.beschreibung}</td>
-      <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
-      <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
-    </tr>`).join("")}
-  </tbody>
-</table>
+${(() => {
+  const allItems = items || [];
+  const KEEP_WITH_TOTALS = 4; // Keep last N items together with totals
+  const tableHead = `<thead><tr>
+    <th style="width:40px;text-align:center;">Pos.</th>
+    <th style="width:55px;text-align:right;">Menge</th>
+    <th style="width:45px;text-align:center;">Einh.</th>
+    <th style="text-align:left;">Beschreibung</th>
+    <th style="width:80px;text-align:right;">Preis</th>
+    <th style="width:90px;text-align:right;">Gesamt</th>
+  </tr></thead>`;
+  const renderRow = (item: InvoiceHtmlItem) => `<tr>
+    <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
+    <td style="text-align:right;">${fmt(Number(item.menge))}</td>
+    <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
+    <td>${item.beschreibung}</td>
+    <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
+    <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
+  </tr>`;
+  const totalsBlock = `<div class="totals-section"><div class="totals-wrap"><table class="totals-table">${totalsHtml}</table></div></div>`;
 
-<!-- Totals — kept together so they never split across pages -->
-<div class="totals-section">
-  <div class="totals-wrap">
-    <table class="totals-table">
-      ${totalsHtml}
-    </table>
-  </div>
-</div>
+  if (allItems.length <= KEEP_WITH_TOTALS + 2) {
+    // Few items — all in one table + totals
+    return `<table class="items">${tableHead}<tbody>${allItems.map(renderRow).join("")}</tbody></table>${totalsBlock}`;
+  }
+
+  // Many items: split into main table + last items grouped with totals
+  const mainItems = allItems.slice(0, -KEEP_WITH_TOTALS);
+  const lastItems = allItems.slice(-KEEP_WITH_TOTALS);
+
+  return `
+    <table class="items">${tableHead}<tbody>${mainItems.map(renderRow).join("")}</tbody></table>
+    <div style="page-break-inside:avoid;break-inside:avoid;">
+      <table class="items">${tableHead}<tbody>${lastItems.map(renderRow).join("")}</tbody></table>
+      ${totalsBlock}
+    </div>`;
+})()}
 
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ""}
 

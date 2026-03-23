@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { format, parseISO, isBefore } from "date-fns";
 import { de } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
+import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import {
   Dialog,
   DialogContent,
@@ -81,6 +82,9 @@ export default function Invoices() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
   const [bankBic, setBankBic] = useState("STSPAT2GXXX");
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
+  const [createProjectForInvoiceId, setCreateProjectForInvoiceId] = useState<string | null>(null);
+  const [createProjectDefaults, setCreateProjectDefaults] = useState({ name: "", customerName: "", adresse: "", plz: "", ort: "" });
 
   // Payment dialog for status change to teilbezahlt/bezahlt
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -172,11 +176,10 @@ export default function Invoices() {
     setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: newStatus } : inv));
     toast({ title: "Status geändert", description: `Status auf "${statusLabels[newStatus]}" gesetzt` });
 
-    // When offer is accepted → create project automatically
+    // When offer is accepted → open CreateProjectDialog
     if (newStatus === "angenommen") {
       const inv = invoices.find(i => i.id === invoiceId);
       if (inv && !inv.project_id) {
-        // Load full invoice for customer data
         const { data: fullInv } = await supabase
           .from("invoices")
           .select("kunde_name, kunde_adresse, kunde_plz, kunde_ort, customer_id")
@@ -184,23 +187,15 @@ export default function Invoices() {
           .single();
 
         if (fullInv) {
-          const { data: project, error: projErr } = await supabase
-            .from("projects")
-            .insert({
-              name: `${inv.nummer} – ${fullInv.kunde_name}`,
-              adresse: fullInv.kunde_adresse || "",
-              plz: fullInv.kunde_plz || "0000",
-              customer_id: fullInv.customer_id || null,
-            })
-            .select("id")
-            .single();
-
-          if (!projErr && project) {
-            // Link invoice to new project
-            await supabase.from("invoices").update({ project_id: project.id }).eq("id", invoiceId);
-            setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, project_id: project.id } : i));
-            toast({ title: "Projekt erstellt", description: `Projekt "${inv.nummer} – ${fullInv.kunde_name}" wurde automatisch angelegt` });
-          }
+          setCreateProjectForInvoiceId(invoiceId);
+          setCreateProjectDefaults({
+            name: `${fullInv.kunde_name} - ${inv.nummer}`,
+            customerName: fullInv.kunde_name || "",
+            adresse: fullInv.kunde_adresse || "",
+            plz: fullInv.kunde_plz || "",
+            ort: fullInv.kunde_ort || "",
+          });
+          setCreateProjectDialogOpen(true);
         }
       }
     }
@@ -793,6 +788,25 @@ export default function Invoices() {
             </div>
           </DialogContent>
         </Dialog>
+        {/* Create Project Dialog (when offer accepted) */}
+        <CreateProjectDialog
+          open={createProjectDialogOpen}
+          onClose={() => setCreateProjectDialogOpen(false)}
+          onCreated={async (newProject) => {
+            if (createProjectForInvoiceId) {
+              await supabase.from("invoices").update({ project_id: newProject.id }).eq("id", createProjectForInvoiceId);
+              setInvoices(prev => prev.map(i => i.id === createProjectForInvoiceId ? { ...i, project_id: newProject.id } : i));
+            }
+            setCreateProjectDialogOpen(false);
+            setCreateProjectForInvoiceId(null);
+          }}
+          defaultName={createProjectDefaults.name}
+          defaultCustomerName={createProjectDefaults.customerName}
+          defaultAdresse={createProjectDefaults.adresse}
+          defaultPlz={createProjectDefaults.plz}
+          defaultOrt={createProjectDefaults.ort}
+        />
+
         {/* Payment Dialog for Teilbezahlt/Bezahlt */}
         <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
           <DialogContent className="max-w-md">

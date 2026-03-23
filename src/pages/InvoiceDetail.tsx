@@ -221,7 +221,7 @@ export default function InvoiceDetail() {
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name").order("name");
+    const { data } = await supabase.from("projects").select("id, name").eq("status", "aktiv").order("name");
     if (data) setProjects(data);
   };
 
