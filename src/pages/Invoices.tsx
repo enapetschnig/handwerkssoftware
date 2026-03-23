@@ -255,24 +255,7 @@ export default function Invoices() {
           for (let i = 1; i <= totalPages; i++) {
             pdf.setPage(i);
 
-            // Table header on pages 2+
-            if (i > 1) {
-              const headerY = 8;
-              pdf.setFont("helvetica", "bold");
-              pdf.setFontSize(6);
-              pdf.setTextColor(100, 100, 100);
-              const cols = [
-                { text: "POS.", x: 15 }, { text: "MENGE", x: 55 },
-                { text: "EINH.", x: 75 }, { text: "BESCHREIBUNG", x: 93 },
-                { text: "PREIS", x: 155 }, { text: "GESAMT", x: 178 },
-              ];
-              cols.forEach(col => pdf.text(col.text, col.x, headerY));
-              pdf.setDrawColor(60, 60, 60);
-              pdf.setLineWidth(0.4);
-              pdf.line(15, headerY + 2, pageWidth - 15, headerY + 2);
-            }
-
-            // Footer
+            // Footer only (no table header — HTML handles that)
             const fy = pageHeight - 18;
             pdf.setDrawColor(204, 0, 0);
             pdf.setLineWidth(0.3);

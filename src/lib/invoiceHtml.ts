@@ -307,54 +307,35 @@ ${mahnBanner}
 <!-- Document Title -->
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
 
-${(() => {
-  const allItems = items || [];
-  const theadHtml = `<thead><tr>
-    <th style="width:40px;text-align:center;">Pos.</th>
-    <th style="width:55px;text-align:right;">Menge</th>
-    <th style="width:45px;text-align:center;">Einh.</th>
-    <th style="text-align:left;">Beschreibung</th>
-    <th style="width:80px;text-align:right;">Preis</th>
-    <th style="width:90px;text-align:right;">Gesamt</th>
-  </tr></thead>`;
-  const row = (item: InvoiceHtmlItem) => `<tr>
-    <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
-    <td style="text-align:right;">${fmt(Number(item.menge))}</td>
-    <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
-    <td>${item.beschreibung}</td>
-    <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
-    <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
-  </tr>`;
-  const totals = `<div class="totals-section"><div class="totals-wrap"><table class="totals-table">${totalsHtml}</table></div></div>`;
-
-  // Estimate rows per page: ~18 first page (with header), ~25 continuation
-  const FIRST_PAGE = 18;
-  const CONT_PAGE = 25;
-
-  // Calculate which page the totals would land on
-  let rowsPlaced = Math.min(allItems.length, FIRST_PAGE);
-  let remaining = allItems.length - rowsPlaced;
-  while (remaining > CONT_PAGE) {
-    remaining -= CONT_PAGE;
-  }
-  // 'remaining' = rows on the last page before totals
-  // If remaining <= 3, totals are nearly alone on a new page → bring last 5 items forward
-
-  const needsExtraPageForTotals = allItems.length > FIRST_PAGE && remaining <= 3;
-
-  if (needsExtraPageForTotals) {
-    // Split: main items + forced page break + last 5 items with totals
-    const splitAt = Math.max(0, allItems.length - 5);
-    const mainItems = allItems.slice(0, splitAt);
-    const lastItems = allItems.slice(splitAt);
-    return `<table class="items">${theadHtml}<tbody>${mainItems.map(row).join("")}</tbody></table>` +
-      `<div style="page-break-before:always;"></div>` +
-      `<table class="items">${theadHtml}<tbody>${lastItems.map(row).join("")}</tbody></table>${totals}`;
-  }
-
-  // Normal: all items in one table
-  return `<table class="items">${theadHtml}<tbody>${allItems.map(row).join("")}</tbody></table>${totals}`;
-})()}
+<table class="items">
+  <thead>
+    <tr>
+      <th style="width:40px;text-align:center;">Pos.</th>
+      <th style="width:55px;text-align:right;">Menge</th>
+      <th style="width:45px;text-align:center;">Einh.</th>
+      <th style="text-align:left;">Beschreibung</th>
+      <th style="width:80px;text-align:right;">Preis</th>
+      <th style="width:90px;text-align:right;">Gesamt</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${(items || []).map((item) => `<tr>
+      <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
+      <td style="text-align:right;">${fmt(Number(item.menge))}</td>
+      <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
+      <td>${item.beschreibung}</td>
+      <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
+      <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
+    </tr>`).join("")}
+  </tbody>
+</table>
+<div class="totals-section">
+  <div class="totals-wrap">
+    <table class="totals-table">
+      ${totalsHtml}
+    </table>
+  </div>
+</div>
 
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ""}
 
