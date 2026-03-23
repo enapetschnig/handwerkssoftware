@@ -157,6 +157,8 @@ export default function InvoiceDetail() {
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
+  const [stornoDialogOpen, setStornoDialogOpen] = useState(false);
+  const [stornoGrund, setStornoGrund] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
 
   // Payment tracking
@@ -197,7 +199,8 @@ export default function InvoiceDetail() {
   });
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
-  const isLocked = !isNew && !!invoiceId && form.status !== "entwurf";
+  // Rechnungen sind immer locked nach Speichern (kein Entwurf), Angebote nur wenn nicht Entwurf
+  const isLocked = !isNew && !!invoiceId && (form.typ === "rechnung" || form.status !== "entwurf");
 
   useEffect(() => {
     fetchProjects();
@@ -362,8 +365,8 @@ export default function InvoiceDetail() {
   const bruttoSumme = nettoSumme + mwstBetrag;
   const restBetrag = bruttoSumme - form.bezahlt_betrag;
 
-  const canDelete = form.typ === "angebot" || form.status === "entwurf";
-  const canCancel = form.typ === "rechnung" && form.status !== "entwurf" && form.status !== "storniert";
+  const canDelete = form.typ === "angebot";
+  const canCancel = form.typ === "rechnung" && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
     if (!form.kunde_name.trim()) {
@@ -438,8 +441,8 @@ export default function InvoiceDetail() {
         fetchCustomers();
       }
 
-      // Auto-set status from "entwurf" to "offen" on save
-      const saveStatus = form.status === "entwurf" ? "offen" : form.status;
+      // Rechnungen sind immer mindestens "offen", Angebote können "entwurf" sein
+      const saveStatus = (form.typ === "rechnung" || form.status === "entwurf") ? "offen" : form.status;
 
       const invoicePayload = {
         status: saveStatus,
@@ -893,7 +896,7 @@ export default function InvoiceDetail() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {form.status === "entwurf" && <SelectItem value="entwurf">Entwurf</SelectItem>}
+                        {form.typ === "angebot" && form.status === "entwurf" && <SelectItem value="entwurf">Entwurf</SelectItem>}
                         <SelectItem value="offen">Offen</SelectItem>
                         {form.typ === "rechnung" ? (
                           <>
@@ -988,7 +991,7 @@ export default function InvoiceDetail() {
           )}
 
           {/* Zahlungsverlauf */}
-          {!isNew && form.typ === "rechnung" && form.status !== "entwurf" && form.status !== "storniert" && (
+          {!isNew && form.typ === "rechnung" && form.status !== "storniert" && (
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-center">
@@ -1454,36 +1457,8 @@ export default function InvoiceDetail() {
             <Button variant="outline" onClick={() => navigate("/invoices")}>
               {isLocked ? "Zurück" : "Abbrechen"}
             </Button>
-            {isLocked && form.typ === "rechnung" && form.status !== "storniert" && (
-              <Button variant="destructive" onClick={async () => {
-                if (!confirm("Rechnung wirklich stornieren? Dies kann nicht rückgängig gemacht werden.")) return;
-
-                // Generate fortlaufende Stornonummer
-                const year = new Date().getFullYear();
-                const { data: maxStorno } = await supabase
-                  .from("invoices")
-                  .select("storno_nummer")
-                  .like("storno_nummer", `ST-${year}-%`)
-                  .order("storno_nummer", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-
-                let nextNum = 1;
-                if (maxStorno?.storno_nummer) {
-                  const match = maxStorno.storno_nummer.match(/ST-\d+-(\d+)/);
-                  if (match) nextNum = parseInt(match[1]) + 1;
-                }
-                const stornoNummer = `ST-${year}-${String(nextNum).padStart(3, "0")}`;
-
-                await supabase.from("invoices").update({
-                  status: "storniert",
-                  storno_nummer: stornoNummer,
-                  storno_datum: new Date().toISOString().split("T")[0],
-                }).eq("id", invoiceId);
-
-                toast({ title: "Rechnung storniert", description: `Stornonummer: ${stornoNummer}` });
-                navigate("/invoices");
-              }}>Stornieren</Button>
+            {canCancel && (
+              <Button variant="destructive" onClick={() => setStornoDialogOpen(true)}>Stornieren</Button>
             )}
             {isLocked && form.typ === "angebot" && (
               <Button variant="destructive" onClick={async () => {
@@ -1745,6 +1720,81 @@ export default function InvoiceDetail() {
             toast({ title: "Aus Angebot importiert", description: `${newItems.length} Positionen hinzugefügt` });
           }}
         />
+
+        {/* Storno Dialog */}
+        <Dialog open={stornoDialogOpen} onOpenChange={setStornoDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Rechnung stornieren</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Die Rechnung {form.nummer} wird unwiderruflich storniert. Eine Storno-Bestätigung wird erstellt.
+            </p>
+            <div>
+              <Label>Storno-Grund *</Label>
+              <Textarea
+                value={stornoGrund}
+                onChange={(e) => setStornoGrund(e.target.value)}
+                placeholder="z.B. Fehlerhafte Rechnung, Kundenreklamation, doppelt erstellt..."
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setStornoDialogOpen(false)}>Abbrechen</Button>
+              <Button variant="destructive" disabled={!stornoGrund.trim()} onClick={async () => {
+                const year = new Date().getFullYear();
+                const { data: maxStorno } = await supabase
+                  .from("invoices")
+                  .select("storno_nummer")
+                  .like("storno_nummer", `ST-${year}-%`)
+                  .order("storno_nummer", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                let nextNum = 1;
+                if (maxStorno?.storno_nummer) {
+                  const match = maxStorno.storno_nummer.match(/ST-\d+-(\d+)/);
+                  if (match) nextNum = parseInt(match[1]) + 1;
+                }
+                const stornoNummer = `ST-${year}-${String(nextNum).padStart(3, "0")}`;
+                const stornoDatum = new Date().toISOString().split("T")[0];
+
+                await supabase.from("invoices").update({
+                  status: "storniert",
+                  storno_nummer: stornoNummer,
+                  storno_datum: stornoDatum,
+                  storno_grund: stornoGrund.trim(),
+                }).eq("id", invoiceId);
+
+                // Generate and download Storno-PDF
+                try {
+                  const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+                  const logoResp = await fetch("/logo-tilger.png");
+                  const logoBlob = await logoResp.blob();
+                  const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+
+                  const stornoBlob = generateStornoPdf(
+                    { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
+                    stornoNummer, stornoDatum, stornoGrund.trim(),
+                    undefined, logoUri
+                  );
+                  const url = URL.createObjectURL(stornoBlob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `Storno_${stornoNummer}.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (e) { console.warn("Storno-PDF failed:", e); }
+
+                toast({ title: "Rechnung storniert", description: `Stornonummer: ${stornoNummer}` });
+                setStornoDialogOpen(false);
+                navigate("/invoices");
+              }}>
+                Rechnung stornieren
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Create Project Dialog (when offer accepted) */}
         <CreateProjectDialog

@@ -302,3 +302,109 @@ export async function generateInvoicePdf(
 
   return pdf.output("blob");
 }
+
+// Generate a Storno confirmation PDF
+export function generateStornoPdf(
+  invoice: { nummer: string; kunde_name: string; brutto_summe: number; datum: string },
+  stornoNummer: string,
+  stornoDatum: string,
+  stornoGrund: string,
+  bank: BankData = DEFAULT_BANK,
+  logoDataUri?: string
+): Blob {
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const ml = 15;
+  const mr = 15;
+
+  let y = 15;
+
+  // Logo
+  if (logoDataUri) {
+    try { pdf.addImage(logoDataUri, "JPEG", ml, y, 45, 18); } catch {}
+  }
+
+  // Company info
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+  pdf.setTextColor(30, 30, 30);
+  pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text("Bahnhofstr. 174 · 8831 Niederwölz", pageWidth - mr, y + 6, { align: "right" });
+  pdf.text("+43 664 44 35 346 · info@ft-tilger.at", pageWidth - mr, y + 10, { align: "right" });
+
+  y += 30;
+
+  // Red "STORNO" header
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(18);
+  pdf.setTextColor(204, 0, 0);
+  pdf.text("STORNO", ml, y);
+  y += 4;
+  pdf.setDrawColor(204, 0, 0);
+  pdf.setLineWidth(1);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 10;
+
+  // Storno details
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.setTextColor(30, 30, 30);
+
+  const details: [string, string][] = [
+    ["Stornonummer:", stornoNummer],
+    ["Stornodatum:", new Date(stornoDatum).toLocaleDateString("de-AT")],
+    ["Rechnungsnummer:", invoice.nummer],
+    ["Rechnungsdatum:", new Date(invoice.datum).toLocaleDateString("de-AT")],
+    ["Kunde:", invoice.kunde_name],
+    ["Rechnungsbetrag:", fmtCurrency(invoice.brutto_summe)],
+  ];
+
+  details.forEach(([label, value]) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(label, ml, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(value, ml + 50, y);
+    y += 7;
+  });
+
+  y += 8;
+
+  // Storno-Grund
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.setTextColor(30, 30, 30);
+  pdf.text("Storno-Grund:", ml, y);
+  y += 6;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(60, 60, 60);
+  const grundLines = pdf.splitTextToSize(stornoGrund, pageWidth - ml - mr);
+  pdf.text(grundLines, ml, y);
+  y += grundLines.length * 5 + 10;
+
+  // Confirmation text
+  pdf.setFontSize(9);
+  pdf.setTextColor(80, 80, 80);
+  pdf.text("Hiermit wird bestätigt, dass die oben genannte Rechnung storniert wurde.", ml, y);
+  y += 5;
+  pdf.text("Der Rechnungsbetrag wird nicht mehr zur Zahlung fällig.", ml, y);
+
+  // Footer
+  const fy = pageHeight - 16;
+  pdf.setDrawColor(204, 0, 0);
+  pdf.setLineWidth(0.3);
+  pdf.line(ml, fy, pageWidth - mr, fy);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(6);
+  pdf.setTextColor(140, 140, 140);
+  pdf.text("Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174 · 8831 Niederwölz · +43 664 44 35 346 · info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
+  pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
+
+  return pdf.output("blob");
+}
