@@ -57,8 +57,8 @@ function addHeaderAndFooterToAllPages(pdf: jsPDF, bank: BankData = DEFAULT_BANK)
       pdf.line(15, headerY + 2, pageWidth - 15, headerY + 2);
     }
 
-    // Footer starts 15mm from bottom
-    const footerLineY = pageHeight - 15;
+    // Footer starts 18mm from bottom (safe for printer margins)
+    const footerLineY = pageHeight - 18;
 
     // Red line
     pdf.setDrawColor(204, 0, 0);

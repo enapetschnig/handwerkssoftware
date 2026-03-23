@@ -278,7 +278,7 @@ export default function Invoices() {
             }
 
             // Footer
-            const fy = pageHeight - 15;
+            const fy = pageHeight - 18;
             pdf.setDrawColor(204, 0, 0);
             pdf.setLineWidth(0.3);
             pdf.line(15, fy, pageWidth - 15, fy);

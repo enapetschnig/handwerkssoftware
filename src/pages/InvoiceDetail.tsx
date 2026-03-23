@@ -1217,6 +1217,7 @@ export default function InvoiceDetail() {
                     </Select>
                   </div>
                 )}
+                {form.typ === "rechnung" && (
                 <div>
                   <Label>Projekt (optional)</Label>
                   <Select value={form.project_id || "none"} onValueChange={(v) => updateField("project_id", v === "none" ? null : v)}>
@@ -1231,6 +1232,7 @@ export default function InvoiceDetail() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -1277,18 +1279,22 @@ export default function InvoiceDetail() {
               <div className="flex justify-between items-center">
                 <CardTitle>Positionen</CardTitle>
                 <div className="flex gap-2 flex-wrap">
-                  <Button onClick={() => setImportOfferOpen(true)} variant="outline" size="sm" className="gap-1">
-                    <FileText className="w-4 h-4" />
-                    Aus Angebot
-                  </Button>
-                  <Button onClick={() => setImportRegieOpen(true)} variant="outline" size="sm" className="gap-1">
-                    <FileText className="w-4 h-4" />
-                    Aus Regiebericht
-                  </Button>
-                  <Button onClick={() => setImportProjectOpen(true)} variant="outline" size="sm" className="gap-1">
-                    <TrendingUp className="w-4 h-4" />
-                    Aus Projekt
-                  </Button>
+                  {form.typ === "rechnung" && (
+                    <>
+                      <Button onClick={() => setImportOfferOpen(true)} variant="outline" size="sm" className="gap-1">
+                        <FileText className="w-4 h-4" />
+                        Aus Angebot
+                      </Button>
+                      <Button onClick={() => setImportRegieOpen(true)} variant="outline" size="sm" className="gap-1">
+                        <FileText className="w-4 h-4" />
+                        Aus Regiebericht
+                      </Button>
+                      <Button onClick={() => setImportProjectOpen(true)} variant="outline" size="sm" className="gap-1">
+                        <TrendingUp className="w-4 h-4" />
+                        Aus Projekt
+                      </Button>
+                    </>
+                  )}
                   <Button onClick={() => setTemplateDialogOpen(true)} variant="outline" size="sm" className="gap-1">
                     <Package className="w-4 h-4" />
                     Materialien
