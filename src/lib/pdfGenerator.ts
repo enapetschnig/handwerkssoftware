@@ -44,16 +44,16 @@ export async function generateInvoicePdf(
 
   // Company info (right side)
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.setTextColor(30, 30, 30);
+  pdf.setFontSize(10);
+  pdf.setTextColor(20, 20, 20);
   pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(7.5);
-  pdf.setTextColor(100, 100, 100);
-  pdf.text("Bahnhofstr. 174", pageWidth - mr, y + 6, { align: "right" });
-  pdf.text("8831 Niederwölz", pageWidth - mr, y + 10, { align: "right" });
-  pdf.text("Tel: +43 664 44 35 346", pageWidth - mr, y + 14, { align: "right" });
-  pdf.text("info@ft-tilger.at", pageWidth - mr, y + 18, { align: "right" });
+  pdf.setFontSize(9);
+  pdf.setTextColor(60, 60, 60);
+  pdf.text("Bahnhofstr. 174", pageWidth - mr, y + 7, { align: "right" });
+  pdf.text("8831 Niederwölz", pageWidth - mr, y + 12, { align: "right" });
+  pdf.text("Tel: +43 664 44 35 346", pageWidth - mr, y + 17, { align: "right" });
+  pdf.text("info@ft-tilger.at", pageWidth - mr, y + 22, { align: "right" });
 
   y += 24;
   // Separator
@@ -63,38 +63,38 @@ export async function generateInvoicePdf(
   y += 4;
 
   // Sender line
-  pdf.setFontSize(6);
-  pdf.setTextColor(160, 160, 160);
+  pdf.setFontSize(7);
+  pdf.setTextColor(120, 120, 120);
   pdf.text("Gottfried Tilger \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz", ml, y);
-  pdf.setDrawColor(220, 220, 220);
-  pdf.line(ml, y + 1.5, ml + 70, y + 1.5);
-  y += 5;
+  pdf.setDrawColor(180, 180, 180);
+  pdf.line(ml, y + 1.5, ml + 72, y + 1.5);
+  y += 6;
 
   // Recipient
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.setTextColor(30, 30, 30);
+  pdf.setFontSize(11);
+  pdf.setTextColor(20, 20, 20);
   pdf.text(invoice.kunde_name || "–", ml, y + 2);
-  y += 5;
+  y += 6;
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8.5);
-  pdf.setTextColor(80, 80, 80);
-  if (invoice.kunde_adresse) { pdf.text(invoice.kunde_adresse, ml, y + 2); y += 4; }
+  pdf.setFontSize(10);
+  pdf.setTextColor(40, 40, 40);
+  if (invoice.kunde_adresse) { pdf.text(invoice.kunde_adresse, ml, y + 2); y += 5; }
   if (invoice.kunde_plz || invoice.kunde_ort) {
     pdf.text(`${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}`.trim(), ml, y + 2);
-    y += 4;
+    y += 5;
   }
   if (invoice.kunde_uid) {
-    pdf.setFontSize(7);
-    pdf.setTextColor(140, 140, 140);
+    pdf.setFontSize(8);
+    pdf.setTextColor(80, 80, 80);
     pdf.text(`UID: ${invoice.kunde_uid}`, ml, y + 2);
-    y += 4;
+    y += 5;
   }
 
   // Meta info (right side)
-  const metaX = pageWidth - mr - 55;
-  let metaY = y - 12;
-  pdf.setFontSize(7.5);
+  const metaX = pageWidth - mr - 60;
+  let metaY = y - 14;
+  pdf.setFontSize(9);
   const datumFormatted = new Date(invoice.datum).toLocaleDateString("de-AT");
   const metaRows: [string, string][] = [
     [`${typLabel} Nr.`, invoice.nummer || "–"],
@@ -106,13 +106,13 @@ export async function generateInvoicePdf(
   if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen]);
 
   metaRows.forEach(([label, value]) => {
-    pdf.setTextColor(140, 140, 140);
+    pdf.setTextColor(80, 80, 80);
     pdf.text(label, metaX, metaY);
-    pdf.setTextColor(30, 30, 30);
+    pdf.setTextColor(20, 20, 20);
     pdf.setFont("helvetica", "bold");
-    pdf.text(value, metaX + 35, metaY);
+    pdf.text(value, metaX + 38, metaY);
     pdf.setFont("helvetica", "normal");
-    metaY += 4.5;
+    metaY += 5;
   });
 
   y = Math.max(y, metaY) + 4;
@@ -168,36 +168,36 @@ export async function generateInvoicePdf(
     theme: "plain",
     margin: { left: ml, right: mr, bottom: footerMargin },
     headStyles: {
-      fillColor: [245, 245, 245],
-      textColor: [80, 80, 80],
+      fillColor: [240, 240, 240],
+      textColor: [50, 50, 50],
       fontStyle: "bold",
-      fontSize: 7,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      fontSize: 8,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
       lineWidth: { bottom: 0.5 },
       lineColor: [60, 60, 60],
     },
     bodyStyles: {
-      fontSize: 8,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-      textColor: [40, 40, 40],
-      lineWidth: { bottom: 0.15 },
-      lineColor: [220, 220, 220],
+      fontSize: 9,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      textColor: [30, 30, 30],
+      lineWidth: { bottom: 0.2 },
+      lineColor: [200, 200, 200],
     },
     footStyles: {
       fillColor: [255, 255, 255],
-      textColor: [50, 50, 50],
-      fontSize: 8.5,
+      textColor: [30, 30, 30],
+      fontSize: 9,
       fontStyle: "normal",
-      cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 },
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
       lineWidth: 0,
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 12, textColor: [140, 140, 140] },
-      1: { halign: "right", cellWidth: 16 },
-      2: { halign: "center", cellWidth: 14, textColor: [140, 140, 140] },
+      0: { halign: "center", cellWidth: 12, textColor: [100, 100, 100] },
+      1: { halign: "right", cellWidth: 18 },
+      2: { halign: "center", cellWidth: 14, textColor: [100, 100, 100] },
       3: { halign: "left" },
-      4: { halign: "right", cellWidth: 22 },
-      5: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+      4: { halign: "right", cellWidth: 24 },
+      5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
       if (data.section === "foot") {
@@ -250,8 +250,8 @@ export async function generateInvoicePdf(
   // ======= CLOSING TEXT =======
   y += 2;
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(100, 100, 100);
+  pdf.setFontSize(9);
+  pdf.setTextColor(60, 60, 60);
   const zahlungsTage = invoice.zahlungsbedingungen?.match(/(\d+)/)?.[1] || "14";
   const closingText = isAngebot
     ? "Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung."
@@ -263,8 +263,8 @@ export async function generateInvoicePdf(
   if (!isAngebot) {
     if (y + 20 > pageHeight - 30) { pdf.addPage(); y = 15; }
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(80, 80, 80);
+    pdf.setFontSize(9);
+    pdf.setTextColor(40, 40, 40);
     pdf.text(`Bankverbindung: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, ml, y);
     y += 5;
 
@@ -290,14 +290,14 @@ export async function generateInvoicePdf(
     pdf.line(ml, fy, pageWidth - mr, fy);
 
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6);
-    pdf.setTextColor(140, 140, 140);
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
     pdf.text(
       "Gottfried Tilger \u00B7 Fliesentechnik & Natursteinteppich \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz \u00B7 +43 664 44 35 346 \u00B7 info@ft-tilger.at",
       pageWidth / 2, fy + 4, { align: "center" }
     );
-    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
-    pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, fy + 7.5, { align: "right" });
+    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, fy + 8, { align: "center" });
+    pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, fy + 8, { align: "right" });
   }
 
   return pdf.output("blob");
