@@ -213,65 +213,14 @@ export default function Invoices() {
       if (error) throw error;
       const html = decodeURIComponent(escape(atob(data.pdf)));
 
-      // Remove HTML footer (added via jsPDF on every page)
-      const cleanHtml = html.replace(/<div class="footer">[\s\S]*?<\/div>[\s\S]*?<!-- \/page-wrap -->/, '</div><!-- /page-wrap -->');
-
-      const html2pdf = (await import("html2pdf.js")).default;
-      const container = document.createElement("div");
-      const bodyMatch = cleanHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-      container.innerHTML = bodyMatch ? bodyMatch[1] : cleanHtml;
-      const styleMatch = cleanHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-      if (styleMatch) {
-        const style = document.createElement("style");
-        style.textContent = styleMatch[1];
-        container.prepend(style);
+      // Use browser print — the only reliable way for proper page breaks,
+      // repeating table headers, and fixed footers
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+        setTimeout(() => win.print(), 500);
       }
-      container.style.width = "180mm";
-      container.style.background = "white";
-      document.body.appendChild(container);
-
-      // Wait for images
-      const images = container.querySelectorAll("img");
-      await Promise.all(Array.from(images).map(img =>
-        img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
-      ));
-      await new Promise(r => setTimeout(r, 500));
-
-      // Generate PDF then add footer on every page
-      await new Promise<void>((resolve, reject) => {
-        html2pdf().set({
-          margin: [12, 15, 20, 15],
-          image: { type: "jpeg", quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, allowTaint: true },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["css"] },
-        }).from(container).toPdf().get("pdf").then((pdf: any) => {
-          document.body.removeChild(container);
-
-          // Draw header (page 2+) and footer on every page
-          const totalPages = pdf.internal.getNumberOfPages();
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          for (let i = 1; i <= totalPages; i++) {
-            pdf.setPage(i);
-
-            // Footer only (no table header — HTML handles that)
-            const fy = pageHeight - 18;
-            pdf.setDrawColor(204, 0, 0);
-            pdf.setLineWidth(0.3);
-            pdf.line(15, fy, pageWidth - 15, fy);
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(6);
-            pdf.setTextColor(136, 136, 136);
-            pdf.text("Gottfried Tilger \u00B7 Fliesentechnik & Natursteinteppich \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz \u00B7 +43 664 44 35 346 \u00B7 info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
-            pdf.text(`IBAN: ${bankIban} \u00B7 BIC: ${bankBic}`, pageWidth / 2, fy + 7.5, { align: "center" });
-            pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - 15, fy + 7.5, { align: "right" });
-          }
-
-          pdf.save(`${nummer}.pdf`);
-          resolve();
-        }).catch(reject);
-      });
     } catch (err: any) {
       console.error("PDF download error:", err);
       toast({ variant: "destructive", title: "Fehler", description: "PDF konnte nicht erstellt werden" });

@@ -199,7 +199,7 @@ export function buildInvoiceHtml(
   return `<!DOCTYPE html>
 <html lang="de"><head><meta charset="utf-8"><title>${typLabel} ${invoice.nummer || "Vorschau"}</title>
 <style>
-  @page { size: A4; margin: 15mm; }
+  @page { size: A4; margin: 15mm 15mm 25mm 15mm; }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .no-print { display: none !important; }
@@ -228,14 +228,16 @@ export function buildInvoiceHtml(
   /* Document title */
   .doc-title { font-size: 14pt; font-weight: 800; color: #1a1a1a; margin-bottom: 16px; border-bottom: 2px solid ${accent}; padding-bottom: 6px; }
 
-  /* Items table — clean like reference, thead repeats on each page */
+  /* Items table */
   table.items { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  table.items thead { display: table-header-group; }
   table.items thead th { border-bottom: 2px solid #333; padding: 6px 8px; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: #555; background: #fff; }
   table.items tbody td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 8.5pt; vertical-align: top; }
+  table.items tbody tr { page-break-inside: avoid; }
   table.items tbody tr:last-child td { border-bottom: 2px solid #333; }
 
   /* Totals */
-  .totals-section { margin-top: 4px; }
+  .totals-section { margin-top: 4px; page-break-inside: avoid; }
   .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
   .totals-table { width: 250px; }
   .totals-table td { padding: 3px 0; font-size: 9pt; }
@@ -251,9 +253,12 @@ export function buildInvoiceHtml(
   .bank-info-row { font-size: 8pt; color: #555; }
   .bank-info-row strong { color: #333; }
 
-  /* Footer — pushed to bottom via flex, full width */
-  .footer { border-top: 1px solid #ccc; padding: 8px 0 4px 0; font-size: 6.5pt; color: #888; line-height: 1.6; margin-top: auto; page-break-inside: avoid; break-inside: avoid; width: 100%; }
-  .footer-line { text-align: center; white-space: nowrap; overflow: visible; }
+  /* Footer — fixed at bottom of every printed page */
+  .footer { border-top: 1px solid #ccc; padding: 6px 0 2px 0; font-size: 6.5pt; color: #888; line-height: 1.5; margin-top: 30px; }
+  @media print {
+    .footer { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; background: #fff; }
+  }
+  .footer-line { text-align: center; }
 
   /* Storniert watermark */
   .storniert::after { content: 'STORNIERT'; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 72pt; color: rgba(204,0,0,0.08); font-weight: 900; pointer-events: none; letter-spacing: 8px; }

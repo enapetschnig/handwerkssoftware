@@ -11,7 +11,6 @@ import {
   type InvoiceHtmlItem,
   type BankData,
 } from "@/lib/invoiceHtml";
-import jsPDF from "jspdf";
 
 interface InvoicePdfPreviewProps {
   open: boolean;
@@ -26,89 +25,6 @@ interface InvoicePdfPreviewProps {
   fileName?: string;
 }
 
-function addFooterToAllPages(pdf: jsPDF, bank: BankData = DEFAULT_BANK) {
-  const totalPages = pdf.internal.getNumberOfPages();
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-
-  for (let i = 1; i <= totalPages; i++) {
-    pdf.setPage(i);
-
-    // Footer only — no table header (HTML handles that)
-    const footerLineY = pageHeight - 18;
-
-    // Red line
-    pdf.setDrawColor(204, 0, 0);
-    pdf.setLineWidth(0.3);
-    pdf.line(15, footerLineY, pageWidth - 15, footerLineY);
-
-    // Footer text
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6);
-    pdf.setTextColor(136, 136, 136);
-
-    pdf.text(
-      "Gottfried Tilger \u00B7 Fliesentechnik & Natursteinteppich \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz \u00B7 Tel: +43 664 44 35 346 \u00B7 info@ft-tilger.at",
-      pageWidth / 2, footerLineY + 4, { align: "center" }
-    );
-    pdf.text(
-      `IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`,
-      pageWidth / 2, footerLineY + 7.5, { align: "center" }
-    );
-    pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - 15, footerLineY + 7.5, { align: "right" });
-  }
-}
-
-async function createPdf(html: string, bank: BankData = DEFAULT_BANK): Promise<Blob> {
-  const html2pdf = (await import("html2pdf.js")).default;
-
-  // Remove the HTML footer (we draw it via jsPDF on every page instead)
-  const cleanHtml = html.replace(/<div class="footer">[\s\S]*?<\/div>[\s\S]*?<!-- \/page-wrap -->/, '</div><!-- /page-wrap -->');
-
-  const container = document.createElement("div");
-  const bodyMatch = cleanHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  container.innerHTML = bodyMatch ? bodyMatch[1] : cleanHtml;
-
-  const styleMatch = cleanHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-  if (styleMatch) {
-    const style = document.createElement("style");
-    style.textContent = styleMatch[1];
-    container.prepend(style);
-  }
-
-  container.style.width = "180mm";
-  container.style.background = "white";
-  document.body.appendChild(container);
-
-  // Wait for images to load
-  const images = container.querySelectorAll("img");
-  await Promise.all(Array.from(images).map(img =>
-    img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
-  ));
-  await new Promise(r => setTimeout(r, 500));
-
-  // Generate PDF, then add footer on every page via jsPDF callback
-  return new Promise<Blob>((resolve, reject) => {
-    html2pdf().set({
-      margin: [12, 15, 20, 15], // top, left, bottom (space for footer), right
-      image: { type: "jpeg", quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, allowTaint: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["css"] },
-    }).from(container).toPdf().get("pdf").then((pdf: any) => {
-      document.body.removeChild(container);
-
-      // Draw footer on every page
-      addFooterToAllPages(pdf, bank);
-
-      resolve(pdf.output("blob"));
-    }).catch((err: any) => {
-      try { document.body.removeChild(container); } catch {}
-      reject(err);
-    });
-  });
-}
-
 export function InvoicePdfPreview({
   open,
   onClose,
@@ -121,9 +37,9 @@ export function InvoicePdfPreview({
   items,
   fileName,
 }: InvoicePdfPreviewProps) {
-  const [generating, setGenerating] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const formDataRef = useRef(formData);
   const itemsRef = useRef(items);
@@ -131,30 +47,22 @@ export function InvoicePdfPreview({
   itemsRef.current = items;
 
   useEffect(() => {
-    return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
-  }, [pdfUrl]);
-
-  useEffect(() => {
     if (!open) {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      setPdfUrl(null);
-      setError(null);
+      setHtmlContent(null);
       return;
     }
-    generatePdf();
+    generateHtml();
   }, [open, invoiceId]);
 
+  // Regenerate when saved (nummer updates)
   useEffect(() => {
-    if (open && saved) generatePdf();
+    if (open && saved) generateHtml();
   }, [saved, formData?.nummer]);
 
-  const generatePdf = async () => {
-    setGenerating(true);
-    setError(null);
+  const generateHtml = async () => {
+    setLoading(true);
     try {
-      let html: string;
-
-      // Load bank data from settings
+      // Load bank data
       let bankData: BankData = { ...DEFAULT_BANK };
       try {
         const { data: bankSettings } = await supabase
@@ -168,10 +76,10 @@ export function InvoicePdfPreview({
             if (row.key === "bank_bic") bankData.bic = row.value;
           });
         }
-      } catch (e) { /* use defaults */ }
+      } catch {}
 
+      let html: string;
       if (formDataRef.current && itemsRef.current) {
-        // Generate QR code for invoices (not offers)
         let qrDataUri: string | undefined;
         if (formDataRef.current.typ === "rechnung" && formDataRef.current.brutto_summe > 0) {
           try {
@@ -180,52 +88,55 @@ export function InvoicePdfPreview({
               formDataRef.current.nummer || "Rechnung",
               bankData
             );
-          } catch (e) {
-            console.warn("QR code generation failed:", e);
-          }
+          } catch {}
         }
         html = buildInvoiceHtml(formDataRef.current, itemsRef.current, qrDataUri, bankData);
       } else if (invoiceId) {
-        const { data, error: fetchErr } = await supabase.functions.invoke(
-          "generate-invoice-pdf", { body: { invoiceId } }
-        );
-        if (fetchErr) throw fetchErr;
+        const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", { body: { invoiceId } });
+        if (error) throw error;
         html = decodeURIComponent(escape(atob(data.pdf)));
       } else {
-        setGenerating(false);
+        setLoading(false);
         return;
       }
 
-      const blob = await createPdf(html, bankData);
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      setPdfUrl(URL.createObjectURL(blob));
-    } catch (err: any) {
-      console.error("PDF generation error:", err);
-      setError(`PDF-Fehler: ${err?.message || "Unbekannt"}`);
+      setHtmlContent(html);
+    } catch (err) {
+      console.error("Preview error:", err);
     } finally {
-      setGenerating(false);
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    if (!htmlContent) return;
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(htmlContent);
+      win.document.close();
+      setTimeout(() => win.print(), 500);
     }
   };
 
   const handleDownload = () => {
-    if (!pdfUrl) return;
-    const a = document.createElement("a");
-    a.href = pdfUrl;
-    a.download = `${fileName || "Dokument"}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handlePrint = () => {
-    if (!pdfUrl) return;
-    const win = window.open(pdfUrl);
-    if (win) {
-      win.addEventListener("load", () => setTimeout(() => win.print(), 300));
-    }
+    // "Save as PDF" via print dialog — the only reliable way to get
+    // proper page breaks, repeating table headers, and fixed footers
+    handlePrint();
   };
 
   const mustSaveFirst = onSave && !saved;
+
+  // For the preview iframe, inject CSS to simulate A4 pages on screen
+  const previewHtml = htmlContent ? htmlContent.replace(
+    "</style>",
+    `
+    @media screen {
+      html, body { background: #d1d5db !important; }
+      .page-wrap { background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.15); margin: 20px auto; padding: 15mm !important; max-width: 210mm; min-height: 297mm; }
+      .footer { position: relative !important; bottom: auto !important; margin-top: 30px; }
+    }
+    </style>`
+  ) : null;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { saved && onSavedClose ? onSavedClose() : onClose(); } }}>
@@ -247,11 +158,11 @@ export function InvoicePdfPreview({
             )}
             {!mustSaveFirst && (
               <>
-                <Button size="sm" onClick={handleDownload} disabled={!pdfUrl} className="gap-2">
+                <Button size="sm" onClick={handleDownload} disabled={!htmlContent} className="gap-2">
                   <Download className="h-4 w-4" />
-                  PDF herunterladen
+                  Als PDF speichern
                 </Button>
-                <Button variant="outline" size="sm" onClick={handlePrint} disabled={!pdfUrl} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handlePrint} disabled={!htmlContent} className="gap-2">
                   <Printer className="h-4 w-4" />
                   Drucken
                 </Button>
@@ -274,25 +185,16 @@ export function InvoicePdfPreview({
         </div>
 
         <div className="flex-1 overflow-hidden bg-gray-300">
-          {generating ? (
+          {loading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">PDF wird erstellt...</p>
-              </div>
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-sm text-destructive mb-2">{error}</p>
-                <Button variant="outline" size="sm" onClick={generatePdf}>Nochmal versuchen</Button>
-              </div>
-            </div>
-          ) : pdfUrl ? (
+          ) : previewHtml ? (
             <iframe
-              src={pdfUrl}
+              ref={iframeRef}
+              srcDoc={previewHtml}
               className="w-full h-full border-0"
-              title="PDF Preview"
+              title="Invoice Preview"
             />
           ) : null}
         </div>
