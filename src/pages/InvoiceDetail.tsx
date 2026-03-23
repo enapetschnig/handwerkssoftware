@@ -200,7 +200,7 @@ export default function InvoiceDetail() {
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
   // Rechnungen sind immer locked nach Speichern (kein Entwurf), Angebote nur wenn nicht Entwurf
-  const isLocked = !isNew && !!invoiceId && (form.typ === "rechnung" || form.status !== "entwurf");
+  const isLocked = !isNew && id !== "new" && !!invoiceId && (form.typ === "rechnung" || form.status !== "entwurf");
 
   useEffect(() => {
     fetchProjects();
@@ -406,7 +406,7 @@ export default function InvoiceDetail() {
   const restBetrag = bruttoSumme - form.bezahlt_betrag;
 
   const canDelete = form.typ === "angebot";
-  const canCancel = !isNew && !!invoiceId && form.typ === "rechnung" && form.status !== "storniert";
+  const canCancel = !isNew && !!invoiceId && id !== "new" && form.typ === "rechnung" && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
     if (!form.kunde_name.trim()) {
