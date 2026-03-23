@@ -100,6 +100,9 @@ export function CreateProjectDialog({
 
     setSaving(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Nicht angemeldet");
+
       let customerId = selectedCustomerId;
 
       // Create new customer if no existing selected
@@ -107,6 +110,7 @@ export function CreateProjectDialog({
         const { data: newCustomer, error: custErr } = await supabase
           .from("customers")
           .insert({
+            user_id: user.id,
             name: customerName.trim(),
             adresse: adresse.trim() || null,
             plz: plz.trim() || null,
