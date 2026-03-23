@@ -128,7 +128,8 @@ export async function generateInvoicePdf(
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
 
-  // ======= ITEMS TABLE (autoTable handles page breaks + header repeat) =======
+  // ======= ITEMS TABLE with TOTALS as table footer =======
+  // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einh.", "Beschreibung", "Preis", "Gesamt"]];
   const tableBody = items.map(item => [
     String(item.position).padStart(2, "0"),
@@ -139,13 +140,35 @@ export async function generateInvoicePdf(
     fmtCurrency(Number(item.gesamtpreis)),
   ]);
 
+  // Build totals rows for the table footer
+  const rabattProzent = Number(invoice.rabatt_prozent) || 0;
+  const rabattBetrag = Number(invoice.rabatt_betrag) || 0;
+  const positionenNetto = items.reduce((s, it) => s + Number(it.gesamtpreis), 0);
+  const rabattWert = rabattProzent > 0 ? positionenNetto * (rabattProzent / 100) : rabattBetrag;
+  const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
+  const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
+
+  const tableFoot: string[][] = [];
+  if (rabattWert > 0) {
+    tableFoot.push(["", "", "", "", "Zwischensumme", fmtCurrency(positionenNetto)]);
+    tableFoot.push(["", "", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, `- ${fmtCurrency(rabattWert)}`]);
+  }
+  tableFoot.push(["", "", "", "", "Nettobetrag", fmtCurrency(Number(invoice.netto_summe))]);
+  tableFoot.push(["", "", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, fmtCurrency(Number(invoice.mwst_betrag))]);
+  tableFoot.push(["", "", "", "", "GESAMTBETRAG", fmtCurrency(Number(invoice.brutto_summe))]);
+  if (!isAngebot && bezahltBetrag > 0) {
+    tableFoot.push(["", "", "", "", "Bereits bezahlt", fmtCurrency(bezahltBetrag)]);
+    tableFoot.push(["", "", "", "", "Offener Betrag", fmtCurrency(restBetrag)]);
+  }
+
   const footerMargin = 28;
-  const totalsNeeded = 45;
 
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
+    foot: tableFoot,
+    showFoot: "lastPage",
     theme: "plain",
     margin: { left: ml, right: mr, bottom: footerMargin },
     headStyles: {
@@ -164,6 +187,14 @@ export async function generateInvoicePdf(
       lineWidth: { bottom: 0.15 },
       lineColor: [220, 220, 220],
     },
+    footStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [50, 50, 50],
+      fontSize: 8.5,
+      fontStyle: "normal",
+      cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 },
+      lineWidth: 0,
+    },
     columnStyles: {
       0: { halign: "center", cellWidth: 12, textColor: [140, 140, 140] },
       1: { halign: "right", cellWidth: 16 },
@@ -172,92 +203,34 @@ export async function generateInvoicePdf(
       4: { halign: "right", cellWidth: 22 },
       5: { halign: "right", cellWidth: 24, fontStyle: "bold" },
     },
+    didParseCell: (data: any) => {
+      // Style the GESAMTBETRAG row in footer
+      if (data.section === "foot") {
+        const cellText = data.cell.raw || "";
+        if (cellText === "GESAMTBETRAG" || (data.row.index === tableFoot.findIndex(r => r[4] === "GESAMTBETRAG"))) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fontSize = 11;
+          data.cell.styles.textColor = [30, 30, 30];
+        }
+        if (cellText === "Offener Betrag" || (data.column.index === 5 && data.row.raw?.[4] === "Offener Betrag")) {
+          data.cell.styles.textColor = [204, 0, 0];
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (cellText === "Bereits bezahlt" || (data.column.index === 5 && data.row.raw?.[4] === "Bereits bezahlt")) {
+          data.cell.styles.textColor = [22, 163, 74];
+        }
+        // Draw red line above GESAMTBETRAG
+        if (cellText === "GESAMTBETRAG") {
+          data.cell.styles.lineWidth = { top: 0.6 };
+          data.cell.styles.lineColor = [204, 0, 0];
+        }
+      }
+    },
   });
 
   y = (pdf as any).lastAutoTable.finalY + 4;
 
-  // Check if totals fit on current page — if not, add new page
-  // This ensures totals are never cut off, but they may be alone on last page
-  // To prevent "alone" totals: check if we just started a new page
-  const spaceForTotals = pageHeight - footerMargin - y;
-  if (spaceForTotals < totalsNeeded) {
-    // Not enough space — totals go to next page
-    // But we don't want them alone: nothing we can do retroactively
-    // The table already rendered. Just add page and continue.
-    pdf.addPage();
-    y = 15;
-  }
-
-  // ======= TOTALS =======
-  const rabattProzent = Number(invoice.rabatt_prozent) || 0;
-  const rabattBetrag = Number(invoice.rabatt_betrag) || 0;
-  const positionenNetto = items.reduce((s, it) => s + Number(it.gesamtpreis), 0);
-  const rabattWert = rabattProzent > 0 ? positionenNetto * (rabattProzent / 100) : rabattBetrag;
-  const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
-  const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
-
-  // Totals should always fit because autoTable reserved extra bottom margin
-  // But double-check just in case
-  if (y + 35 > pageHeight - 20) {
-    pdf.addPage();
-    y = 15;
-  }
-
-  const totalsX = pageWidth - mr - 70;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8.5);
-
-  if (rabattWert > 0) {
-    pdf.setTextColor(100, 100, 100);
-    pdf.text("Zwischensumme", totalsX, y);
-    pdf.text(fmtCurrency(positionenNetto), pageWidth - mr, y, { align: "right" });
-    y += 5;
-    pdf.setTextColor(204, 0, 0);
-    pdf.text(`Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, totalsX, y);
-    pdf.text(`- ${fmtCurrency(rabattWert)}`, pageWidth - mr, y, { align: "right" });
-    y += 5;
-  }
-
-  pdf.setTextColor(100, 100, 100);
-  pdf.text("Nettobetrag", totalsX, y);
-  pdf.setTextColor(50, 50, 50);
-  pdf.text(fmtCurrency(Number(invoice.netto_summe)), pageWidth - mr, y, { align: "right" });
-  y += 5;
-
-  pdf.setTextColor(100, 100, 100);
-  pdf.text(`USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, totalsX, y);
-  pdf.setTextColor(50, 50, 50);
-  pdf.text(fmtCurrency(Number(invoice.mwst_betrag)), pageWidth - mr, y, { align: "right" });
-  y += 3;
-
-  // Line
-  pdf.setDrawColor(204, 0, 0);
-  pdf.setLineWidth(0.6);
-  pdf.line(totalsX, y, pageWidth - mr, y);
-  y += 5;
-
-  // Gross total
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(12);
-  pdf.setTextColor(30, 30, 30);
-  pdf.text("Gesamtbetrag", totalsX, y);
-  pdf.text(fmtCurrency(Number(invoice.brutto_summe)), pageWidth - mr, y, { align: "right" });
-  y += 6;
-
-  // Payment info
-  if (!isAngebot && bezahltBetrag > 0) {
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8);
-    pdf.setTextColor(22, 163, 74);
-    pdf.text("Bereits bezahlt", totalsX, y);
-    pdf.text(fmtCurrency(bezahltBetrag), pageWidth - mr, y, { align: "right" });
-    y += 4;
-    pdf.setTextColor(204, 0, 0);
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Offener Betrag", totalsX, y);
-    pdf.text(fmtCurrency(restBetrag), pageWidth - mr, y, { align: "right" });
-    y += 6;
-  }
+  // Totals are now part of the autoTable footer — no separate drawing needed
 
   // ======= NOTES =======
   if (invoice.notizen) {
