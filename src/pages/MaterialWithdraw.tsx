@@ -145,10 +145,15 @@ export default function MaterialWithdraw() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!confirm("Lieferschein und alle Materialeinträge wirklich löschen?")) return;
+    // Delete material entries first, then lieferschein
+    await supabase.from("material_entries").delete().eq("lieferschein_id", id);
     const { error } = await supabase.from("lieferscheine").delete().eq("id", id);
     if (!error) {
-      toast({ title: "Gelöscht" });
+      toast({ title: "Lieferschein gelöscht" });
       fetchLieferscheine();
+    } else {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
     }
   };
 
@@ -256,8 +261,8 @@ export default function MaterialWithdraw() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {(isAdmin || ls.user_id === currentUserId) && ls.entnahmen === 0 && ls.rueckgaben === 0 && (
-                        <Button variant="ghost" size="sm" onClick={(e) => handleDelete(ls.id, e)}>
+                      {(isAdmin || (ls.user_id === currentUserId && ls.entnahmen === 0 && ls.rueckgaben === 0)) && (
+                        <Button variant="ghost" size="sm" onClick={(e) => handleDelete(ls.id, e)} title="Lieferschein löschen">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
