@@ -217,13 +217,13 @@ export async function generateInvoicePdf(
           data.cell.styles.lineColor = [0, 0, 0];
         }
 
-        // Bruttobetrag row: bold, larger, red line above
+        // Bruttobetrag row: bold, red line above
         if (rowLabel === "Bruttobetrag") {
           data.cell.styles.fontStyle = "bold";
-          data.cell.styles.fontSize = 11;
+          data.cell.styles.fontSize = 10;
           data.cell.styles.textColor = [0, 0, 0];
-          data.cell.styles.lineWidth = { top: 0.6 };
-          data.cell.styles.lineColor = [204, 0, 0];
+          data.cell.styles.lineWidth = { top: 0.8 };
+          data.cell.styles.lineColor = [0, 0, 0];
         }
 
         // Rabatt row: red text
