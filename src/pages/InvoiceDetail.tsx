@@ -216,6 +216,46 @@ export default function InvoiceDetail() {
     if (distId && isNew) {
       setImportRegieOpen(true);
     }
+
+    // Load data from Angebot conversion
+    if (isNew && searchParams.get("from_angebot") === "true") {
+      try {
+        const stored = sessionStorage.getItem("convertToInvoice");
+        if (stored) {
+          const data = JSON.parse(stored);
+          setForm(prev => ({
+            ...prev,
+            kunde_name: data.kunde_name || "",
+            kunde_adresse: data.kunde_adresse || "",
+            kunde_plz: data.kunde_plz || "",
+            kunde_ort: data.kunde_ort || "",
+            kunde_land: data.kunde_land || "Österreich",
+            kunde_email: data.kunde_email || "",
+            kunde_telefon: data.kunde_telefon || "",
+            kunde_uid: data.kunde_uid || "",
+            customer_id: data.customer_id || null,
+            project_id: data.project_id || null,
+            leistungsdatum: data.leistungsdatum || "",
+            zahlungsbedingungen: data.zahlungsbedingungen || "",
+            notizen: data.notizen || "",
+            mwst_satz: data.mwst_satz || 20,
+            rabatt_prozent: data.rabatt_prozent || 0,
+            rabatt_betrag: data.rabatt_betrag || 0,
+          }));
+          if (data.items?.length > 0) {
+            setItems(data.items.map((it: any, idx: number) => ({
+              position: idx + 1,
+              beschreibung: it.beschreibung || "",
+              menge: it.menge || 1,
+              einheit: it.einheit || "Stk.",
+              einzelpreis: it.einzelpreis || 0,
+              gesamtpreis: it.gesamtpreis || 0,
+            })));
+          }
+          sessionStorage.removeItem("convertToInvoice");
+        }
+      } catch {}
+    }
   }, [id]);
 
   const fetchCustomers = async () => {
@@ -744,74 +784,32 @@ export default function InvoiceDetail() {
     }
   };
 
-  const handleConvertToInvoice = async () => {
+  const handleConvertToInvoice = () => {
     if (!invoiceId || form.typ !== "angebot") return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    try {
-      const { data: numData, error: numError } = await supabase.rpc("next_invoice_number", {
-        p_typ: "rechnung",
-        p_jahr: new Date().getFullYear(),
-      });
-      if (numError) throw numError;
-
-      const nummer = numData as string;
-      const laufnummer = parseInt(nummer.split("-")[2]);
-
-      const { data: newInvoice, error: insertError } = await supabase
-        .from("invoices")
-        .insert({
-          user_id: user.id,
-          typ: "rechnung",
-          nummer,
-          laufnummer,
-          jahr: new Date().getFullYear(),
-          status: "offen",
-          kunde_name: form.kunde_name,
-          kunde_adresse: form.kunde_adresse || null,
-          kunde_plz: form.kunde_plz || null,
-          kunde_ort: form.kunde_ort || null,
-          kunde_land: form.kunde_land || null,
-          kunde_email: form.kunde_email || null,
-          kunde_telefon: form.kunde_telefon || null,
-          kunde_uid: form.kunde_uid || null,
-          datum: format(new Date(), "yyyy-MM-dd"),
-          faellig_am: null,
-          leistungsdatum: form.leistungsdatum || null,
-          zahlungsbedingungen: form.zahlungsbedingungen || null,
-          notizen: form.notizen || null,
-          netto_summe: nettoSumme,
-          mwst_satz: form.mwst_satz,
-          mwst_betrag: mwstBetrag,
-          brutto_summe: bruttoSumme,
-          project_id: form.project_id || null,
-          rabatt_prozent: form.rabatt_prozent,
-          rabatt_betrag: form.rabatt_betrag,
-        })
-        .select("id")
-        .single();
-
-      if (insertError) throw insertError;
-
-      const itemsToInsert = items.map((item, idx) => ({
-        invoice_id: newInvoice.id,
-        position: idx + 1,
-        beschreibung: item.beschreibung,
-        menge: item.menge,
-        einheit: item.einheit,
-        einzelpreis: item.einzelpreis,
-        gesamtpreis: item.gesamtpreis,
-      }));
-
-      await supabase.from("invoice_items").insert(itemsToInsert);
-      await supabase.from("invoices").update({ status: "angenommen" }).eq("id", invoiceId);
-
-      toast({ title: "Rechnung erstellt", description: "Angebot wurde in eine Rechnung umgewandelt" });
-      navigate(`/invoices/${newInvoice.id}`);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Fehler", description: err.message || "Umwandlung fehlgeschlagen" });
-    }
+    // Store current data in sessionStorage so the new invoice page can load it
+    const convertData = {
+      fromAngebotId: invoiceId,
+      kunde_name: form.kunde_name,
+      kunde_adresse: form.kunde_adresse,
+      kunde_plz: form.kunde_plz,
+      kunde_ort: form.kunde_ort,
+      kunde_land: form.kunde_land,
+      kunde_email: form.kunde_email,
+      kunde_telefon: form.kunde_telefon,
+      kunde_uid: form.kunde_uid,
+      customer_id: form.customer_id,
+      project_id: form.project_id,
+      leistungsdatum: form.leistungsdatum,
+      zahlungsbedingungen: form.zahlungsbedingungen,
+      notizen: form.notizen,
+      mwst_satz: form.mwst_satz,
+      rabatt_prozent: form.rabatt_prozent,
+      rabatt_betrag: form.rabatt_betrag,
+      items: items,
+    };
+    sessionStorage.setItem("convertToInvoice", JSON.stringify(convertData));
+    navigate("/invoices/new?typ=rechnung&from_angebot=true");
   };
 
   const handleDelete = async () => {
