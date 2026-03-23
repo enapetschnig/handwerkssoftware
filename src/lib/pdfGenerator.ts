@@ -214,14 +214,14 @@ export async function generateInvoicePdf(
         // First footer row: thick line above as separator from positions
         if (data.row.index === 0) {
           data.cell.styles.lineWidth = { top: 0.8 };
-          data.cell.styles.lineColor = [60, 60, 60];
+          data.cell.styles.lineColor = [0, 0, 0];
         }
 
         // Bruttobetrag row: bold, larger, red line above
         if (rowLabel === "Bruttobetrag") {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 11;
-          data.cell.styles.textColor = [30, 30, 30];
+          data.cell.styles.textColor = [0, 0, 0];
           data.cell.styles.lineWidth = { top: 0.6 };
           data.cell.styles.lineColor = [204, 0, 0];
         }
