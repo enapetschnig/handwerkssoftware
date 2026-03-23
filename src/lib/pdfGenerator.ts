@@ -156,10 +156,6 @@ export async function generateInvoicePdf(
   tableFoot.push(["", "", "", "", "Nettobetrag", fmtCurrency(Number(invoice.netto_summe))]);
   tableFoot.push(["", "", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, fmtCurrency(Number(invoice.mwst_betrag))]);
   tableFoot.push(["", "", "", "", "GESAMTBETRAG", fmtCurrency(Number(invoice.brutto_summe))]);
-  if (!isAngebot && bezahltBetrag > 0) {
-    tableFoot.push(["", "", "", "", "Bereits bezahlt", fmtCurrency(bezahltBetrag)]);
-    tableFoot.push(["", "", "", "", "Offener Betrag", fmtCurrency(restBetrag)]);
-  }
 
   const footerMargin = 28;
 
@@ -204,25 +200,28 @@ export async function generateInvoicePdf(
       5: { halign: "right", cellWidth: 24, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
-      // Style the GESAMTBETRAG row in footer
       if (data.section === "foot") {
         const cellText = data.cell.raw || "";
-        if (cellText === "GESAMTBETRAG" || (data.row.index === tableFoot.findIndex(r => r[4] === "GESAMTBETRAG"))) {
+        const rowLabel = data.row.raw?.[4] || "";
+
+        // First footer row: thick line above as separator from positions
+        if (data.row.index === 0) {
+          data.cell.styles.lineWidth = { top: 0.8 };
+          data.cell.styles.lineColor = [60, 60, 60];
+        }
+
+        // GESAMTBETRAG row: bold, larger, red line above
+        if (rowLabel === "GESAMTBETRAG") {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 11;
           data.cell.styles.textColor = [30, 30, 30];
-        }
-        if (cellText === "Offener Betrag" || (data.column.index === 5 && data.row.raw?.[4] === "Offener Betrag")) {
-          data.cell.styles.textColor = [204, 0, 0];
-          data.cell.styles.fontStyle = "bold";
-        }
-        if (cellText === "Bereits bezahlt" || (data.column.index === 5 && data.row.raw?.[4] === "Bereits bezahlt")) {
-          data.cell.styles.textColor = [22, 163, 74];
-        }
-        // Draw red line above GESAMTBETRAG
-        if (cellText === "GESAMTBETRAG") {
           data.cell.styles.lineWidth = { top: 0.6 };
           data.cell.styles.lineColor = [204, 0, 0];
+        }
+
+        // Rabatt row: red text
+        if (rowLabel.startsWith("Rabatt")) {
+          data.cell.styles.textColor = [204, 0, 0];
         }
       }
     },
