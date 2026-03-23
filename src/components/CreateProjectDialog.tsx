@@ -107,13 +107,10 @@ export function CreateProjectDialog({
 
       // Find or create customer (duplicate protection by name)
       if (!customerId && customerName.trim()) {
-        // Check if customer with same name already exists
-        const { data: existing } = await supabase
-          .from("customers")
-          .select("id")
-          .ilike("name", customerName.trim())
-          .limit(1)
-          .maybeSingle();
+        // Check if customer with same name + PLZ already exists
+        let query = supabase.from("customers").select("id").ilike("name", customerName.trim());
+        if (plz.trim()) query = query.eq("plz", plz.trim());
+        const { data: existing } = await query.limit(1).maybeSingle();
 
         if (existing) {
           customerId = existing.id;

@@ -402,13 +402,10 @@ export default function InvoiceDetail() {
             uid_nummer: form.kunde_uid || null,
           }).eq("id", customerId);
         } else {
-          // Check for existing customer with same name (duplicate protection)
-          const { data: existingCust } = await supabase
-            .from("customers")
-            .select("id")
-            .ilike("name", form.kunde_name.trim())
-            .limit(1)
-            .maybeSingle();
+          // Check for existing customer with same name + PLZ (duplicate protection)
+          let custQuery = supabase.from("customers").select("id").ilike("name", form.kunde_name.trim());
+          if (form.kunde_plz?.trim()) custQuery = custQuery.eq("plz", form.kunde_plz.trim());
+          const { data: existingCust } = await custQuery.limit(1).maybeSingle();
 
           if (existingCust) {
             customerId = existingCust.id;
