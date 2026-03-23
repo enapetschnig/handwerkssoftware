@@ -798,48 +798,69 @@ export default function Invoices() {
               </DialogTitle>
             </DialogHeader>
 
-            {/* Existing payments */}
-            {existingPayments.length > 0 && (
-              <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Bisherige Zahlungen:</p>
-                {existingPayments.map((p, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm">
-                    <div>
-                      <span className="font-medium text-green-700">€ {Number(p.betrag).toFixed(2)}</span>
-                      <span className="text-muted-foreground ml-2">{new Date(p.datum).toLocaleDateString("de-AT")}</span>
-                    </div>
-                    {p.notiz && <span className="text-xs text-muted-foreground italic">{p.notiz}</span>}
+            {/* Invoice summary — always visible */}
+            {(() => {
+              const inv = invoices.find(i => i.id === paymentInvoiceId);
+              const brutto = inv?.brutto_summe || 0;
+              const bereitsGezahlt = existingPayments.reduce((s, p) => s + Number(p.betrag), 0);
+              const offen = brutto - bereitsGezahlt;
+              return (
+                <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Rechnungsbetrag (brutto):</span>
+                    <span className="font-bold">€ {brutto.toFixed(2)}</span>
                   </div>
-                ))}
-                <div className="border-t pt-1 flex justify-between text-sm font-medium">
-                  <span>Bereits bezahlt:</span>
-                  <span className="text-green-700">€ {existingPayments.reduce((s, p) => s + Number(p.betrag), 0).toFixed(2)}</span>
-                </div>
-                {(() => {
-                  const inv = invoices.find(i => i.id === paymentInvoiceId);
-                  const offen = (inv?.brutto_summe || 0) - existingPayments.reduce((s, p) => s + Number(p.betrag), 0);
-                  return offen > 0 ? (
-                    <div className="flex justify-between text-sm font-medium text-orange-600">
-                      <span>Noch offen:</span>
-                      <span>€ {offen.toFixed(2)}</span>
+                  {bereitsGezahlt > 0 && (
+                    <div className="flex justify-between text-sm text-green-700">
+                      <span>Bereits bezahlt:</span>
+                      <span className="font-medium">€ {bereitsGezahlt.toFixed(2)}</span>
                     </div>
-                  ) : null;
-                })()}
-              </div>
-            )}
+                  )}
+                  <div className="flex justify-between text-sm font-bold text-orange-600 border-t pt-1">
+                    <span>Noch offen:</span>
+                    <span>€ {offen.toFixed(2)}</span>
+                  </div>
+
+                  {/* Existing payment history */}
+                  {existingPayments.length > 0 && (
+                    <div className="border-t pt-2 mt-1 space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">Zahlungshistorie:</p>
+                      {existingPayments.map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-medium text-green-700">€ {Number(p.betrag).toFixed(2)}</span>
+                            <span className="text-muted-foreground ml-2">{new Date(p.datum).toLocaleDateString("de-AT")}</span>
+                          </div>
+                          {p.notiz && <span className="text-muted-foreground italic">{p.notiz}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* New payment */}
+            {(() => {
+              const inv = invoices.find(i => i.id === paymentInvoiceId);
+              const maxBetrag = (inv?.brutto_summe || 0) - existingPayments.reduce((s, p) => s + Number(p.betrag), 0);
+              return (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Betrag (€)</Label>
+                  <Label>Betrag (€) <span className="text-muted-foreground font-normal">max. € {maxBetrag.toFixed(2)}</span></Label>
                   <Input
                     type="number"
                     value={paymentBetrag}
-                    onChange={(e) => setPaymentBetrag(e.target.value)}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      if (val > maxBetrag) setPaymentBetrag(maxBetrag.toFixed(2));
+                      else setPaymentBetrag(e.target.value);
+                    }}
                     placeholder="0,00"
                     step="0.01"
                     min="0"
+                    max={maxBetrag}
                   />
                 </div>
                 <div>
@@ -860,6 +881,8 @@ export default function Invoices() {
                 />
               </div>
             </div>
+              );
+            })()}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Abbrechen</Button>
               <Button onClick={async () => {
