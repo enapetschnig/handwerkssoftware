@@ -139,42 +139,38 @@ export async function generateInvoicePdf(
     fmtCurrency(Number(item.gesamtpreis)),
   ]);
 
+  // Reserve space for totals block (~45mm) so it's never alone on last page
+  const totalsHeight = 50;
+
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
     theme: "plain",
-    margin: { left: ml, right: mr, bottom: 30 },
+    margin: { left: ml, right: mr, bottom: 30 + totalsHeight },
     headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [100, 100, 100],
+      fillColor: [245, 245, 245],
+      textColor: [80, 80, 80],
       fontStyle: "bold",
       fontSize: 7,
-      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      lineWidth: { bottom: 0.5 },
+      lineColor: [60, 60, 60],
     },
     bodyStyles: {
       fontSize: 8,
       cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
       textColor: [40, 40, 40],
+      lineWidth: { bottom: 0.15 },
+      lineColor: [220, 220, 220],
     },
     columnStyles: {
       0: { halign: "center", cellWidth: 12, textColor: [140, 140, 140] },
       1: { halign: "right", cellWidth: 16 },
       2: { halign: "center", cellWidth: 14, textColor: [140, 140, 140] },
-      3: { halign: "left" }, // auto width
+      3: { halign: "left" },
       4: { halign: "right", cellWidth: 22 },
       5: { halign: "right", cellWidth: 24, fontStyle: "bold" },
-    },
-    didDrawPage: () => {
-      // Draw line under header row
-      // Footer is added separately below
-    },
-    // Draw top/bottom borders
-    didParseCell: (data: any) => {
-      if (data.section === "head") {
-        data.cell.styles.lineWidth = { bottom: 0.5 };
-        data.cell.styles.lineColor = [60, 60, 60];
-      }
     },
   });
 
@@ -189,8 +185,9 @@ export async function generateInvoicePdf(
   const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
 
-  // Check if totals fit on current page (need ~40mm)
-  if (y + 40 > pageHeight - 30) {
+  // Totals should always fit because autoTable reserved extra bottom margin
+  // But double-check just in case
+  if (y + 35 > pageHeight - 20) {
     pdf.addPage();
     y = 15;
   }
