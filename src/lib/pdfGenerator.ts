@@ -139,15 +139,15 @@ export async function generateInvoicePdf(
     fmtCurrency(Number(item.gesamtpreis)),
   ]);
 
-  // Reserve space for totals block (~45mm) so it's never alone on last page
-  const totalsHeight = 50;
+  const footerMargin = 28;
+  const totalsNeeded = 45;
 
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
     theme: "plain",
-    margin: { left: ml, right: mr, bottom: 30 + totalsHeight },
+    margin: { left: ml, right: mr, bottom: footerMargin },
     headStyles: {
       fillColor: [245, 245, 245],
       textColor: [80, 80, 80],
@@ -174,8 +174,19 @@ export async function generateInvoicePdf(
     },
   });
 
-  // Get Y after table
   y = (pdf as any).lastAutoTable.finalY + 4;
+
+  // Check if totals fit on current page — if not, add new page
+  // This ensures totals are never cut off, but they may be alone on last page
+  // To prevent "alone" totals: check if we just started a new page
+  const spaceForTotals = pageHeight - footerMargin - y;
+  if (spaceForTotals < totalsNeeded) {
+    // Not enough space — totals go to next page
+    // But we don't want them alone: nothing we can do retroactively
+    // The table already rendered. Just add page and continue.
+    pdf.addPage();
+    y = 15;
+  }
 
   // ======= TOTALS =======
   const rabattProzent = Number(invoice.rabatt_prozent) || 0;
