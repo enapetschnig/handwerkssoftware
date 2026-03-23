@@ -230,16 +230,12 @@ export function buildInvoiceHtml(
 
   /* Items table — clean like reference, thead repeats on each page */
   table.items { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  table.items thead { display: table-header-group; }
   table.items thead th { border-bottom: 2px solid #333; padding: 6px 8px; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: #555; background: #fff; }
   table.items tbody td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 8.5pt; vertical-align: top; }
-  table.items tbody tr { page-break-inside: avoid; }
   table.items tbody tr:last-child td { border-bottom: 2px solid #333; }
-  table.items tfoot { display: table-footer-group; }
-  table.items tfoot td { border: none; padding: 4px 8px; font-size: 7.5pt; color: #888; font-style: italic; }
 
-  /* Totals — never split across pages */
-  .totals-section { page-break-inside: avoid !important; break-inside: avoid !important; page-break-before: auto; }
+  /* Totals */
+  .totals-section { margin-top: 4px; }
   .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
   .totals-table { width: 250px; }
   .totals-table td { padding: 3px 0; font-size: 9pt; }
@@ -248,10 +244,10 @@ export function buildInvoiceHtml(
   .notes { border-left: 3px solid #ddd; padding: 8px 14px; font-size: 8.5pt; color: #555; margin-bottom: 14px; }
 
   /* Closing */
-  .closing-text { font-size: 8.5pt; color: #666; margin-bottom: 14px; padding-top: 8px; page-break-inside: avoid; break-inside: avoid; }
+  .closing-text { font-size: 8.5pt; color: #666; margin-bottom: 14px; padding-top: 8px; }
 
-  /* Bank info — inline like reference */
-  .bank-info { page-break-inside: avoid; break-inside: avoid; margin-bottom: 10px; }
+  /* Bank info */
+  .bank-info { margin-bottom: 10px; }
   .bank-info-row { font-size: 8pt; color: #555; }
   .bank-info-row strong { color: #333; }
 
@@ -311,43 +307,36 @@ ${mahnBanner}
 <!-- Document Title -->
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
 
-${(() => {
-  const allItems = items || [];
-  const KEEP_WITH_TOTALS = 4; // Keep last N items together with totals
-  const tableHead = `<thead><tr>
-    <th style="width:40px;text-align:center;">Pos.</th>
-    <th style="width:55px;text-align:right;">Menge</th>
-    <th style="width:45px;text-align:center;">Einh.</th>
-    <th style="text-align:left;">Beschreibung</th>
-    <th style="width:80px;text-align:right;">Preis</th>
-    <th style="width:90px;text-align:right;">Gesamt</th>
-  </tr></thead>`;
-  const renderRow = (item: InvoiceHtmlItem) => `<tr>
-    <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
-    <td style="text-align:right;">${fmt(Number(item.menge))}</td>
-    <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
-    <td>${item.beschreibung}</td>
-    <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
-    <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
-  </tr>`;
-  const totalsBlock = `<div class="totals-section"><div class="totals-wrap"><table class="totals-table">${totalsHtml}</table></div></div>`;
+<table class="items">
+  <thead>
+    <tr>
+      <th style="width:40px;text-align:center;">Pos.</th>
+      <th style="width:55px;text-align:right;">Menge</th>
+      <th style="width:45px;text-align:center;">Einh.</th>
+      <th style="text-align:left;">Beschreibung</th>
+      <th style="width:80px;text-align:right;">Preis</th>
+      <th style="width:90px;text-align:right;">Gesamt</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${(items || []).map((item) => `<tr>
+      <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
+      <td style="text-align:right;">${fmt(Number(item.menge))}</td>
+      <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
+      <td>${item.beschreibung}</td>
+      <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
+      <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
+    </tr>`).join("")}
+  </tbody>
+</table>
 
-  if (allItems.length <= KEEP_WITH_TOTALS + 2) {
-    // Few items — all in one table + totals
-    return `<table class="items">${tableHead}<tbody>${allItems.map(renderRow).join("")}</tbody></table>${totalsBlock}`;
-  }
-
-  // Many items: split into main table + last items grouped with totals
-  const mainItems = allItems.slice(0, -KEEP_WITH_TOTALS);
-  const lastItems = allItems.slice(-KEEP_WITH_TOTALS);
-
-  return `
-    <table class="items">${tableHead}<tbody>${mainItems.map(renderRow).join("")}</tbody></table>
-    <div style="page-break-inside:avoid;break-inside:avoid;">
-      <table class="items">${tableHead}<tbody>${lastItems.map(renderRow).join("")}</tbody></table>
-      ${totalsBlock}
-    </div>`;
-})()}
+<div class="totals-section">
+  <div class="totals-wrap">
+    <table class="totals-table">
+      ${totalsHtml}
+    </table>
+  </div>
+</div>
 
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ""}
 

@@ -95,12 +95,7 @@ async function createPdf(html: string, bank: BankData = DEFAULT_BANK): Promise<B
   const styleMatch = cleanHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
   if (styleMatch) {
     const style = document.createElement("style");
-    style.textContent = styleMatch[1] + `
-      .totals-section { page-break-inside: avoid !important; break-inside: avoid !important; }
-      .bank-info { page-break-inside: avoid !important; break-inside: avoid !important; }
-      .closing-text { page-break-inside: avoid !important; break-inside: avoid !important; }
-      table.items tbody tr { page-break-inside: avoid !important; }
-    `;
+    style.textContent = styleMatch[1];
     container.prepend(style);
   }
 
@@ -122,7 +117,7 @@ async function createPdf(html: string, bank: BankData = DEFAULT_BANK): Promise<B
       image: { type: "jpeg", quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, allowTaint: true },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["avoid-all", "css"], avoid: [".totals-section", ".bank-info", ".closing-text", "tr"] },
+      pagebreak: { mode: ["css"] },
     }).from(container).toPdf().get("pdf").then((pdf: any) => {
       document.body.removeChild(container);
 
