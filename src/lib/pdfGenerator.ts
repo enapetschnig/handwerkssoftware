@@ -166,6 +166,7 @@ export async function generateInvoicePdf(
     foot: tableFoot,
     showFoot: "lastPage",
     theme: "plain",
+    rowPageBreak: "avoid",
     margin: { left: ml, right: mr, bottom: footerMargin },
     headStyles: {
       fillColor: [240, 240, 240],
