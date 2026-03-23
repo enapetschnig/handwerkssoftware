@@ -366,7 +366,7 @@ export default function InvoiceDetail() {
   const restBetrag = bruttoSumme - form.bezahlt_betrag;
 
   const canDelete = form.typ === "angebot";
-  const canCancel = form.typ === "rechnung" && form.status !== "storniert";
+  const canCancel = !isNew && !!invoiceId && form.typ === "rechnung" && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
     if (!form.kunde_name.trim()) {
