@@ -79,6 +79,8 @@ export default function Invoices() {
   const [rechnungStartNr, setRechnungStartNr] = useState("1");
   const [angebotStartNr, setAngebotStartNr] = useState("1");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
+  const [bankBic, setBankBic] = useState("STSPAT2GXXX");
 
   // Payment dialog for status change to teilbezahlt/bezahlt
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -100,11 +102,13 @@ export default function Invoices() {
     const { data } = await supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", ["rechnung_start_nummer", "angebot_start_nummer"]);
+      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_iban", "bank_bic"]);
     if (data) {
       data.forEach(s => {
         if (s.key === "rechnung_start_nummer") setRechnungStartNr(s.value);
         if (s.key === "angebot_start_nummer") setAngebotStartNr(s.value);
+        if (s.key === "bank_iban") setBankIban(s.value);
+        if (s.key === "bank_bic") setBankBic(s.value);
       });
     }
   };
@@ -287,7 +291,7 @@ export default function Invoices() {
             pdf.setFontSize(6);
             pdf.setTextColor(136, 136, 136);
             pdf.text("Gottfried Tilger \u00B7 Fliesentechnik & Natursteinteppich \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz \u00B7 +43 664 44 35 346 \u00B7 info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
-            pdf.text("IBAN: AT61 2081 5000 0423 1474 \u00B7 BIC: STSPAT2GXXX", pageWidth / 2, fy + 7.5, { align: "center" });
+            pdf.text(`IBAN: ${bankIban} \u00B7 BIC: ${bankBic}`, pageWidth / 2, fy + 7.5, { align: "center" });
             pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - 15, fy + 7.5, { align: "right" });
           }
 
