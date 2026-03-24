@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useEinheiten } from "@/hooks/useEinheiten";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -36,6 +37,7 @@ type MaterialSummary = {
 export default function LieferscheinDetail() {
   const { id } = useParams();
   const { toast } = useToast();
+  const einheiten = useEinheiten();
   const [lsName, setLsName] = useState("");
   const [lsProjectId, setLsProjectId] = useState<string | null>(null);
   const [lsProject, setLsProject] = useState<string | null>(null);
@@ -286,13 +288,9 @@ export default function LieferscheinDetail() {
                     <Select value={formEinheit} onValueChange={setFormEinheit}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Stk.">Stk.</SelectItem>
-                        <SelectItem value="m²">m²</SelectItem>
-                        <SelectItem value="m">lfm</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="Sack">Sack</SelectItem>
-                        <SelectItem value="Eimer">Eimer</SelectItem>
-                        <SelectItem value="Pkg.">Pkg.</SelectItem>
+                        {einheiten.map(e => (
+                          <SelectItem key={e} value={e}>{e}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

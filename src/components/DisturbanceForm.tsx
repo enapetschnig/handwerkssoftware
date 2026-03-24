@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEinheiten } from "@/hooks/useEinheiten";
 import { format } from "date-fns";
 import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
 
@@ -53,6 +54,7 @@ type DisturbanceFormProps = {
 
 export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: DisturbanceFormProps) => {
   const { toast } = useToast();
+  const einheiten = useEinheiten();
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
 
@@ -667,13 +669,9 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                     <Select value={mat.einheit} onValueChange={(v) => updateMaterial(mat.id, "einheit", v)}>
                       <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Stk.">Stk.</SelectItem>
-                        <SelectItem value="m²">m²</SelectItem>
-                        <SelectItem value="lfm">lfm</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="Sack">Sack</SelectItem>
-                        <SelectItem value="Eimer">Eimer</SelectItem>
-                        <SelectItem value="Pkg.">Pkg.</SelectItem>
+                        {einheiten.map(e => (
+                          <SelectItem key={e} value={e}>{e}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Button

@@ -16,6 +16,7 @@ import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
 import { ImportFromOfferDialog } from "@/components/ImportFromOfferDialog";
 import { ImportTimeDialog } from "@/components/ImportTimeDialog";
+import { useEinheiten } from "@/hooks/useEinheiten";
 import { ImportLieferscheinDialog } from "@/components/ImportLieferscheinDialog";
 import { ImportDisturbanceToInvoiceDialog } from "@/components/ImportDisturbanceToInvoiceDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
@@ -136,6 +137,7 @@ export default function InvoiceDetail() {
   const isNew = id === "new" || !id;
   const navigate = useNavigate();
   const { toast } = useToast();
+  const einheiten = useEinheiten();
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -1569,15 +1571,9 @@ export default function InvoiceDetail() {
                           <Select value={item.einheit || "Stk."} onValueChange={(v) => updateItem(idx, "einheit", v)}>
                             <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Stk.">Stk.</SelectItem>
-                              <SelectItem value="m²">m²</SelectItem>
-                              <SelectItem value="lfm">lfm</SelectItem>
-                              <SelectItem value="kg">kg</SelectItem>
-                              <SelectItem value="Sack">Sack</SelectItem>
-                              <SelectItem value="Eimer">Eimer</SelectItem>
-                              <SelectItem value="Pkg.">Pkg.</SelectItem>
-                              <SelectItem value="Std.">Std.</SelectItem>
-                              <SelectItem value="psch.">psch.</SelectItem>
+                              {einheiten.map(e => (
+                                <SelectItem key={e} value={e}>{e}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </TableCell>

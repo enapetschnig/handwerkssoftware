@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useEinheiten } from "@/hooks/useEinheiten";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -40,6 +41,7 @@ type MaterialSummary = {
 const MaterialList = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { toast } = useToast();
+  const einheiten = useEinheiten();
   const [entries, setEntries] = useState<MaterialEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectName, setProjectName] = useState("");
@@ -284,13 +286,9 @@ const MaterialList = () => {
                     <Select value={newEinheit} onValueChange={setNewEinheit}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Stk.">Stk.</SelectItem>
-                        <SelectItem value="m²">m²</SelectItem>
-                        <SelectItem value="m">lfm</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="Sack">Sack</SelectItem>
-                        <SelectItem value="Eimer">Eimer</SelectItem>
-                        <SelectItem value="Pkg.">Pkg.</SelectItem>
+                        {einheiten.map(e => (
+                          <SelectItem key={e} value={e}>{e}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

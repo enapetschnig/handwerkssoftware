@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, Loader2, Check, X, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEinheiten } from "@/hooks/useEinheiten";
 
 interface ParsedMaterial {
   name: string;
@@ -24,6 +25,7 @@ interface MaterialFileImportProps {
 
 export function MaterialFileImport({ open, onClose, onImported }: MaterialFileImportProps) {
   const { toast } = useToast();
+  const einheiten = useEinheiten();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -205,13 +207,9 @@ export function MaterialFileImport({ open, onClose, onImported }: MaterialFileIm
                       <Select value={mat.einheit} onValueChange={(v) => updateMaterial(idx, "einheit", v)}>
                         <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Stk.">Stk.</SelectItem>
-                          <SelectItem value="m²">m²</SelectItem>
-                          <SelectItem value="lfm">lfm</SelectItem>
-                          <SelectItem value="kg">kg</SelectItem>
-                          <SelectItem value="Sack">Sack</SelectItem>
-                          <SelectItem value="Eimer">Eimer</SelectItem>
-                          <SelectItem value="Pkg.">Pkg.</SelectItem>
+                          {einheiten.map(e => (
+                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

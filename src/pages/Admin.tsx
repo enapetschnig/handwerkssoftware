@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -104,6 +105,7 @@ export default function Admin() {
   const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
   const [bankBic, setBankBic] = useState("STSPAT2GXXX");
   const [firmenUid, setFirmenUid] = useState("");
+  const [einheitenStr, setEinheitenStr] = useState("Stk.,m²,lfm,Std.,Pauschal,kg,Liter,Tube,Sack,Karton,Palette,Rolle,Dose,Eimer");
   const [savingSettings, setSavingSettings] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
@@ -113,7 +115,7 @@ export default function Admin() {
       const { data, error } = await supabase
         .from("app_settings")
         .select("key, value")
-        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
+        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid", "einheiten"]);
 
       if (error) {
         console.error("Error fetching app settings:", error);
@@ -124,6 +126,7 @@ export default function Admin() {
           if (row.key === "bank_iban") setBankIban(row.value);
           if (row.key === "bank_bic") setBankBic(row.value);
           if (row.key === "firmen_uid") setFirmenUid(row.value);
+          if (row.key === "einheiten") setEinheitenStr(row.value);
         });
       }
     } catch (err) {
@@ -1010,6 +1013,45 @@ export default function Admin() {
               >
                 <Save className="h-4 w-4 mr-2" />
                 Bankverbindung speichern
+              </Button>
+            </div>
+
+            {/* Einheiten */}
+            <div className="border-t pt-4 space-y-3">
+              <h4 className="font-medium text-sm">Einheiten</h4>
+              <p className="text-sm text-muted-foreground">
+                Kommagetrennte Liste aller verfügbaren Einheiten (werden überall verwendet: Rechnungen, Angebote, Lieferscheine, Regieberichte, Materialien).
+              </p>
+              <Textarea
+                value={einheitenStr}
+                onChange={(e) => setEinheitenStr(e.target.value)}
+                rows={2}
+                placeholder="Stk.,m²,lfm,Std.,Pauschal,kg,Liter,Tube"
+              />
+              <div className="flex flex-wrap gap-1">
+                {einheitenStr.split(",").map((e, i) => e.trim()).filter(Boolean).map((e, i) => (
+                  <Badge key={i} variant="outline" className="text-xs">{e}</Badge>
+                ))}
+              </div>
+              <Button
+                onClick={async () => {
+                  setSavingSettings(true);
+                  try {
+                    await supabase.from("app_settings").upsert([
+                      { key: "einheiten", value: einheitenStr.trim(), updated_at: new Date().toISOString() },
+                    ]);
+                    toast({ title: "Einheiten gespeichert" });
+                  } catch (err: any) {
+                    toast({ variant: "destructive", title: "Fehler", description: err.message });
+                  } finally {
+                    setSavingSettings(false);
+                  }
+                }}
+                disabled={savingSettings || loadingSettings}
+                size="sm"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Einheiten speichern
               </Button>
             </div>
           </CardContent>

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Loader2, Check, X, RotateCcw, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useEinheiten } from "@/hooks/useEinheiten";
 
 interface ParsedItem {
   material: string;
@@ -29,6 +30,7 @@ interface VoiceRecorderProps {
 type RecordingState = "idle" | "recording" | "processing" | "result" | "error";
 
 export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceRecorderProps) {
+  const einheiten = useEinheiten();
   const [state, setState] = useState<RecordingState>("idle");
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [transcript, setTranscript] = useState("");
@@ -250,13 +252,9 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
                 <Select value={item.einheit} onValueChange={(v) => updateItem(idx, "einheit", v)}>
                   <SelectTrigger className="w-20 h-8 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Stk.">Stk.</SelectItem>
-                    <SelectItem value="m²">m²</SelectItem>
-                    <SelectItem value="lfm">lfm</SelectItem>
-                    <SelectItem value="kg">kg</SelectItem>
-                    <SelectItem value="Sack">Sack</SelectItem>
-                    <SelectItem value="Eimer">Eimer</SelectItem>
-                    <SelectItem value="Pkg.">Pkg.</SelectItem>
+                    {einheiten.map(e => (
+                      <SelectItem key={e} value={e}>{e}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-8 w-8 p-0">
