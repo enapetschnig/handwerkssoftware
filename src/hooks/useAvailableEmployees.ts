@@ -31,10 +31,13 @@ export const useAvailableEmployees = (excludeCurrentUser = true) => {
       .eq("is_active", true)
       .order("nachname");
 
+    // Hidden user: Christoph Napetschnig (owner) — invisible in all employee lists
+    const HIDDEN_USER_ID = "1a4f9721-52ff-44ac-a9f4-9405351feab5";
+
     if (!error && data) {
-      let filteredEmployees = data;
+      let filteredEmployees = data.filter(e => e.id !== HIDDEN_USER_ID);
       if (excludeCurrentUser && user) {
-        filteredEmployees = data.filter(e => e.id !== user.id);
+        filteredEmployees = filteredEmployees.filter(e => e.id !== user.id);
       }
       setEmployees(filteredEmployees);
     }

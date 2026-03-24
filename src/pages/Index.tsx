@@ -361,7 +361,19 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 2. Projekte - Für alle */}
+          {/* 2. Zeiterfassung - Für Mitarbeiter ganz vorne */}
+          {!isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
+                <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 3. Projekte - Für alle */}
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/projects")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center"><FolderKanban className="h-6 w-6 text-accent" /></div>
@@ -371,7 +383,7 @@ export default function Index() {
             <CardContent><Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button></CardContent>
           </Card>
 
-          {/* 3. Material entnehmen - Für alle */}
+          {/* 4. Material entnehmen - Für alle */}
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/material")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><BoxSelect className="h-6 w-6 text-orange-600" /></div>
@@ -381,7 +393,19 @@ export default function Index() {
             <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Material buchen</Button></CardContent>
           </Card>
 
-          {/* 4. Admin: Materialien */}
+          {/* 4b. Regieberichte - Für Mitarbeiter nach Material */}
+          {!isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/disturbances")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-yellow-500/10 flex items-center justify-center"><FileText className="h-6 w-6 text-yellow-600" /></div>
+                <CardTitle className="text-lg sm:text-xl">Regieberichte</CardTitle>
+                <CardDescription className="text-sm">Regieberichte erfassen & verwalten</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm" variant="secondary">Regieberichte öffnen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 5. Admin: Materialien */}
           {isAdmin && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/materials")}>
               <CardHeader className="space-y-2 pb-3">
@@ -417,15 +441,17 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 7. Zeiterfassung - Für alle */}
-          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
-              <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
-              <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
-            </CardHeader>
-            <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
-          </Card>
+          {/* 7. Zeiterfassung - Für Admin (Mitarbeiter haben es oben) */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
+                <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
+            </Card>
+          )}
 
           {/* 8. Meine Stunden - Für alle */}
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/my-hours")}>

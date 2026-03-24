@@ -79,10 +79,13 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   selectedDisturbanceIds: [],
 });
 
+const HIDDEN_USER_ID = "1a4f9721-52ff-44ac-a9f4-9405351feab5"; // Christoph Napetschnig - hidden from lists
+
 const TimeTracking = () => {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [submittingAbsence, setSubmittingAbsence] = useState(false);
@@ -184,6 +187,15 @@ const TimeTracking = () => {
   useEffect(() => {
     fetchProjects();
     fetchDisturbances();
+
+    // Check if user is admin
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
+        setIsAdmin(roleData?.role === "administrator");
+      }
+    })();
 
     const channel = supabase
       .channel('projects-changes')
@@ -846,7 +858,7 @@ const TimeTracking = () => {
                           <RadioGroup
                             value={block.locationType}
                             onValueChange={(value: 'baustelle' | 'werkstatt' | 'regie') => updateBlock(block.id, { locationType: value, taetigkeit: value === 'regie' ? 'Regiearbeit' : block.taetigkeit })}
-                            className="grid grid-cols-3 gap-3"
+                            className="grid grid-cols-2 gap-3"
                           >
                             <div>
                               <RadioGroupItem value="baustelle" id={`baustelle-${block.id}`} className="peer sr-only" />
@@ -858,12 +870,6 @@ const TimeTracking = () => {
                               <RadioGroupItem value="werkstatt" id={`werkstatt-${block.id}`} className="peer sr-only" />
                               <Label htmlFor={`werkstatt-${block.id}`} className="flex h-12 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary text-sm">
                                 🔧 Werkstatt
-                              </Label>
-                            </div>
-                            <div>
-                              <RadioGroupItem value="regie" id={`regie-${block.id}`} className="peer sr-only" />
-                              <Label htmlFor={`regie-${block.id}`} className="flex h-12 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary text-sm">
-                                📋 Regie
                               </Label>
                             </div>
                           </RadioGroup>
