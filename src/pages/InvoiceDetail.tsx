@@ -189,7 +189,7 @@ export default function InvoiceDetail() {
     datum: format(new Date(), "yyyy-MM-dd"),
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
-    zahlungsbedingungen: "14 Tage netto",
+    zahlungsbedingungen: "14 Tage",
     notizen: "",
     mwst_satz: 20,
     project_id: null,

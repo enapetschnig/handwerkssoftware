@@ -104,7 +104,7 @@ export async function generateInvoicePdf(
   if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", new Date(invoice.leistungsdatum).toLocaleDateString("de-AT")]);
   if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", new Date(invoice.faellig_am).toLocaleDateString("de-AT")]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", new Date(invoice.gueltig_bis).toLocaleDateString("de-AT")]);
-  if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen]);
+  if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen.replace(/ netto$/i, "")]);
   if (firmenUid) metaRows.push(["UID-Nr.", firmenUid]);
   if (invoice.kunde_uid) metaRows.push(["Kunden-UID", invoice.kunde_uid]);
 
