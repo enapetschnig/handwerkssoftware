@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams, useSearchParams } from "react-router-dom";
 import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { InstallPromptDialog } from "./components/InstallPromptDialog";
 import { useOnboarding } from "./contexts/OnboardingContext";
@@ -33,6 +33,14 @@ import OfferPackages from "./pages/OfferPackages";
 import MaterialWithdraw from "./pages/MaterialWithdraw";
 import LieferscheinDetail from "./pages/LieferscheinDetail";
 import NotFound from "./pages/NotFound";
+
+// Wrapper that forces re-mount when id or query params change
+function InvoiceDetailKeyed() {
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const key = `${id || "new"}-${searchParams.get("typ") || ""}-${searchParams.get("from_angebot") || ""}`;
+  return <InvoiceDetail key={key} />;
+}
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -80,8 +88,8 @@ function AppContent() {
         <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
         <Route path="/invoices/templates" element={<ProtectedRoute><InvoiceTemplates /></ProtectedRoute>} />
         <Route path="/invoices/packages" element={<ProtectedRoute><OfferPackages /></ProtectedRoute>} />
-        <Route path="/invoices/new" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
-        <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
+        <Route path="/invoices/new" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
+        <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
         <Route path="/materials" element={<ProtectedRoute><InvoiceTemplates /></ProtectedRoute>} />
         <Route path="/material-withdraw" element={<ProtectedRoute><MaterialWithdraw /></ProtectedRoute>} />
         <Route path="/material" element={<ProtectedRoute><MaterialWithdraw /></ProtectedRoute>} />
