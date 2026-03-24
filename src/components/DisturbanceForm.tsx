@@ -237,9 +237,31 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
       // Update workers
       await updateDisturbanceWorkers(editData.id, user.id, selectedEmployees);
-      
+
       // Update materials
       await updateMaterials(editData.id, user.id);
+
+      // Zeiteinträge für alle Mitarbeiter synchronisieren
+      // Alte Einträge für diesen Regiebericht löschen
+      await supabase.from("time_entries").delete().eq("disturbance_id", editData.id);
+
+      // Neue Einträge für alle beteiligten Mitarbeiter anlegen
+      const allWorkerIds = [user.id, ...selectedEmployees];
+      for (const workerId of allWorkerIds) {
+        await supabase.from("time_entries").insert({
+          user_id: workerId,
+          datum: formData.datum,
+          start_time: formData.startTime,
+          end_time: formData.endTime,
+          pause_minutes: formData.pauseMinutes,
+          stunden,
+          taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
+          location_type: "baustelle",
+          project_id: null,
+          disturbance_id: editData.id,
+          notizen: `Regie-Zuordnung: ${editData.id}`,
+        });
+      }
 
       toast({ title: "Erfolg", description: "Regiebericht wurde aktualisiert" });
     } else {
@@ -286,11 +308,40 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
         );
       }
 
+      // Automatisch Zeiteinträge für alle beteiligten Mitarbeiter anlegen
+      const allWorkerIds = [user.id, ...selectedEmployees];
+      for (const workerId of allWorkerIds) {
+        // Prüfen ob bereits ein Zeiteintrag für diesen Tag/User/Disturbance existiert
+        const { data: existing } = await supabase
+          .from("time_entries")
+          .select("id")
+          .eq("user_id", workerId)
+          .eq("datum", formData.datum)
+          .eq("disturbance_id", newDisturbance.id)
+          .maybeSingle();
+
+        if (!existing) {
+          await supabase.from("time_entries").insert({
+            user_id: workerId,
+            datum: formData.datum,
+            start_time: formData.startTime,
+            end_time: formData.endTime,
+            pause_minutes: formData.pauseMinutes,
+            stunden,
+            taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
+            location_type: "baustelle",
+            project_id: null,
+            disturbance_id: newDisturbance.id,
+            notizen: `Regie-Zuordnung: ${newDisturbance.id}`,
+          });
+        }
+      }
+
       toast({ title: "Erfolg", description: "Regiebericht wurde erfasst" });
-      
+
       setSaving(false);
       onOpenChange(false);
-      
+
       // Navigate to detail page with signature dialog open
       navigate(`/disturbances/${newDisturbance.id}?openSignature=true`);
       return;
