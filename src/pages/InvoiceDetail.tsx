@@ -901,8 +901,12 @@ export default function InvoiceDetail() {
                     {form.status === "storniert" ? (
                       <Badge className="bg-red-100 text-red-800">Storniert</Badge>
                     ) : (
-                    <Select value={form.status} onValueChange={(v) => {
+                    <Select value={form.status} onValueChange={async (v) => {
                       updateField("status", v);
+                      // Persist status change immediately to DB (if already saved)
+                      if (invoiceId && !isNew) {
+                        await supabase.from("invoices").update({ status: v }).eq("id", invoiceId);
+                      }
                       if (v === "angenommen" && form.typ === "angebot" && !form.project_id) {
                         setCreateProjectDialogOpen(true);
                       }
