@@ -2058,6 +2058,15 @@ export default function InvoiceDetail() {
                   storno_grund: stornoGrund.trim(),
                 }).eq("id", invoiceId);
 
+                // Update local form state with storno data
+                setForm(prev => ({
+                  ...prev,
+                  status: "storniert",
+                  storno_nummer: stornoNummer,
+                  storno_datum: stornoDatum,
+                  storno_grund: stornoGrund.trim(),
+                }));
+
                 // Generate and download Storno-PDF
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
