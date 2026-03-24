@@ -167,6 +167,7 @@ export default function InvoiceDetail() {
   // Payment tracking
   interface Payment { id: string; betrag: number; datum: string; notizen: string | null; }
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [mahnungen, setMahnungen] = useState<{ mahnstufe: number; created_at: string }[]>([]);
   const [newPaymentAmount, setNewPaymentAmount] = useState("");
   const [newPaymentDate, setNewPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [newPaymentNote, setNewPaymentNote] = useState("");
@@ -215,6 +216,7 @@ export default function InvoiceDetail() {
       loadInvoice(id);
       loadStoredPdfs(id);
       loadPayments(id);
+      loadMahnungen();
     }
     // Auto-open regiebericht import if disturbance_id is in URL
     const distId = searchParams.get("disturbance_id");
@@ -633,6 +635,16 @@ export default function InvoiceDetail() {
     if (data) setPayments(data);
   };
 
+  const loadMahnungen = async () => {
+    if (!invoiceId) return;
+    const { data } = await supabase
+      .from("mahnung_history")
+      .select("mahnstufe, created_at")
+      .eq("invoice_id", invoiceId)
+      .order("created_at");
+    if (data) setMahnungen(data);
+  };
+
   const addPayment = async () => {
     if (!invoiceId) return;
     let betrag = Math.round((Number(newPaymentAmount) || restBetrag) * 100) / 100;
@@ -992,9 +1004,11 @@ export default function InvoiceDetail() {
                       <Select onValueChange={async (stufe) => {
                         const mahnstufe = parseInt(stufe);
                         try {
-                          // Update mahnstufe in DB
+                          // Update mahnstufe in DB + save history
                           await supabase.from("invoices").update({ mahnstufe }).eq("id", invoiceId);
+                          await supabase.from("mahnung_history").insert({ invoice_id: invoiceId, mahnstufe });
                           updateField("mahnstufe", mahnstufe);
+                          loadMahnungen();
                           // Generate Mahnung PDF
                           let logoUri: string | undefined;
                           try {
@@ -1180,22 +1194,28 @@ export default function InvoiceDetail() {
           )}
 
           {/* Mahnungs-Übersicht */}
-          {!isNew && form.typ === "rechnung" && form.mahnstufe > 0 && (
+          {!isNew && form.typ === "rechnung" && mahnungen.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Mahnungen</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {Array.from({ length: form.mahnstufe }, (_, i) => i + 1).map(stufe => {
-                    const label = stufe === 1 ? "Zahlungserinnerung" : stufe === 2 ? "2. Mahnung" : "3. Mahnung (Letzte)";
+                  {mahnungen.map((m, idx) => {
+                    const label = m.mahnstufe === 1 ? "Zahlungserinnerung" : m.mahnstufe === 2 ? "2. Mahnung" : "3. Mahnung (Letzte)";
+                    const dateTime = new Date(m.created_at);
+                    const dateStr = dateTime.toLocaleDateString("de-AT");
+                    const timeStr = dateTime.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
                     return (
-                      <div key={stufe} className="flex items-center justify-between p-2 rounded-md border">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={stufe >= 3 ? "destructive" : "outline"} className="text-xs">
-                            Stufe {stufe}
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-md border">
+                        <div className="flex items-center gap-3">
+                          <Badge variant={m.mahnstufe >= 3 ? "destructive" : "outline"} className="text-xs">
+                            Stufe {m.mahnstufe}
                           </Badge>
-                          <span className="text-sm">{label}</span>
+                          <div>
+                            <span className="text-sm font-medium">{label}</span>
+                            <p className="text-xs text-muted-foreground">{dateStr} um {timeStr} Uhr</p>
+                          </div>
                         </div>
                         <Button variant="ghost" size="sm" className="gap-1" onClick={async () => {
                           try {
@@ -1215,7 +1235,7 @@ export default function InvoiceDetail() {
                             const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
                             const pdfBlob = generateMahnungPdf(
                               { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
-                              stufe, 0, bank, logoUri
+                              m.mahnstufe, 0, bank, logoUri
                             );
                             const url = URL.createObjectURL(pdfBlob);
                             const a = document.createElement("a"); a.href = url; a.download = `${label}_${form.nummer}.pdf`; a.click();
