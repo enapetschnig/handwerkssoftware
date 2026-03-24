@@ -21,6 +21,7 @@ interface Material {
   id: string;
   material: string;
   menge: string | null;
+  einheit: string | null;
   notizen: string | null;
 }
 
@@ -238,8 +239,8 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     doc.setFont("helvetica", "bold");
     doc.setTextColor(100, 100, 100);
     doc.text("MATERIAL", margin + 5, yPos);
-    doc.text("MENGE", margin + 95, yPos);
-    doc.text("NOTIZEN", margin + 120, yPos);
+    doc.text("MENGE / EINHEIT", margin + 95, yPos);
+    doc.text("NOTIZEN", margin + 130, yPos);
     yPos += 2;
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
@@ -259,8 +260,9 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
       doc.setTextColor(26, 26, 26);
       doc.text(mat.material || "-", margin + 5, yPos);
       doc.setTextColor(80, 80, 80);
-      doc.text(mat.menge || "-", margin + 95, yPos);
-      doc.text(mat.notizen || "-", margin + 120, yPos);
+      const mengeText = mat.menge ? `${mat.menge}${mat.einheit ? ` ${mat.einheit}` : ""}` : "-";
+      doc.text(mengeText, margin + 95, yPos);
+      doc.text(mat.notizen || "-", margin + 130, yPos);
       yPos += 6;
     });
     yPos += 6;

@@ -14,6 +14,7 @@ type Material = {
   id: string;
   material: string;
   menge: string | null;
+  einheit: string | null;
   notizen: string | null;
 };
 
