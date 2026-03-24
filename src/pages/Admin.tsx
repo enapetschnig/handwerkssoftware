@@ -897,8 +897,7 @@ export default function Admin() {
         {/* ===== URLAUBSVERWALTUNG ===== */}
         <LeaveManagement profiles={profiles.filter(p => p.is_active)} />
 
-        {/* ===== ZEITKONTO ===== */}
-        <TimeAccountManagement profiles={profiles.filter(p => p.is_active)} />
+        {/* Zeitkonto ausgeblendet */}
 
         {/* ===== EINSTELLUNGEN ===== */}
         <Card>
