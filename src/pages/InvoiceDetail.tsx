@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -727,6 +727,25 @@ export default function InvoiceDetail() {
     }
   };
 
+  const handlePrintPdf = async () => {
+    if (!invoiceId) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
+        body: { invoiceId },
+      });
+      if (error) throw error;
+      const html = decodeURIComponent(escape(atob(data.pdf)));
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => printWindow.print(), 500);
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Drucken fehlgeschlagen", description: err.message });
+    }
+  };
+
   const handleDownloadStoredPdf = async (fileName: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || !invoiceId) return;
@@ -1099,7 +1118,8 @@ export default function InvoiceDetail() {
           )}
 
           {/* Kundendaten */}
-          <Card>
+          <Card className={isLocked ? "opacity-80" : ""}>
+            <fieldset disabled={isLocked}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Kundendaten</CardTitle>
@@ -1194,10 +1214,12 @@ export default function InvoiceDetail() {
                 </div>
               </div>
             </CardContent>
+            </fieldset>
           </Card>
 
           {/* Rechnungsdetails */}
-          <Card>
+          <Card className={isLocked ? "opacity-80" : ""}>
+            <fieldset disabled={isLocked}>
             <CardHeader>
               <CardTitle>Details</CardTitle>
             </CardHeader>
@@ -1340,13 +1362,15 @@ export default function InvoiceDetail() {
                 </div>
               </div>
             </CardContent>
+            </fieldset>
           </Card>
 
           {/* Positionen */}
-          <Card>
+          <Card className={isLocked ? "opacity-80" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Positionen</CardTitle>
+                {!isLocked && (
                 <div className="flex gap-2 flex-wrap">
                   {form.typ === "rechnung" && (
                     <>
@@ -1373,9 +1397,11 @@ export default function InvoiceDetail() {
                     Position
                   </Button>
                 </div>
+                )}
               </div>
             </CardHeader>
             <CardContent>
+              <fieldset disabled={isLocked}>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1478,11 +1504,12 @@ export default function InvoiceDetail() {
                   </TableFooter>
                 </Table>
               </div>
+              </fieldset>
             </CardContent>
           </Card>
 
           {/* Notizen */}
-          <Card>
+          <Card className={isLocked ? "opacity-80" : ""}>
             <CardHeader>
               <CardTitle>Notizen</CardTitle>
             </CardHeader>
@@ -1490,6 +1517,7 @@ export default function InvoiceDetail() {
               <Textarea
                 value={form.notizen}
                 onChange={(e) => updateField("notizen", e.target.value)}
+                disabled={isLocked}
                 placeholder="Zusätzliche Anmerkungen..."
                 rows={3}
               />
@@ -1548,7 +1576,7 @@ export default function InvoiceDetail() {
                 Storno-Beleg
               </Button>
             )}
-            {isLocked && form.typ === "angebot" && (
+            {isLocked && form.typ === "angebot" && form.status !== "verrechnet" && (
               <Button variant="destructive" onClick={async () => {
                 if (!confirm("Angebot wirklich löschen?")) return;
                 await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
@@ -1557,10 +1585,23 @@ export default function InvoiceDetail() {
                 navigate("/invoices");
               }}>Löschen</Button>
             )}
-            <Button onClick={handlePreview} className="gap-2">
-              <Eye className="w-4 h-4" />
-              Vorschau
-            </Button>
+            {isLocked ? (
+              <>
+                <Button onClick={handleDownloadPdf} variant="outline" className="gap-2">
+                  <Download className="w-4 h-4" />
+                  PDF herunterladen
+                </Button>
+                <Button onClick={handlePrintPdf} variant="outline" className="gap-2">
+                  <Printer className="w-4 h-4" />
+                  Drucken
+                </Button>
+              </>
+            ) : (
+              <Button onClick={handlePreview} className="gap-2">
+                <Eye className="w-4 h-4" />
+                Vorschau
+              </Button>
+            )}
           </div>
         </div>
 
