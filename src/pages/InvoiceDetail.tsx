@@ -982,40 +982,9 @@ export default function InvoiceDetail() {
                       {statusLabels[form.status] || form.status}
                     </Badge>
                     {form.mahnstufe > 0 && (
-                      <Badge variant="destructive">Mahnung {form.mahnstufe}</Badge>
-                    )}
-                    {form.status === "storniert" ? (
-                      <Badge className="bg-red-100 text-red-800">Storniert</Badge>
-                    ) : (
-                    <Select value={form.status} onValueChange={async (v) => {
-                      updateField("status", v);
-                      // Persist status change immediately to DB (if already saved)
-                      if (invoiceId && !isNew) {
-                        await supabase.from("invoices").update({ status: v }).eq("id", invoiceId);
-                      }
-                      if (v === "angenommen" && form.typ === "angebot" && !form.project_id) {
-                        setCreateProjectDialogOpen(true);
-                      }
-                    }}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {form.typ === "angebot" && form.status === "entwurf" && <SelectItem value="entwurf">Entwurf</SelectItem>}
-                        <SelectItem value="offen">Offen</SelectItem>
-                        {form.typ === "rechnung" ? (
-                          <>
-                            <SelectItem value="teilbezahlt">Teilbezahlt</SelectItem>
-                            <SelectItem value="bezahlt">Bezahlt</SelectItem>
-                          </>
-                        ) : (
-                          <>
-                            <SelectItem value="angenommen">Angenommen</SelectItem>
-                            <SelectItem value="abgelehnt">Abgelehnt</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
+                      <Badge variant="destructive">
+                        {form.mahnstufe === 1 ? "Zahlungserinnerung" : `${form.mahnstufe}. Mahnung`}
+                      </Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1206,6 +1175,60 @@ export default function InvoiceDetail() {
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Mahnungs-Übersicht */}
+          {!isNew && form.typ === "rechnung" && form.mahnstufe > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Mahnungen</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {Array.from({ length: form.mahnstufe }, (_, i) => i + 1).map(stufe => {
+                    const label = stufe === 1 ? "Zahlungserinnerung" : stufe === 2 ? "2. Mahnung" : "3. Mahnung (Letzte)";
+                    return (
+                      <div key={stufe} className="flex items-center justify-between p-2 rounded-md border">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={stufe >= 3 ? "destructive" : "outline"} className="text-xs">
+                            Stufe {stufe}
+                          </Badge>
+                          <span className="text-sm">{label}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" className="gap-1" onClick={async () => {
+                          try {
+                            let logoUri: string | undefined;
+                            try {
+                              const resp = await fetch("/logo-tilger.png");
+                              const blob = await resp.blob();
+                              logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
+                            } catch {}
+                            const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+                            const bank = { kontoinhaber: "Gottfried Tilger", iban: "AT61 2081 5000 0423 1474", bic: "STSPAT2GXXX" };
+                            bankSettings?.forEach((s: any) => {
+                              if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
+                              if (s.key === "bank_iban") bank.iban = s.value;
+                              if (s.key === "bank_bic") bank.bic = s.value;
+                            });
+                            const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                            const pdfBlob = generateMahnungPdf(
+                              { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
+                              stufe, 0, bank, logoUri
+                            );
+                            const url = URL.createObjectURL(pdfBlob);
+                            const a = document.createElement("a"); a.href = url; a.download = `${label}_${form.nummer}.pdf`; a.click();
+                            URL.revokeObjectURL(url);
+                          } catch {}
+                        }}>
+                          <Download className="w-4 h-4" />
+                          PDF
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           )}
