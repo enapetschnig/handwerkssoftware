@@ -960,11 +960,15 @@ export default function InvoiceDetail() {
                 <div className="flex justify-center gap-3 pt-4">
                   <Button variant="outline" onClick={() => navigate("/invoices")}>Zurück</Button>
                   <Button variant="default" className="gap-2" onClick={async () => {
-                    if (!form.storno_nummer) {
-                      toast({ variant: "destructive", title: "Kein Stornobeleg vorhanden" });
-                      return;
-                    }
                     try {
+                      // Always load fresh from DB to ensure data is available
+                      const { data: freshInv } = await supabase.from("invoices")
+                        .select("storno_nummer, storno_datum, storno_grund, nummer, kunde_name, brutto_summe, datum")
+                        .eq("id", invoiceId).single();
+                      if (!freshInv?.storno_nummer) {
+                        toast({ variant: "destructive", title: "Kein Stornobeleg vorhanden" });
+                        return;
+                      }
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                       let logoUri: string | undefined;
                       try {
@@ -973,14 +977,14 @@ export default function InvoiceDetail() {
                         logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                       } catch {}
                       const pdfBlob = generateStornoPdf(
-                        { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
-                        form.storno_nummer, form.storno_datum || form.datum, form.storno_grund || "",
+                        { nummer: freshInv.nummer, kunde_name: freshInv.kunde_name, brutto_summe: Number(freshInv.brutto_summe), datum: freshInv.datum },
+                        freshInv.storno_nummer, freshInv.storno_datum || freshInv.datum, freshInv.storno_grund || "",
                         undefined, logoUri
                       );
                       const url = URL.createObjectURL(pdfBlob);
-                      const a = document.createElement("a"); a.href = url; a.download = `Storno_${form.storno_nummer}.pdf`; a.click();
+                      const a = document.createElement("a"); a.href = url; a.download = `Storno_${freshInv.storno_nummer}.pdf`; a.click();
                       URL.revokeObjectURL(url);
-                    } catch (e) { console.error(e); }
+                    } catch (e) { console.error(e); toast({ variant: "destructive", title: "Fehler beim Erstellen" }); }
                   }}>
                     <Download className="w-4 h-4" />
                     Stornobeleg herunterladen
