@@ -76,7 +76,38 @@ Deno.serve(async (req: Request) => {
     const userId = claimsData.claims.sub;
 
     // Parse request body
-    const { mainEntry, teamEntries, createWorkerLinks = true, skipMainEntry = false }: TeamTimeEntriesRequest = await req.json();
+    const body = await req.json();
+
+    // Support new simplified format: { entries: [...], deleteDisturbanceId?: string }
+    let mainEntry: TimeEntryData;
+    let teamEntries: TimeEntryData[];
+    let createWorkerLinks = true;
+    let skipMainEntry = false;
+
+    if (body.entries) {
+      // New format from Regiebericht: all entries as flat array
+      const entries = body.entries as TimeEntryData[];
+      const deleteDisturbanceId = body.deleteDisturbanceId as string | undefined;
+
+      // Create admin client early for delete
+      const supabaseAdminEarly = createClient(supabaseUrl, supabaseServiceKey);
+
+      // Delete old entries for this disturbance if updating
+      if (deleteDisturbanceId) {
+        await supabaseAdminEarly.from("time_entries").delete().eq("disturbance_id", deleteDisturbanceId);
+      }
+
+      // First entry is main, rest are team
+      mainEntry = entries[0];
+      teamEntries = entries.slice(1);
+      createWorkerLinks = false;
+    } else {
+      // Original format
+      mainEntry = body.mainEntry;
+      teamEntries = body.teamEntries || [];
+      createWorkerLinks = body.createWorkerLinks ?? true;
+      skipMainEntry = body.skipMainEntry ?? false;
+    }
 
     // Validate that the main entry belongs to the authenticated user
     if (mainEntry.user_id !== userId) {

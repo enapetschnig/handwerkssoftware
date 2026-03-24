@@ -242,26 +242,25 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       await updateMaterials(editData.id, user.id);
 
       // Zeiteinträge für alle Mitarbeiter synchronisieren
-      // Alte Einträge für diesen Regiebericht löschen
-      await supabase.from("time_entries").delete().eq("disturbance_id", editData.id);
-
-      // Neue Einträge für alle beteiligten Mitarbeiter anlegen
+      // Alte Einträge für diesen Regiebericht über Edge Function löschen + neu anlegen
       const allWorkerIds = [user.id, ...selectedEmployees];
-      for (const workerId of allWorkerIds) {
-        await supabase.from("time_entries").insert({
-          user_id: workerId,
-          datum: formData.datum,
-          start_time: formData.startTime,
-          end_time: formData.endTime,
-          pause_minutes: formData.pauseMinutes,
-          stunden,
-          taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
-          location_type: "baustelle",
-          project_id: null,
-          disturbance_id: editData.id,
-          notizen: `Regie-Zuordnung: ${editData.id}`,
-        });
-      }
+      const timeEntries = allWorkerIds.map(workerId => ({
+        user_id: workerId,
+        datum: formData.datum,
+        start_time: formData.startTime,
+        end_time: formData.endTime,
+        pause_minutes: formData.pauseMinutes,
+        stunden,
+        taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
+        location_type: "baustelle",
+        project_id: null,
+        disturbance_id: editData.id,
+        notizen: `Regie-Zuordnung: ${editData.id}`,
+      }));
+
+      await supabase.functions.invoke("create-team-time-entries", {
+        body: { entries: timeEntries, deleteDisturbanceId: editData.id },
+      });
 
       toast({ title: "Erfolg", description: "Regiebericht wurde aktualisiert" });
     } else {
@@ -309,33 +308,25 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       }
 
       // Automatisch Zeiteinträge für alle beteiligten Mitarbeiter anlegen
+      // Nutzt Edge Function (Service Role) damit auch für andere User inserted werden kann
       const allWorkerIds = [user.id, ...selectedEmployees];
-      for (const workerId of allWorkerIds) {
-        // Prüfen ob bereits ein Zeiteintrag für diesen Tag/User/Disturbance existiert
-        const { data: existing } = await supabase
-          .from("time_entries")
-          .select("id")
-          .eq("user_id", workerId)
-          .eq("datum", formData.datum)
-          .eq("disturbance_id", newDisturbance.id)
-          .maybeSingle();
+      const timeEntries = allWorkerIds.map(workerId => ({
+        user_id: workerId,
+        datum: formData.datum,
+        start_time: formData.startTime,
+        end_time: formData.endTime,
+        pause_minutes: formData.pauseMinutes,
+        stunden,
+        taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
+        location_type: "baustelle",
+        project_id: null,
+        disturbance_id: newDisturbance.id,
+        notizen: `Regie-Zuordnung: ${newDisturbance.id}`,
+      }));
 
-        if (!existing) {
-          await supabase.from("time_entries").insert({
-            user_id: workerId,
-            datum: formData.datum,
-            start_time: formData.startTime,
-            end_time: formData.endTime,
-            pause_minutes: formData.pauseMinutes,
-            stunden,
-            taetigkeit: `Regiearbeit: ${formData.beschreibung.trim().substring(0, 100)}`,
-            location_type: "baustelle",
-            project_id: null,
-            disturbance_id: newDisturbance.id,
-            notizen: `Regie-Zuordnung: ${newDisturbance.id}`,
-          });
-        }
-      }
+      await supabase.functions.invoke("create-team-time-entries", {
+        body: { entries: timeEntries },
+      });
 
       toast({ title: "Erfolg", description: "Regiebericht wurde erfasst" });
 
