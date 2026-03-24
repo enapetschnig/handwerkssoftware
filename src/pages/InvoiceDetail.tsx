@@ -403,26 +403,32 @@ export default function InvoiceDetail() {
     });
   };
 
-  // Calculations with discount
-  const positionenNetto = items.reduce((sum, item) => sum + item.gesamtpreis, 0);
-  const rabattWert = form.rabatt_prozent > 0
+  // Calculations with discount — round to 2 decimal places to avoid floating-point issues
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const positionenNetto = r2(items.reduce((sum, item) => sum + item.gesamtpreis, 0));
+  const rabattWert = r2(form.rabatt_prozent > 0
     ? positionenNetto * (form.rabatt_prozent / 100)
-    : form.rabatt_betrag;
-  const nettoSumme = positionenNetto - rabattWert;
-  const mwstBetrag = nettoSumme * (form.mwst_satz / 100);
-  const bruttoSumme = nettoSumme + mwstBetrag;
-  const restBetrag = bruttoSumme - form.bezahlt_betrag;
+    : form.rabatt_betrag);
+  const nettoSumme = r2(positionenNetto - rabattWert);
+  const mwstBetrag = r2(nettoSumme * (form.mwst_satz / 100));
+  const bruttoSumme = r2(nettoSumme + mwstBetrag);
+  const restBetrag = r2(bruttoSumme - form.bezahlt_betrag);
 
   const canDelete = form.typ === "angebot";
   const canCancel = !isNew && !!invoiceId && id !== "new" && form.typ === "rechnung" && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
+    // Double-click protection
+    if (saving) return false;
+
     if (!form.kunde_name.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Kundenname ist erforderlich" });
       return false;
     }
-    if (items.length === 0 || !items[0].beschreibung.trim()) {
-      toast({ variant: "destructive", title: "Fehler", description: "Mindestens eine Position ist erforderlich" });
+    // Validate ALL items, not just the first
+    const validItems = items.filter(item => item.beschreibung.trim());
+    if (validItems.length === 0) {
+      toast({ variant: "destructive", title: "Fehler", description: "Mindestens eine Position mit Beschreibung ist erforderlich" });
       return false;
     }
 
@@ -629,8 +635,15 @@ export default function InvoiceDetail() {
 
   const addPayment = async () => {
     if (!invoiceId) return;
-    const betrag = Number(newPaymentAmount) || restBetrag;
+    let betrag = Math.round((Number(newPaymentAmount) || restBetrag) * 100) / 100;
     if (betrag <= 0) return;
+
+    // Prevent overpayment
+    const maxBetrag = Math.round((bruttoSumme - form.bezahlt_betrag) * 100) / 100;
+    if (betrag > maxBetrag) {
+      toast({ variant: "destructive", title: "Betrag zu hoch", description: `Maximal € ${maxBetrag.toFixed(2)} offen` });
+      return;
+    }
 
     const { error } = await supabase.from("invoice_payments").insert({
       invoice_id: invoiceId,
@@ -645,8 +658,8 @@ export default function InvoiceDetail() {
     }
 
     // Update bezahlt_betrag on invoice
-    const newTotal = form.bezahlt_betrag + betrag;
-    const newStatus = newTotal >= bruttoSumme ? "bezahlt" : "teilbezahlt";
+    const newTotal = Math.round((form.bezahlt_betrag + betrag) * 100) / 100;
+    const newStatus = newTotal >= Math.round(bruttoSumme * 100) / 100 ? "bezahlt" : "teilbezahlt";
     await supabase.from("invoices").update({ bezahlt_betrag: newTotal, status: newStatus }).eq("id", invoiceId);
     updateField("bezahlt_betrag", newTotal);
     updateField("status", newStatus);
@@ -664,8 +677,9 @@ export default function InvoiceDetail() {
     if (!payment) return;
 
     await supabase.from("invoice_payments").delete().eq("id", paymentId);
-    const newTotal = Math.max(0, form.bezahlt_betrag - Number(payment.betrag));
-    const newStatus = newTotal <= 0 ? "offen" : newTotal >= bruttoSumme ? "bezahlt" : "teilbezahlt";
+    const newTotal = Math.round(Math.max(0, form.bezahlt_betrag - Number(payment.betrag)) * 100) / 100;
+    // Don't overwrite storniert status
+    const newStatus = form.status === "storniert" ? "storniert" : newTotal <= 0 ? "offen" : newTotal >= Math.round(bruttoSumme * 100) / 100 ? "bezahlt" : "teilbezahlt";
     await supabase.from("invoices").update({ bezahlt_betrag: newTotal, status: newStatus }).eq("id", invoiceId);
     updateField("bezahlt_betrag", newTotal);
     updateField("status", newStatus);
@@ -1247,7 +1261,7 @@ export default function InvoiceDetail() {
                       <Input
                         type="number"
                         value={form.skonto_prozent || ""}
-                        onChange={(e) => updateField("skonto_prozent", Number(e.target.value))}
+                        onChange={(e) => updateField("skonto_prozent", Math.min(100, Math.max(0, Number(e.target.value))))}
                         placeholder="z.B. 2"
                         min={0}
                         max={100}

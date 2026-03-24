@@ -9,11 +9,23 @@ const DEFAULT_BANK: BankData = {
 };
 
 function fmt(val: number): string {
+  if (!isFinite(val)) return "0,00";
   return val.toFixed(2).replace(".", ",");
 }
 
 function fmtCurrency(val: number): string {
   return `€ ${fmt(val)}`;
+}
+
+// Timezone-safe date formatting — "2026-03-24" should always show as 24.03.2026
+function fmtDate(dateStr: string): string {
+  if (!dateStr) return "–";
+  // Parse as local date (not UTC) by splitting the string
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  }
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("de-AT");
 }
 
 export async function generateInvoicePdf(
@@ -96,14 +108,14 @@ export async function generateInvoicePdf(
   const metaX = pageWidth - mr - 60;
   let metaY = y - 14;
   pdf.setFontSize(9);
-  const datumFormatted = new Date(invoice.datum).toLocaleDateString("de-AT");
+  const datumFormatted = fmtDate(invoice.datum);
   const metaRows: [string, string][] = [
     [`${typLabel} Nr.`, invoice.nummer || "–"],
     ["Datum", datumFormatted],
   ];
-  if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", new Date(invoice.leistungsdatum).toLocaleDateString("de-AT")]);
-  if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", new Date(invoice.faellig_am).toLocaleDateString("de-AT")]);
-  if (invoice.gueltig_bis) metaRows.push(["Gültig bis", new Date(invoice.gueltig_bis).toLocaleDateString("de-AT")]);
+  if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
+  if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
+  if (invoice.gueltig_bis) metaRows.push(["Gültig bis", fmtDate(invoice.gueltig_bis!)]);
   if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen.replace(/ netto$/i, "")]);
   if (firmenUid) metaRows.push(["UID-Nr.", firmenUid]);
   if (invoice.kunde_uid) metaRows.push(["Kunden-UID", invoice.kunde_uid]);
@@ -273,7 +285,7 @@ export async function generateInvoicePdf(
     const skontoDatum = new Date(invoice.datum);
     skontoDatum.setDate(skontoDatum.getDate() + skontoTage);
     const skontoDateStr = skontoDatum.toLocaleDateString("de-AT");
-    const faelligDateStr = invoice.faellig_am ? new Date(invoice.faellig_am).toLocaleDateString("de-AT") : "";
+    const faelligDateStr = invoice.faellig_am ? fmtDate(invoice.faellig_am!) : "";
 
     // Skonto box
     pdf.setDrawColor(200, 200, 200);
@@ -405,9 +417,9 @@ export function generateStornoPdf(
 
   const details: [string, string][] = [
     ["Stornonummer:", stornoNummer],
-    ["Stornodatum:", new Date(stornoDatum).toLocaleDateString("de-AT")],
+    ["Stornodatum:", fmtDate(stornoDatum)],
     ["Rechnungsnummer:", invoice.nummer],
-    ["Rechnungsdatum:", new Date(invoice.datum).toLocaleDateString("de-AT")],
+    ["Rechnungsdatum:", fmtDate(invoice.datum)],
     ["Kunde:", invoice.kunde_name],
     ["Rechnungsbetrag:", fmtCurrency(invoice.brutto_summe)],
   ];
@@ -543,8 +555,8 @@ export function generateMahnungPdf(
 
   const detailRows: [string, string][] = [
     ["Rechnungsnummer:", invoice.nummer],
-    ["Rechnungsdatum:", new Date(invoice.datum).toLocaleDateString("de-AT")],
-    ["Fällig am:", invoice.faellig_am ? new Date(invoice.faellig_am).toLocaleDateString("de-AT") : "–"],
+    ["Rechnungsdatum:", fmtDate(invoice.datum)],
+    ["Fällig am:", invoice.faellig_am ? fmtDate(invoice.faellig_am!) : "–"],
     ["Rechnungsbetrag:", fmtCurrency(invoice.brutto_summe)],
   ];
   if (invoice.bezahlt_betrag > 0) detailRows.push(["Bereits bezahlt:", fmtCurrency(invoice.bezahlt_betrag)]);
