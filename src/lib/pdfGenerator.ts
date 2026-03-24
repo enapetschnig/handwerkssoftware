@@ -10,7 +10,9 @@ const DEFAULT_BANK: BankData = {
 
 function fmt(val: number): string {
   if (!isFinite(val)) return "0,00";
-  return val.toFixed(2).replace(".", ",");
+  const parts = val.toFixed(2).split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return parts.join(",");
 }
 
 function fmtCurrency(val: number): string {
