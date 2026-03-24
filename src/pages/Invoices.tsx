@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { format, parseISO, isBefore } from "date-fns";
 import { de } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
+import { ExportInvoicesDialog } from "@/components/ExportInvoicesDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import {
   Dialog,
@@ -752,69 +753,11 @@ export default function Invoices() {
         </Dialog>
 
         {/* Export Dialog */}
-        <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileDown className="w-5 h-5" />
-                Rechnungen & Angebote exportieren
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex rounded-lg border overflow-hidden">
-                <button
-                  onClick={() => setExportMode("month")}
-                  className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${exportMode === "month" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                >
-                  Monat
-                </button>
-                <button
-                  onClick={() => setExportMode("year")}
-                  className={`flex-1 px-3 py-2 text-sm font-medium transition-colors border-l ${exportMode === "year" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                >
-                  Ganzes Jahr
-                </button>
-              </div>
-
-              {exportMode === "month" ? (
-                <div>
-                  <label className="text-sm font-medium">Monat auswählen</label>
-                  <input
-                    type="month"
-                    value={exportMonth}
-                    onChange={(e) => setExportMonth(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-sm font-medium">Jahr auswählen</label>
-                  <Select value={exportMonth.substring(0, 4)} onValueChange={(v) => setExportMonth(`${v}-01`)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 5 }, (_, i) => {
-                        const y = new Date().getFullYear() - i;
-                        return <SelectItem key={y} value={String(y)}>{y}</SelectItem>;
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Alle Rechnungen und Angebote (außer Entwürfe) werden als einzelne PDFs in neuen Tabs geöffnet. Von dort können sie gedruckt oder gespeichert werden.
-              </p>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setExportDialogOpen(false)}>Abbrechen</Button>
-                <Button onClick={handleExport} disabled={exporting} className="gap-2">
-                  <FileDown className="w-4 h-4" />
-                  {exporting ? "Exportiert..." : "PDFs exportieren"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <ExportInvoicesDialog
+          open={exportDialogOpen}
+          onClose={() => setExportDialogOpen(false)}
+          bankData={{ kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic }}
+        />
         {/* Create Project Dialog (when offer accepted) */}
         <CreateProjectDialog
           open={createProjectDialogOpen}
