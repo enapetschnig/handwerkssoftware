@@ -676,40 +676,6 @@ export default function Admin() {
         <section>
           <h2 className="text-2xl font-bold mb-4">Benutzerrollen & Einladungen</h2>
           
-          {/* Invitation Form */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Send className="h-5 w-5" />
-                Neuen Mitarbeiter einladen
-              </CardTitle>
-              <CardDescription>
-                Senden Sie eine SMS mit dem Registrierungslink an einen neuen Mitarbeiter
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleInviteSend} className="space-y-4">
-                <div>
-                  <Label htmlFor="telefon">Telefonnummer (Format: +43...)</Label>
-                  <Input
-                    id="telefon"
-                    type="tel"
-                    placeholder="+43664..."
-                    value={inviteTelefon}
-                    onChange={(e) => setInviteTelefon(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Format: +43 gefolgt von der Nummer ohne Leerzeichen
-                  </p>
-                </div>
-                <Button type="submit" disabled={sendingInvite}>
-                  {sendingInvite ? "Sendet..." : "SMS senden"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             <Card>
