@@ -156,6 +156,7 @@ export default function InvoiceDetail() {
   const [importProjectOpen, setImportProjectOpen] = useState(false);
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
+  const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
@@ -258,6 +259,7 @@ export default function InvoiceDetail() {
               gesamtpreis: it.gesamtpreis || 0,
             })));
           }
+          if (data.fromAngebotId) setFromAngebotId(data.fromAngebotId);
           sessionStorage.removeItem("convertToInvoice");
         }
       } catch {}
@@ -576,6 +578,12 @@ export default function InvoiceDetail() {
         updateField("status", saveStatus);
       }
 
+      // Mark original Angebot as "verrechnet" when saving the converted Rechnung
+      if (fromAngebotId && form.typ === "rechnung") {
+        await supabase.from("invoices").update({ status: "verrechnet" }).eq("id", fromAngebotId);
+        setFromAngebotId(null);
+      }
+
       toast({ title: "Gespeichert", description: `${form.typ === "rechnung" ? "Rechnung" : "Angebot"} wurde gespeichert` });
 
       if (isNew && !previewOpen) {
@@ -795,9 +803,7 @@ export default function InvoiceDetail() {
   const handleConvertToInvoice = async () => {
     if (!invoiceId || form.typ !== "angebot") return;
 
-    // Mark the Angebot as "verrechnet"
-    await supabase.from("invoices").update({ status: "verrechnet" }).eq("id", invoiceId);
-
+    // DON'T mark as verrechnet yet — only when the new Rechnung is saved
     // Store current data in sessionStorage so the new invoice page can load it
     const convertData = {
       fromAngebotId: invoiceId,
@@ -1210,7 +1216,8 @@ export default function InvoiceDetail() {
                       value={form.zahlungsbedingungen}
                       onValueChange={(v) => {
                         updateField("zahlungsbedingungen", v);
-                        const days = v === "sofort" ? 0 : v === "7 Tage netto" ? 7 : v === "14 Tage netto" ? 14 : v === "30 Tage netto" ? 30 : v === "60 Tage netto" ? 60 : 14;
+                        const daysMatch = v.match(/(\d+)/);
+                        const days = v === "sofort" ? 0 : daysMatch ? parseInt(daysMatch[1]) : 14;
                         if (form.datum) {
                           const due = new Date(form.datum);
                           due.setDate(due.getDate() + days);
@@ -1221,10 +1228,10 @@ export default function InvoiceDetail() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="sofort">Sofort fällig</SelectItem>
-                        <SelectItem value="7 Tage netto">7 Tage netto</SelectItem>
-                        <SelectItem value="14 Tage netto">14 Tage netto</SelectItem>
-                        <SelectItem value="30 Tage netto">30 Tage netto</SelectItem>
-                        <SelectItem value="60 Tage netto">60 Tage netto</SelectItem>
+                        <SelectItem value="7 Tage">7 Tage</SelectItem>
+                        <SelectItem value="14 Tage">14 Tage</SelectItem>
+                        <SelectItem value="30 Tage">30 Tage</SelectItem>
+                        <SelectItem value="60 Tage">60 Tage</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1607,6 +1614,8 @@ export default function InvoiceDetail() {
             rabatt_prozent: form.rabatt_prozent,
             rabatt_betrag: form.rabatt_betrag,
             mahnstufe: form.mahnstufe,
+            skonto_prozent: form.skonto_prozent,
+            skonto_tage: form.skonto_tage,
           }}
           items={items.map((item, idx) => ({
             position: idx + 1,

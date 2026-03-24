@@ -69,7 +69,7 @@ const angebotStatuses = ["offen", "angenommen", "abgelehnt"];
 export default function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterTyp, setFilterTyp] = useState<string>("alle");
+  const [filterTyp, setFilterTyp] = useState<string>("rechnung");
   const [filterStatus, setFilterStatus] = useState<string>("alle");
   const [showArchive, setShowArchive] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -465,14 +465,8 @@ export default function Invoices() {
                 {/* Typ-Buttons */}
                 <div className="flex rounded-lg border overflow-hidden">
                   <button
-                    onClick={() => setFilterTyp("alle")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${filterTyp === "alle" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                  >
-                    Alle
-                  </button>
-                  <button
                     onClick={() => setFilterTyp("rechnung")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${filterTyp === "rechnung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${filterTyp === "rechnung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                   >
                     Rechnungen
                   </button>
