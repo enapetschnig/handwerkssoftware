@@ -909,6 +909,59 @@ export default function InvoiceDetail() {
     return acc;
   }, {});
 
+  // Stornierte Rechnung: Nur Stornobeleg anzeigen
+  if (form.status === "storniert" && !isNew && invoiceId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-[800px]">
+          <PageHeader title={`Storno: ${form.nummer}`} backPath="/invoices" />
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="pt-6 text-center space-y-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-2">
+                  <Ban className="w-8 h-8 text-red-600" />
+                </div>
+                <h2 className="text-xl font-bold text-red-700">Rechnung storniert</h2>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Rechnungsnummer: <strong>{form.nummer}</strong></p>
+                  <p>Kunde: <strong>{form.kunde_name}</strong></p>
+                  <p>Bruttobetrag: <strong>€ {bruttoSumme.toFixed(2)}</strong></p>
+                </div>
+                <div className="flex justify-center gap-3 pt-4">
+                  <Button variant="outline" onClick={() => navigate("/invoices")}>Zurück</Button>
+                  <Button variant="default" className="gap-2" onClick={async () => {
+                    try {
+                      const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+                      let logoUri: string | undefined;
+                      try {
+                        const resp = await fetch("/logo-tilger.png");
+                        const blob = await resp.blob();
+                        logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
+                      } catch {}
+                      const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
+                      if (!inv?.storno_nummer) { toast({ variant: "destructive", title: "Kein Stornobeleg vorhanden" }); return; }
+                      const pdfBlob = generateStornoPdf(
+                        { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
+                        inv.storno_nummer, inv.storno_datum || form.datum, inv.storno_grund || "",
+                        undefined, logoUri
+                      );
+                      const url = URL.createObjectURL(pdfBlob);
+                      const a = document.createElement("a"); a.href = url; a.download = `Storno_${inv.storno_nummer}.pdf`; a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (e) { console.error(e); }
+                  }}>
+                    <Download className="w-4 h-4" />
+                    Stornobeleg herunterladen
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-[1600px]">
@@ -967,10 +1020,50 @@ export default function InvoiceDetail() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {form.typ === "rechnung" && (form.status === "offen" || form.status === "teilbezahlt") && (
-                      <Button onClick={handleMahnstufeUp} variant="outline" size="sm" className="gap-1.5">
-                        <TrendingUp className="w-4 h-4" />
-                        Mahnstufe erhöhen
-                      </Button>
+                      <Select onValueChange={async (stufe) => {
+                        const mahnstufe = parseInt(stufe);
+                        try {
+                          // Update mahnstufe in DB
+                          await supabase.from("invoices").update({ mahnstufe }).eq("id", invoiceId);
+                          updateField("mahnstufe", mahnstufe);
+                          // Generate Mahnung PDF
+                          let logoUri: string | undefined;
+                          try {
+                            const resp = await fetch("/logo-tilger.png");
+                            const blob = await resp.blob();
+                            logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
+                          } catch {}
+                          const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+                          const bank = { kontoinhaber: "Gottfried Tilger", iban: "AT61 2081 5000 0423 1474", bic: "STSPAT2GXXX" };
+                          bankSettings?.forEach((s: any) => {
+                            if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
+                            if (s.key === "bank_iban") bank.iban = s.value;
+                            if (s.key === "bank_bic") bank.bic = s.value;
+                          });
+                          const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                          const pdfBlob = generateMahnungPdf(
+                            { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
+                            mahnstufe, 0, bank, logoUri
+                          );
+                          const url = URL.createObjectURL(pdfBlob);
+                          const a = document.createElement("a"); a.href = url;
+                          const stufeLabel = mahnstufe === 1 ? "Zahlungserinnerung" : `${mahnstufe}. Mahnung`;
+                          a.download = `${stufeLabel}_${form.nummer}.pdf`; a.click();
+                          URL.revokeObjectURL(url);
+                          toast({ title: `${stufeLabel} erstellt`, description: "PDF wurde heruntergeladen" });
+                        } catch (err: any) {
+                          toast({ variant: "destructive", title: "Fehler", description: err.message });
+                        }
+                      }}>
+                        <SelectTrigger className="w-[220px]" size="sm">
+                          <SelectValue placeholder="Mahnung erstellen..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Zahlungserinnerung (1. Stufe)</SelectItem>
+                          <SelectItem value="2">2. Mahnung</SelectItem>
+                          <SelectItem value="3">3. Mahnung (Letzte)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
                     {form.typ === "angebot" && (
                       <Button onClick={handleConvertToInvoice} variant="default" size="sm" className="gap-1.5">
