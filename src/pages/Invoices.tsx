@@ -81,6 +81,7 @@ export default function Invoices() {
   const [rechnungStartNr, setRechnungStartNr] = useState("1");
   const [angebotStartNr, setAngebotStartNr] = useState("1");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("Gottfried Tilger");
   const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
   const [bankBic, setBankBic] = useState("STSPAT2GXXX");
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
@@ -107,11 +108,12 @@ export default function Invoices() {
     const { data } = await supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_iban", "bank_bic"]);
+      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_kontoinhaber", "bank_iban", "bank_bic"]);
     if (data) {
       data.forEach(s => {
         if (s.key === "rechnung_start_nummer") setRechnungStartNr(s.value);
         if (s.key === "angebot_start_nummer") setAngebotStartNr(s.value);
+        if (s.key === "bank_kontoinhaber") setBankKontoinhaber(s.value);
         if (s.key === "bank_iban") setBankIban(s.value);
         if (s.key === "bank_bic") setBankBic(s.value);
       });

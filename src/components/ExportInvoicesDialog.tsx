@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2 } from "lucide-react";
-import JSZip from "jszip";
+// JSZip loaded dynamically in handleExport
 
 interface ExportInvoicesDialogProps {
   open: boolean;
@@ -93,6 +93,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
       const { generateInvoicePdf } = await import("@/lib/pdfGenerator");
       const { generateEpcQrCode } = await import("@/lib/invoiceHtml");
 
+      const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
       for (let i = 0; i < invoices.length; i++) {
