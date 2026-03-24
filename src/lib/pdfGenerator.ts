@@ -301,7 +301,7 @@ export async function generateInvoicePdf(
       pdf.setFont("helvetica", "bold");
       pdf.text(`€ ${fmt(brutto)}`, ml + 70, y + 13);
       pdf.setFont("helvetica", "normal");
-      pdf.text("(netto)", ml + 100, y + 13);
+      pdf.text("(ohne Abzug)", ml + 100, y + 13);
       y += 24;
     } else {
       y += 18;
