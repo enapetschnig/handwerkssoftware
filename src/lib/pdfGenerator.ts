@@ -268,23 +268,44 @@ export async function generateInvoicePdf(
   const skontoTage = (invoice as any).skonto_tage || 0;
   if (!isAngebot && skontoProzent > 0 && skontoTage > 0) {
     const brutto = Number(invoice.brutto_summe);
-    const skontoBetrag = brutto * (1 - skontoProzent / 100);
+    const skontoAbzug = brutto * (skontoProzent / 100);
+    const skontoBetrag = brutto - skontoAbzug;
     const skontoDatum = new Date(invoice.datum);
     skontoDatum.setDate(skontoDatum.getDate() + skontoTage);
     const skontoDateStr = skontoDatum.toLocaleDateString("de-AT");
     const faelligDateStr = invoice.faellig_am ? new Date(invoice.faellig_am).toLocaleDateString("de-AT") : "";
 
+    // Skonto box
+    pdf.setDrawColor(200, 200, 200);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(ml, y - 2, contentWidth, faelligDateStr ? 22 : 16, 1, 1);
+
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(9);
+    pdf.setFontSize(8);
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Bei Zahlung bis ${skontoDateStr}: € ${fmt(skontoBetrag)} (${skontoProzent}% Skonto)`, ml, y);
-    y += 5;
+    pdf.text("Zahlungsbedingungen:", ml + 3, y + 2);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text(`Bei Zahlung bis ${skontoDateStr}:`, ml + 3, y + 7);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`€ ${fmt(skontoBetrag)}`, ml + 70, y + 7);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`(${skontoProzent}% Skonto = € ${fmt(skontoAbzug)} Abzug)`, ml + 100, y + 7);
+
     if (faelligDateStr) {
       pdf.setFont("helvetica", "normal");
-      pdf.text(`Zahlbar bis ${faelligDateStr}: € ${fmt(brutto)}`, ml, y);
-      y += 5;
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`Zahlbar bis ${faelligDateStr}:`, ml + 3, y + 13);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`€ ${fmt(brutto)}`, ml + 70, y + 13);
+      pdf.setFont("helvetica", "normal");
+      pdf.text("(netto)", ml + 100, y + 13);
+      y += 24;
+    } else {
+      y += 18;
     }
-    y += 3;
   }
 
   // ======= BANK INFO (only for Rechnung) =======
