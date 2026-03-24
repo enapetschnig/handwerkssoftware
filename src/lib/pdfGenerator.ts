@@ -284,7 +284,7 @@ export async function generateInvoicePdf(
     const brutto = Number(invoice.brutto_summe);
     const skontoAbzug = brutto * (skontoProzent / 100);
     const skontoBetrag = brutto - skontoAbzug;
-    const skontoDatum = new Date(invoice.datum);
+    const skontoDatum = new Date(invoice.datum + "T12:00:00");
     skontoDatum.setDate(skontoDatum.getDate() + skontoTage);
     const skontoDateStr = skontoDatum.toLocaleDateString("de-AT");
     const faelligDateStr = invoice.faellig_am ? fmtDate(invoice.faellig_am!) : "";

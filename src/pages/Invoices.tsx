@@ -41,31 +41,29 @@ interface Invoice {
 
 const statusColors: Record<string, string> = {
   entwurf: "bg-muted text-muted-foreground",
-  gesendet: "bg-blue-100 text-blue-800",
+  offen: "bg-blue-100 text-blue-800",
   bezahlt: "bg-green-100 text-green-800",
   teilbezahlt: "bg-yellow-100 text-yellow-800",
   storniert: "bg-red-100 text-red-800",
   abgelehnt: "bg-red-100 text-red-800",
   angenommen: "bg-green-100 text-green-800",
   verrechnet: "bg-purple-100 text-purple-800",
-  offen: "bg-blue-100 text-blue-800",
 };
 
 const statusLabels: Record<string, string> = {
   entwurf: "Entwurf",
-  gesendet: "Offen",
+  offen: "Offen",
   bezahlt: "Bezahlt",
   teilbezahlt: "Teilbezahlt",
   storniert: "Storniert",
   abgelehnt: "Abgelehnt",
   angenommen: "Angenommen",
   verrechnet: "Verrechnet",
-  offen: "Offen",
 };
 
 // Rechnung: Kein Entwurf zurück, kein Storniert von außen (nur in Detail-Ansicht)
 const rechnungStatuses = ["offen", "teilbezahlt", "bezahlt"];
-const angebotStatuses = ["offen", "angenommen", "abgelehnt"];
+const angebotStatuses = ["offen", "angenommen", "abgelehnt", "verrechnet"];
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);

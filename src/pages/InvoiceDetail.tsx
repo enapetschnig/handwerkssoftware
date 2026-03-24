@@ -113,22 +113,24 @@ interface StoredPdf {
 
 const statusColors: Record<string, string> = {
   entwurf: "bg-muted text-muted-foreground",
-  gesendet: "bg-blue-100 text-blue-800",
+  offen: "bg-blue-100 text-blue-800",
   bezahlt: "bg-green-100 text-green-800",
   teilbezahlt: "bg-yellow-100 text-yellow-800",
   storniert: "bg-red-100 text-red-800",
   abgelehnt: "bg-red-100 text-red-800",
   angenommen: "bg-green-100 text-green-800",
+  verrechnet: "bg-purple-100 text-purple-800",
 };
 
 const statusLabels: Record<string, string> = {
   entwurf: "Entwurf",
-  gesendet: "Offen",
+  offen: "Offen",
   bezahlt: "Bezahlt",
   teilbezahlt: "Teilbezahlt",
   storniert: "Storniert",
   abgelehnt: "Abgelehnt",
   angenommen: "Angenommen",
+  verrechnet: "Verrechnet",
 };
 
 export default function InvoiceDetail() {
@@ -332,6 +334,8 @@ export default function InvoiceDetail() {
       rabatt_prozent: Number((data as any).rabatt_prozent) || 0,
       rabatt_betrag: Number((data as any).rabatt_betrag) || 0,
       mahnstufe: Number((data as any).mahnstufe) || 0,
+      skonto_prozent: Number((data as any).skonto_prozent) || 0,
+      skonto_tage: Number((data as any).skonto_tage) || 0,
     });
 
     const { data: itemsData } = await supabase
@@ -1050,7 +1054,7 @@ export default function InvoiceDetail() {
                         </SelectContent>
                       </Select>
                     )}
-                    {form.typ === "angebot" && (
+                    {form.typ === "angebot" && form.status !== "verrechnet" && form.status !== "abgelehnt" && (
                       <Button onClick={handleConvertToInvoice} variant="default" size="sm" className="gap-1.5">
                         <ArrowRightLeft className="w-4 h-4" />
                         In Rechnung umwandeln
@@ -1977,7 +1981,18 @@ export default function InvoiceDetail() {
             setItems(prev => mergeItems(prev, newItems));
             // Fill customer data from offer if empty
             if (!form.kunde_name && offer.kunde_name) {
-              setForm(prev => ({ ...prev, kunde_name: offer.kunde_name }));
+              setForm(prev => ({
+                ...prev,
+                kunde_name: offer.kunde_name || prev.kunde_name,
+                kunde_adresse: offer.kunde_adresse || prev.kunde_adresse,
+                kunde_plz: offer.kunde_plz || prev.kunde_plz,
+                kunde_ort: offer.kunde_ort || prev.kunde_ort,
+                kunde_land: offer.kunde_land || prev.kunde_land,
+                kunde_email: offer.kunde_email || prev.kunde_email,
+                kunde_telefon: offer.kunde_telefon || prev.kunde_telefon,
+                kunde_uid: offer.kunde_uid || prev.kunde_uid,
+                customer_id: offer.customer_id || prev.customer_id,
+              }));
             }
             setImportOfferOpen(false);
             toast({ title: "Aus Angebot importiert", description: `${newItems.length} Positionen hinzugefügt` });
@@ -2005,7 +2020,7 @@ export default function InvoiceDetail() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setStornoDialogOpen(false)}>Abbrechen</Button>
               <Button variant="destructive" disabled={!stornoGrund.trim()} onClick={async () => {
-                const year = new Date().getFullYear();
+                const year = form.jahr || new Date().getFullYear();
                 const { data: maxStorno } = await supabase
                   .from("invoices")
                   .select("storno_nummer")
