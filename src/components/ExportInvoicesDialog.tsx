@@ -115,33 +115,44 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
             } catch {}
           }
 
-          const pdfBlob = await generateInvoicePdf(
-            {
-              typ: inv.typ, nummer: inv.nummer, status: inv.status,
-              kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
-              kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
-              kunde_land: inv.kunde_land, kunde_email: inv.kunde_email,
-              kunde_telefon: inv.kunde_telefon, kunde_uid: inv.kunde_uid,
-              datum: inv.datum, faellig_am: inv.faellig_am,
-              leistungsdatum: inv.leistungsdatum, gueltig_bis: inv.gueltig_bis,
-              zahlungsbedingungen: inv.zahlungsbedingungen, notizen: inv.notizen,
-              netto_summe: Number(inv.netto_summe), mwst_satz: Number(inv.mwst_satz),
-              mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
-              bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
-              rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
-              skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
-            },
-            (items || []).map((it: any) => ({
-              position: it.position, beschreibung: it.beschreibung,
-              menge: Number(it.menge), einheit: it.einheit || "Stk.",
-              einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
-            })),
-            bankData, logoUri, qrUri, firmenUid
-          );
+          let pdfBlob: Blob;
+          let fileName: string;
 
-          const fileName = inv.status === "storniert"
-            ? `STORNO_${inv.nummer}.pdf`
-            : `${inv.nummer}.pdf`;
+          if (inv.status === "storniert" && inv.storno_nummer) {
+            // Stornierte Rechnungen: Stornobeleg-PDF exportieren
+            const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+            pdfBlob = generateStornoPdf(
+              { nummer: inv.nummer, kunde_name: inv.kunde_name, brutto_summe: Number(inv.brutto_summe), datum: inv.datum },
+              inv.storno_nummer, inv.storno_datum || inv.datum, inv.storno_grund || "",
+              bankData, logoUri
+            );
+            fileName = `Storno_${inv.storno_nummer}.pdf`;
+          } else {
+            pdfBlob = await generateInvoicePdf(
+              {
+                typ: inv.typ, nummer: inv.nummer, status: inv.status,
+                kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
+                kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
+                kunde_land: inv.kunde_land, kunde_email: inv.kunde_email,
+                kunde_telefon: inv.kunde_telefon, kunde_uid: inv.kunde_uid,
+                datum: inv.datum, faellig_am: inv.faellig_am,
+                leistungsdatum: inv.leistungsdatum, gueltig_bis: inv.gueltig_bis,
+                zahlungsbedingungen: inv.zahlungsbedingungen, notizen: inv.notizen,
+                netto_summe: Number(inv.netto_summe), mwst_satz: Number(inv.mwst_satz),
+                mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
+                bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
+                rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
+                skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
+              },
+              (items || []).map((it: any) => ({
+                position: it.position, beschreibung: it.beschreibung,
+                menge: Number(it.menge), einheit: it.einheit || "Stk.",
+                einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
+              })),
+              bankData, logoUri, qrUri, firmenUid
+            );
+            fileName = `${inv.nummer}.pdf`;
+          }
           zip.file(fileName, pdfBlob);
         } catch (err) {
           console.error(`PDF generation failed for ${inv.nummer}:`, err);

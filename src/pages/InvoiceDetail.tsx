@@ -82,6 +82,9 @@ interface InvoiceData {
   mahnstufe: number;
   skonto_prozent: number;
   skonto_tage: number;
+  storno_nummer: string;
+  storno_datum: string;
+  storno_grund: string;
 }
 
 interface CustomerOption {
@@ -206,6 +209,9 @@ export default function InvoiceDetail() {
     mahnstufe: 0,
     skonto_prozent: 0,
     skonto_tage: 0,
+    storno_nummer: "",
+    storno_datum: "",
+    storno_grund: "",
   });
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
@@ -336,6 +342,9 @@ export default function InvoiceDetail() {
       mahnstufe: Number((data as any).mahnstufe) || 0,
       skonto_prozent: Number((data as any).skonto_prozent) || 0,
       skonto_tage: Number((data as any).skonto_tage) || 0,
+      storno_nummer: (data as any).storno_nummer || "",
+      storno_datum: (data as any).storno_datum || "",
+      storno_grund: (data as any).storno_grund || "",
     });
 
     const { data: itemsData } = await supabase
@@ -944,10 +953,17 @@ export default function InvoiceDetail() {
                   <p>Rechnungsnummer: <strong>{form.nummer}</strong></p>
                   <p>Kunde: <strong>{form.kunde_name}</strong></p>
                   <p>Bruttobetrag: <strong>€ {bruttoSumme.toFixed(2)}</strong></p>
+                  {form.storno_nummer && <p>Stornonummer: <strong>{form.storno_nummer}</strong></p>}
+                  {form.storno_datum && <p>Storniert am: <strong>{new Date(form.storno_datum + "T12:00:00").toLocaleDateString("de-AT")}</strong></p>}
+                  {form.storno_grund && <p>Grund: <strong>{form.storno_grund}</strong></p>}
                 </div>
                 <div className="flex justify-center gap-3 pt-4">
                   <Button variant="outline" onClick={() => navigate("/invoices")}>Zurück</Button>
                   <Button variant="default" className="gap-2" onClick={async () => {
+                    if (!form.storno_nummer) {
+                      toast({ variant: "destructive", title: "Kein Stornobeleg vorhanden" });
+                      return;
+                    }
                     try {
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                       let logoUri: string | undefined;
@@ -956,15 +972,13 @@ export default function InvoiceDetail() {
                         const blob = await resp.blob();
                         logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                       } catch {}
-                      const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
-                      if (!inv?.storno_nummer) { toast({ variant: "destructive", title: "Kein Stornobeleg vorhanden" }); return; }
                       const pdfBlob = generateStornoPdf(
                         { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
-                        inv.storno_nummer, inv.storno_datum || form.datum, inv.storno_grund || "",
+                        form.storno_nummer, form.storno_datum || form.datum, form.storno_grund || "",
                         undefined, logoUri
                       );
                       const url = URL.createObjectURL(pdfBlob);
-                      const a = document.createElement("a"); a.href = url; a.download = `Storno_${inv.storno_nummer}.pdf`; a.click();
+                      const a = document.createElement("a"); a.href = url; a.download = `Storno_${form.storno_nummer}.pdf`; a.click();
                       URL.revokeObjectURL(url);
                     } catch (e) { console.error(e); }
                   }}>
