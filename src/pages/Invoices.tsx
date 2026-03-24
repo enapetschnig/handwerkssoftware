@@ -651,6 +651,54 @@ export default function Invoices() {
                               >
                                 <Printer className="h-4 w-4" />
                               </Button>
+                              {inv.typ === "rechnung" && isOverdue(inv) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      let logoUri: string | undefined;
+                                      try {
+                                        const resp = await fetch("/logo-tilger.png");
+                                        const blob = await resp.blob();
+                                        logoUri = await new Promise<string>((resolve) => {
+                                          const r = new FileReader();
+                                          r.onload = () => resolve(r.result as string);
+                                          r.readAsDataURL(blob);
+                                        });
+                                      } catch {}
+                                      const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
+                                      const stufe = Number(inv.mahnstufe || 0) + 1;
+                                      const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                                      const pdfBlob = generateMahnungPdf(
+                                        {
+                                          nummer: inv.nummer, datum: inv.datum, faellig_am: inv.faellig_am || "",
+                                          kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
+                                          kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
+                                          brutto_summe: Number(inv.brutto_summe), bezahlt_betrag: Number(inv.bezahlt_betrag || 0),
+                                        },
+                                        stufe, 0, bank, logoUri
+                                      );
+                                      // Update mahnstufe
+                                      await supabase.from("invoices").update({ mahnstufe: stufe }).eq("id", inv.id);
+                                      // Download
+                                      const url = URL.createObjectURL(pdfBlob);
+                                      const a = document.createElement("a"); a.href = url;
+                                      a.download = `Mahnung_${stufe}_${inv.nummer}.pdf`; a.click();
+                                      URL.revokeObjectURL(url);
+                                      toast({ title: `Mahnung ${stufe} erstellt` });
+                                      fetchInvoices();
+                                    } catch (err: any) {
+                                      toast({ variant: "destructive", title: "Fehler", description: err.message });
+                                    }
+                                  }}
+                                  title={`Mahnung erstellen (Stufe ${Number(inv.mahnstufe || 0) + 1})`}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

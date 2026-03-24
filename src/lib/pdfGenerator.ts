@@ -436,3 +436,140 @@ export function generateStornoPdf(
 
   return pdf.output("blob");
 }
+
+// ======= MAHNUNG PDF =======
+export function generateMahnungPdf(
+  invoice: { nummer: string; datum: string; faellig_am: string; kunde_name: string; kunde_adresse?: string | null; kunde_plz?: string | null; kunde_ort?: string | null; brutto_summe: number; bezahlt_betrag: number },
+  mahnstufe: number,
+  mahngebuehr: number = 0,
+  bank: BankData = DEFAULT_BANK,
+  logoDataUri?: string
+): Blob {
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const ml = 20;
+  const mr = 15;
+
+  let y = 15;
+
+  if (logoDataUri) {
+    try { pdf.addImage(logoDataUri, "JPEG", ml, y, 45, 18); } catch {}
+  }
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.5);
+  pdf.text("Bahnhofstr. 174 · 8831 Niederwölz", pageWidth - mr, y + 6, { align: "right" });
+  pdf.text("+43 664 44 35 346 · info@ft-tilger.at", pageWidth - mr, y + 10, { align: "right" });
+
+  y += 25;
+
+  pdf.setFontSize(6);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text("Gottfried Tilger · Bahnhofstr. 174 · 8831 Niederwölz", ml, y);
+  pdf.setDrawColor(200, 200, 200);
+  pdf.setLineWidth(0.2);
+  pdf.line(ml, y + 1, ml + 85, y + 1);
+  y += 5;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text(invoice.kunde_name, ml, y); y += 5;
+  if (invoice.kunde_adresse) { pdf.text(invoice.kunde_adresse, ml, y); y += 5; }
+  if (invoice.kunde_plz || invoice.kunde_ort) {
+    pdf.text(`${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}`.trim(), ml, y); y += 5;
+  }
+  y += 10;
+
+  const stufeText = mahnstufe === 1 ? "Zahlungserinnerung" : mahnstufe === 2 ? "2. Mahnung" : "Letzte Mahnung";
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+  pdf.setTextColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
+  pdf.text(stufeText, ml, y);
+  y += 4;
+  pdf.setDrawColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
+  pdf.setLineWidth(0.8);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 10;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text(`Datum: ${new Date().toLocaleDateString("de-AT")}`, pageWidth - mr, y, { align: "right" });
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  const offenerBetrag = invoice.brutto_summe - invoice.bezahlt_betrag;
+
+  let bodyText = "";
+  if (mahnstufe === 1) {
+    bodyText = "Sehr geehrte Damen und Herren,\n\nbei der Überprüfung unserer Konten haben wir festgestellt, dass die folgende Rechnung noch nicht beglichen wurde. Möglicherweise handelt es sich um ein Versehen.\n\nWir bitten Sie freundlich, den offenen Betrag innerhalb der nächsten 7 Tage zu überweisen.";
+  } else if (mahnstufe === 2) {
+    bodyText = "Sehr geehrte Damen und Herren,\n\ntrotz unserer Zahlungserinnerung ist die folgende Rechnung weiterhin offen. Wir bitten Sie dringend, den ausstehenden Betrag umgehend zu begleichen.";
+  } else {
+    bodyText = "Sehr geehrte Damen und Herren,\n\ntrotz wiederholter Aufforderung ist die nachstehende Rechnung noch immer unbeglichen. Wir fordern Sie hiermit letztmalig auf, den offenen Betrag innerhalb von 5 Werktagen zu überweisen.\n\nSollte die Zahlung nicht fristgerecht eingehen, sehen wir uns gezwungen, rechtliche Schritte einzuleiten.";
+  }
+
+  const bodyLines = pdf.splitTextToSize(bodyText, pageWidth - ml - mr);
+  pdf.text(bodyLines, ml, y);
+  y += bodyLines.length * 5 + 10;
+
+  const detailRows: [string, string][] = [
+    ["Rechnungsnummer:", invoice.nummer],
+    ["Rechnungsdatum:", new Date(invoice.datum).toLocaleDateString("de-AT")],
+    ["Fällig am:", invoice.faellig_am ? new Date(invoice.faellig_am).toLocaleDateString("de-AT") : "–"],
+    ["Rechnungsbetrag:", fmtCurrency(invoice.brutto_summe)],
+  ];
+  if (invoice.bezahlt_betrag > 0) detailRows.push(["Bereits bezahlt:", fmtCurrency(invoice.bezahlt_betrag)]);
+  detailRows.push(["Offener Betrag:", fmtCurrency(offenerBetrag)]);
+  if (mahngebuehr > 0) {
+    detailRows.push(["Mahngebühr:", fmtCurrency(mahngebuehr)]);
+    detailRows.push(["Gesamt fällig:", fmtCurrency(offenerBetrag + mahngebuehr)]);
+  }
+
+  detailRows.forEach(([label, value]) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(label, ml, y);
+    pdf.setFont("helvetica", "bold");
+    const isTotalRow = label.startsWith("Offener") || label.startsWith("Gesamt");
+    if (isTotalRow) pdf.setFontSize(11);
+    pdf.text(value, ml + 50, y);
+    pdf.setFontSize(10);
+    y += 7;
+  });
+
+  y += 8;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text("Bitte überweisen Sie den Betrag auf folgendes Konto:", ml, y); y += 6;
+  pdf.setFont("helvetica", "bold");
+  pdf.text(`IBAN: ${bank.iban}`, ml, y); y += 5;
+  pdf.text(`BIC: ${bank.bic}`, ml, y); y += 5;
+  pdf.setFont("helvetica", "normal");
+  pdf.text(`Verwendungszweck: ${invoice.nummer}`, ml, y); y += 10;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.text("Mit freundlichen Grüßen", ml, y); y += 5;
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Gottfried Tilger", ml, y);
+
+  const fy = pageHeight - 22;
+  pdf.setDrawColor(204, 0, 0);
+  pdf.setLineWidth(0.3);
+  pdf.line(ml, fy, pageWidth - mr, fy);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(6);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text("Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174 · 8831 Niederwölz · +43 664 44 35 346 · info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
+  pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
+
+  return pdf.output("blob");
+}
