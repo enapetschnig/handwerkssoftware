@@ -967,6 +967,7 @@ const TimeTracking = () => {
                             <Label>Beginn</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.startTime}
                               onChange={(e) => updateBlock(block.id, { startTime: e.target.value })}
                               required
@@ -976,6 +977,7 @@ const TimeTracking = () => {
                             <Label>Ende</Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.endTime}
                               onChange={(e) => updateBlock(block.id, { endTime: e.target.value })}
                               required
@@ -987,6 +989,7 @@ const TimeTracking = () => {
                             <Label>Pause von <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.pauseStart}
                               onChange={(e) => updateBlock(block.id, { pauseStart: e.target.value })}
                             />
@@ -995,6 +998,7 @@ const TimeTracking = () => {
                             <Label>Pause bis <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input
                               type="time"
+                              step={900}
                               value={block.pauseEnd}
                               onChange={(e) => updateBlock(block.id, { pauseEnd: e.target.value })}
                             />
@@ -1249,6 +1253,7 @@ const TimeTracking = () => {
                       <Label>Von</Label>
                       <Input
                         type="time"
+                        step={900}
                         value={absenceData.absenceStartTime}
                         onChange={(e) => setAbsenceData({ ...absenceData, absenceStartTime: e.target.value })}
                       />
@@ -1257,6 +1262,7 @@ const TimeTracking = () => {
                       <Label>Bis</Label>
                       <Input
                         type="time"
+                        step={900}
                         value={absenceData.absenceEndTime}
                         onChange={(e) => setAbsenceData({ ...absenceData, absenceEndTime: e.target.value })}
                       />

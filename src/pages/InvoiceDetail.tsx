@@ -1549,7 +1549,7 @@ export default function InvoiceDetail() {
                       <TableHead className="w-28">Menge</TableHead>
                       <TableHead className="w-24">Einheit</TableHead>
                       <TableHead className="w-32">Preis (netto) €</TableHead>
-                      <TableHead className="w-28 text-right">Gesamt €</TableHead>
+                      <TableHead className="w-28 text-right">Gesamt (netto) €</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>

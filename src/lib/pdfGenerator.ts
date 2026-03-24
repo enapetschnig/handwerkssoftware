@@ -145,7 +145,7 @@ export async function generateInvoicePdf(
 
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
-  const tableHead = [["Pos.", "Menge", "Einh.", "Beschreibung", "Preis (netto)", "Gesamt"]];
+  const tableHead = [["Pos.", "Menge", "Einh.", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
   const tableBody = items.map(item => [
     String(item.position).padStart(2, "0"),
     fmt(Number(item.menge)),
