@@ -21,7 +21,8 @@ export async function generateInvoicePdf(
   items: InvoiceHtmlItem[],
   bank: BankData = DEFAULT_BANK,
   logoDataUri?: string,
-  qrCodeDataUri?: string
+  qrCodeDataUri?: string,
+  firmenUid?: string
 ): Promise<Blob> {
   const isAngebot = invoice.typ === "angebot";
   const typLabel = isAngebot ? "Angebot" : "Rechnung";
@@ -104,6 +105,8 @@ export async function generateInvoicePdf(
   if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", new Date(invoice.faellig_am).toLocaleDateString("de-AT")]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", new Date(invoice.gueltig_bis).toLocaleDateString("de-AT")]);
   if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen]);
+  if (firmenUid) metaRows.push(["UID-Nr.", firmenUid]);
+  if (invoice.kunde_uid) metaRows.push(["Kunden-UID", invoice.kunde_uid]);
 
   metaRows.forEach(([label, value]) => {
     pdf.setTextColor(0, 0, 0);
@@ -259,6 +262,30 @@ export async function generateInvoicePdf(
     : `Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`;
   pdf.text(closingText, ml, y, { maxWidth: contentWidth });
   y += 8;
+
+  // ======= SKONTO INFO (only for Rechnung with Skonto) =======
+  const skontoProzent = (invoice as any).skonto_prozent || 0;
+  const skontoTage = (invoice as any).skonto_tage || 0;
+  if (!isAngebot && skontoProzent > 0 && skontoTage > 0) {
+    const brutto = Number(invoice.brutto_summe);
+    const skontoBetrag = brutto * (1 - skontoProzent / 100);
+    const skontoDatum = new Date(invoice.datum);
+    skontoDatum.setDate(skontoDatum.getDate() + skontoTage);
+    const skontoDateStr = skontoDatum.toLocaleDateString("de-AT");
+    const faelligDateStr = invoice.faellig_am ? new Date(invoice.faellig_am).toLocaleDateString("de-AT") : "";
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Bei Zahlung bis ${skontoDateStr}: € ${fmt(skontoBetrag)} (${skontoProzent}% Skonto)`, ml, y);
+    y += 5;
+    if (faelligDateStr) {
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`Zahlbar bis ${faelligDateStr}: € ${fmt(brutto)}`, ml, y);
+      y += 5;
+    }
+    y += 3;
+  }
 
   // ======= BANK INFO (only for Rechnung) =======
   if (!isAngebot) {

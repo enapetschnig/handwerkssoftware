@@ -91,16 +91,18 @@ export function InvoicePdfPreview({
     setGenerating(true);
     setError(null);
     try {
-      // Load bank data
+      // Load bank data + firmen UID
       let bankData: BankData = { ...DEFAULT_BANK };
+      let loadedFirmenUid = "";
       try {
         const { data: bankSettings } = await supabase
-          .from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+          .from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
         if (bankSettings) {
           bankSettings.forEach((row: any) => {
             if (row.key === "bank_kontoinhaber") bankData.kontoinhaber = row.value;
             if (row.key === "bank_iban") bankData.iban = row.value;
             if (row.key === "bank_bic") bankData.bic = row.value;
+            if (row.key === "firmen_uid") loadedFirmenUid = row.value;
           });
         }
       } catch {}
@@ -129,7 +131,8 @@ export function InvoicePdfPreview({
         itemsRef.current,
         bankData,
         logoUri,
-        qrDataUri
+        qrDataUri,
+        loadedFirmenUid
       );
 
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);

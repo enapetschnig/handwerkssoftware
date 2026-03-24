@@ -79,6 +79,8 @@ interface InvoiceData {
   rabatt_prozent: number;
   rabatt_betrag: number;
   mahnstufe: number;
+  skonto_prozent: number;
+  skonto_tage: number;
 }
 
 interface CustomerOption {
@@ -196,6 +198,8 @@ export default function InvoiceDetail() {
     rabatt_prozent: 0,
     rabatt_betrag: 0,
     mahnstufe: 0,
+    skonto_prozent: 0,
+    skonto_tage: 0,
   });
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
@@ -241,6 +245,8 @@ export default function InvoiceDetail() {
             mwst_satz: data.mwst_satz || 20,
             rabatt_prozent: data.rabatt_prozent || 0,
             rabatt_betrag: data.rabatt_betrag || 0,
+            skonto_prozent: data.skonto_prozent || 0,
+            skonto_tage: data.skonto_tage || 0,
           }));
           if (data.items?.length > 0) {
             setItems(data.items.map((it: any, idx: number) => ({
@@ -510,6 +516,8 @@ export default function InvoiceDetail() {
         rabatt_prozent: form.rabatt_prozent,
         rabatt_betrag: form.rabatt_betrag,
         mahnstufe: form.mahnstufe,
+        skonto_prozent: form.skonto_prozent || 0,
+        skonto_tage: form.skonto_tage || 0,
       };
 
       if (isNew || !savedId) {
@@ -649,7 +657,7 @@ export default function InvoiceDetail() {
 
     await supabase.from("invoice_payments").delete().eq("id", paymentId);
     const newTotal = Math.max(0, form.bezahlt_betrag - Number(payment.betrag));
-    const newStatus = newTotal <= 0 ? "gesendet" : newTotal >= bruttoSumme ? "bezahlt" : "teilbezahlt";
+    const newStatus = newTotal <= 0 ? "offen" : newTotal >= bruttoSumme ? "bezahlt" : "teilbezahlt";
     await supabase.from("invoices").update({ bezahlt_betrag: newTotal, status: newStatus }).eq("id", invoiceId);
     updateField("bezahlt_betrag", newTotal);
     updateField("status", newStatus);
@@ -784,8 +792,11 @@ export default function InvoiceDetail() {
     }
   };
 
-  const handleConvertToInvoice = () => {
+  const handleConvertToInvoice = async () => {
     if (!invoiceId || form.typ !== "angebot") return;
+
+    // Mark the Angebot as "verrechnet"
+    await supabase.from("invoices").update({ status: "verrechnet" }).eq("id", invoiceId);
 
     // Store current data in sessionStorage so the new invoice page can load it
     const convertData = {
@@ -912,7 +923,7 @@ export default function InvoiceDetail() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {form.typ === "rechnung" && (form.status === "gesendet" || form.status === "teilbezahlt") && (
+                    {form.typ === "rechnung" && (form.status === "offen" || form.status === "teilbezahlt") && (
                       <Button onClick={handleMahnstufeUp} variant="outline" size="sm" className="gap-1.5">
                         <TrendingUp className="w-4 h-4" />
                         Mahnstufe erhöhen
@@ -1216,6 +1227,38 @@ export default function InvoiceDetail() {
                         <SelectItem value="60 Tage netto">60 Tage netto</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+                {form.typ === "rechnung" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label>Skonto %</Label>
+                      <Input
+                        type="number"
+                        value={form.skonto_prozent || ""}
+                        onChange={(e) => updateField("skonto_prozent", Number(e.target.value))}
+                        placeholder="z.B. 2"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                      />
+                    </div>
+                    <div>
+                      <Label>Skonto Tage</Label>
+                      <Input
+                        type="number"
+                        value={form.skonto_tage || ""}
+                        onChange={(e) => updateField("skonto_tage", Number(e.target.value))}
+                        placeholder="z.B. 10"
+                        min={0}
+                      />
+                    </div>
+                    {form.skonto_prozent > 0 && form.skonto_tage > 0 && (
+                      <p className="col-span-2 text-xs text-muted-foreground">
+                        Bei Zahlung bis {form.datum ? format(new Date(new Date(form.datum).getTime() + form.skonto_tage * 86400000), "dd.MM.yyyy") : "–"}:
+                        {" "}€ {(bruttoSumme * (1 - form.skonto_prozent / 100)).toFixed(2)} ({form.skonto_prozent}% Skonto)
+                      </p>
+                    )}
                   </div>
                 )}
                 {form.typ === "rechnung" && (

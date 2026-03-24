@@ -68,6 +68,8 @@ export interface InvoiceHtmlData {
   rabatt_prozent?: number;
   rabatt_betrag?: number;
   mahnstufe?: number;
+  skonto_prozent?: number;
+  skonto_tage?: number;
 }
 
 export interface InvoiceHtmlItem {

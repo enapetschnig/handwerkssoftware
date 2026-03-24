@@ -211,16 +211,18 @@ export default function Invoices() {
       const [{ data: inv }, { data: invItems }, { data: bankSettings }] = await Promise.all([
         supabase.from("invoices").select("*").eq("id", invoiceId).single(),
         supabase.from("invoice_items").select("*").eq("invoice_id", invoiceId).order("position"),
-        supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]),
+        supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]),
       ]);
       if (!inv) throw new Error("Rechnung nicht gefunden");
 
       const bank = { kontoinhaber: "Gottfried Tilger", iban: bankIban, bic: bankBic };
+      let firmenUid = "";
       if (bankSettings) {
         bankSettings.forEach((s: any) => {
           if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
           if (s.key === "bank_iban") bank.iban = s.value;
           if (s.key === "bank_bic") bank.bic = s.value;
+          if (s.key === "firmen_uid") firmenUid = s.value;
         });
       }
 
@@ -258,13 +260,14 @@ export default function Invoices() {
           mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
           bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
           rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
+          skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
         },
         (invItems || []).map((it: any) => ({
           position: it.position, beschreibung: it.beschreibung,
           menge: Number(it.menge), einheit: it.einheit || "Stk.",
           einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
         })),
-        bank, logoUri, qrUri
+        bank, logoUri, qrUri, firmenUid
       );
 
       // Direct download
@@ -386,13 +389,13 @@ export default function Invoices() {
   const isOverdue = (inv: Invoice) =>
     inv.typ === "rechnung" &&
     inv.faellig_am &&
-    (inv.status === "gesendet" || inv.status === "teilbezahlt") &&
+    (inv.status === "offen" || inv.status === "teilbezahlt") &&
     isBefore(parseISO(inv.faellig_am), today);
 
   const isExpiredOffer = (inv: Invoice) =>
     inv.typ === "angebot" &&
     inv.gueltig_bis &&
-    inv.status === "gesendet" &&
+    inv.status === "offen" &&
     isBefore(parseISO(inv.gueltig_bis), today);
 
   const filtered = invoices.filter(i => {
@@ -410,7 +413,7 @@ export default function Invoices() {
   const totalRechnungen = invoices.filter(i => i.typ === "rechnung").length;
   const totalAngebote = invoices.filter(i => i.typ === "angebot").length;
   const offeneSumme = invoices
-    .filter(i => i.typ === "rechnung" && (i.status === "gesendet" || i.status === "teilbezahlt"))
+    .filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + Number(i.brutto_summe) - i.bezahlt_betrag, 0);
   const bezahlteSumme = invoices
     .filter(i => i.typ === "rechnung" && (i.status === "bezahlt" || i.status === "teilbezahlt"))

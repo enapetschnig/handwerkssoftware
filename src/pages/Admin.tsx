@@ -103,6 +103,7 @@ export default function Admin() {
   const [bankKontoinhaber, setBankKontoinhaber] = useState("Gottfried Tilger");
   const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
   const [bankBic, setBankBic] = useState("STSPAT2GXXX");
+  const [firmenUid, setFirmenUid] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
@@ -112,7 +113,7 @@ export default function Admin() {
       const { data, error } = await supabase
         .from("app_settings")
         .select("key, value")
-        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic"]);
+        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
 
       if (error) {
         console.error("Error fetching app settings:", error);
@@ -122,6 +123,7 @@ export default function Admin() {
           if (row.key === "bank_kontoinhaber") setBankKontoinhaber(row.value);
           if (row.key === "bank_iban") setBankIban(row.value);
           if (row.key === "bank_bic") setBankBic(row.value);
+          if (row.key === "firmen_uid") setFirmenUid(row.value);
         });
       }
     } catch (err) {
@@ -967,6 +969,40 @@ export default function Admin() {
               <p className="text-sm text-muted-foreground">
                 Diese E-Mail-Adresse erhält alle Regieberichte als Kopie.
               </p>
+            </div>
+
+            {/* Firmen-UID */}
+            <div className="border-t pt-4 space-y-3">
+              <h4 className="font-medium text-sm">Firmen-UID</h4>
+              <p className="text-sm text-muted-foreground">
+                Die UID-Nummer wird auf allen Rechnungs-PDFs angezeigt (Pflicht bei Rechnungen über €400).
+              </p>
+              <div className="flex gap-3 items-end">
+                <div className="space-y-1 flex-1 max-w-xs">
+                  <Label>UID-Nummer</Label>
+                  <Input value={firmenUid} onChange={(e) => setFirmenUid(e.target.value)} disabled={loadingSettings} placeholder="ATU12345678" />
+                </div>
+                <Button
+                  onClick={async () => {
+                    setSavingSettings(true);
+                    try {
+                      await supabase.from("app_settings").upsert([
+                        { key: "firmen_uid", value: firmenUid, updated_at: new Date().toISOString() },
+                      ]);
+                      toast({ title: "UID-Nummer gespeichert" });
+                    } catch (err: any) {
+                      toast({ variant: "destructive", title: "Fehler", description: err.message });
+                    } finally {
+                      setSavingSettings(false);
+                    }
+                  }}
+                  disabled={savingSettings || loadingSettings}
+                  size="sm"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Speichern
+                </Button>
+              </div>
             </div>
 
             {/* Bankverbindung */}
