@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +35,11 @@ import {
 interface Customer {
   id: string;
   name: string;
+  kundennummer: string | null;
+  anrede: string | null;
+  titel: string | null;
+  vorname: string | null;
+  nachname: string | null;
   ansprechpartner: string | null;
   uid_nummer: string | null;
   adresse: string | null;
@@ -42,7 +48,12 @@ interface Customer {
   land: string | null;
   email: string | null;
   telefon: string | null;
+  telefon2: string | null;
   notizen: string | null;
+  zahlungsbedingungen: string | null;
+  skonto_prozent: number | null;
+  skonto_tage: number | null;
+  nettofrist: number | null;
 }
 
 interface CustomerInvoice {
@@ -56,6 +67,11 @@ interface CustomerInvoice {
 
 const emptyForm = {
   name: "",
+  kundennummer: "",
+  anrede: "",
+  titel: "",
+  vorname: "",
+  nachname: "",
   ansprechpartner: "",
   uid_nummer: "",
   adresse: "",
@@ -64,7 +80,12 @@ const emptyForm = {
   land: "Österreich",
   email: "",
   telefon: "",
+  telefon2: "",
   notizen: "",
+  zahlungsbedingungen: "",
+  skonto_prozent: 0,
+  skonto_tage: 0,
+  nettofrist: 0,
 };
 
 const statusLabels: Record<string, string> = {
@@ -143,6 +164,11 @@ export default function Customers() {
     setEditId(c.id);
     setForm({
       name: c.name,
+      kundennummer: (c as any).kundennummer || "",
+      anrede: (c as any).anrede || "",
+      titel: (c as any).titel || "",
+      vorname: (c as any).vorname || "",
+      nachname: (c as any).nachname || "",
       ansprechpartner: c.ansprechpartner || "",
       uid_nummer: c.uid_nummer || "",
       adresse: c.adresse || "",
@@ -151,7 +177,12 @@ export default function Customers() {
       land: c.land || "Österreich",
       email: c.email || "",
       telefon: c.telefon || "",
+      telefon2: (c as any).telefon2 || "",
       notizen: c.notizen || "",
+      zahlungsbedingungen: (c as any).zahlungsbedingungen || "",
+      skonto_prozent: Number((c as any).skonto_prozent) || 0,
+      skonto_tage: Number((c as any).skonto_tage) || 0,
+      nettofrist: Number((c as any).nettofrist) || 0,
     });
     setDialogOpen(true);
   };
@@ -167,9 +198,13 @@ export default function Customers() {
     if (!user) { setSaving(false); return; }
 
     try {
-      if (editId) {
-        const { error } = await supabase.from("customers").update({
+      const payload = {
           name: form.name,
+          kundennummer: form.kundennummer || null,
+          anrede: form.anrede || null,
+          titel: form.titel || null,
+          vorname: form.vorname || null,
+          nachname: form.nachname || null,
           ansprechpartner: form.ansprechpartner || null,
           uid_nummer: form.uid_nummer || null,
           adresse: form.adresse || null,
@@ -178,24 +213,20 @@ export default function Customers() {
           land: form.land || null,
           email: form.email || null,
           telefon: form.telefon || null,
+          telefon2: form.telefon2 || null,
           notizen: form.notizen || null,
-        }).eq("id", editId);
+          zahlungsbedingungen: form.zahlungsbedingungen || null,
+          skonto_prozent: form.skonto_prozent || 0,
+          skonto_tage: form.skonto_tage || 0,
+          nettofrist: form.nettofrist || 0,
+      };
+
+      if (editId) {
+        const { error } = await supabase.from("customers").update(payload).eq("id", editId);
         if (error) throw error;
         toast({ title: "Gespeichert", description: "Kunde wurde aktualisiert" });
       } else {
-        const { error } = await supabase.from("customers").insert({
-          user_id: user.id,
-          name: form.name,
-          ansprechpartner: form.ansprechpartner || null,
-          uid_nummer: form.uid_nummer || null,
-          adresse: form.adresse || null,
-          plz: form.plz || null,
-          ort: form.ort || null,
-          land: form.land || null,
-          email: form.email || null,
-          telefon: form.telefon || null,
-          notizen: form.notizen || null,
-        });
+        const { error } = await supabase.from("customers").insert({ user_id: user.id, ...payload });
         if (error) throw error;
         toast({ title: "Erstellt", description: "Neuer Kunde wurde angelegt" });
       }
@@ -466,8 +497,40 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
 }) {
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label>Kundennr.</Label>
+          <Input value={form.kundennummer} onChange={(e) => setForm(p => ({ ...p, kundennummer: e.target.value }))} placeholder="z.B. 10001" />
+        </div>
+        <div>
+          <Label>Anrede</Label>
+          <Select value={form.anrede || ""} onValueChange={(v) => setForm(p => ({ ...p, anrede: v }))}>
+            <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Herr">Herr</SelectItem>
+              <SelectItem value="Frau">Frau</SelectItem>
+              <SelectItem value="Firma">Firma</SelectItem>
+              <SelectItem value="Divers">Divers</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Titel</Label>
+          <Input value={form.titel} onChange={(e) => setForm(p => ({ ...p, titel: e.target.value }))} placeholder="Mag., Dr., Ing." />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Vorname</Label>
+          <Input value={form.vorname} onChange={(e) => setForm(p => ({ ...p, vorname: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Nachname</Label>
+          <Input value={form.nachname} onChange={(e) => setForm(p => ({ ...p, nachname: e.target.value }))} />
+        </div>
+      </div>
       <div>
-        <Label>Name / Firma *</Label>
+        <Label>Firma / Anzeigename *</Label>
         <Input value={form.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Firmenname oder Personenname" />
       </div>
       <div>
@@ -538,14 +601,32 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Input value={form.land} onChange={(e) => setForm(p => ({ ...p, land: e.target.value }))} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>E-Mail</Label>
           <Input type="email" value={form.email} onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))} />
         </div>
         <div>
-          <Label>Telefon</Label>
+          <Label>Telefon 1</Label>
           <Input value={form.telefon} onChange={(e) => setForm(p => ({ ...p, telefon: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Telefon 2</Label>
+          <Input value={form.telefon2} onChange={(e) => setForm(p => ({ ...p, telefon2: e.target.value }))} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label>Zahlungsfrist (Tage)</Label>
+          <Input type="number" value={form.nettofrist || ""} onChange={(e) => setForm(p => ({ ...p, nettofrist: Number(e.target.value) }))} min={0} />
+        </div>
+        <div>
+          <Label>Skonto %</Label>
+          <Input type="number" value={form.skonto_prozent || ""} onChange={(e) => setForm(p => ({ ...p, skonto_prozent: Number(e.target.value) }))} min={0} max={100} step={0.5} />
+        </div>
+        <div>
+          <Label>Skonto Tage</Label>
+          <Input type="number" value={form.skonto_tage || ""} onChange={(e) => setForm(p => ({ ...p, skonto_tage: Number(e.target.value) }))} min={0} />
         </div>
       </div>
       <div>
