@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { Plus, Trash2, Save, Package, Search, Filter, Upload } from "lucide-react";
 import { MaterialFileImport } from "@/components/MaterialFileImport";
+import { Textarea } from "@/components/ui/textarea";
+import { useEinheiten } from "@/hooks/useEinheiten";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +30,16 @@ interface Template {
   einzelpreis: number;
   kategorie: string;
   artikelnummer: string | null;
+  produktnummer: string | null;
+  produktgruppe: string | null;
+  kurzbezeichnung: string | null;
+  langbezeichnung: string | null;
+  netto_preis: number;
+  brutto_preis: number;
+  ust_satz: number;
+  ist_aktiv: boolean;
+  ist_lagerartikel: boolean;
+  lieferant: string | null;
 }
 
 export default function InvoiceTemplates() {
@@ -36,9 +49,14 @@ export default function InvoiceTemplates() {
   const [editId, setEditId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterKategorie, setFilterKategorie] = useState<string>("alle");
-  const [form, setForm] = useState({ name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "" });
+  const [form, setForm] = useState({
+    name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
+    produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
+    ist_lagerartikel: false, lieferant: "", produktgruppe: "",
+  });
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
+  const einheiten = useEinheiten();
 
   useEffect(() => { fetchTemplates(); }, []);
 
@@ -50,7 +68,21 @@ export default function InvoiceTemplates() {
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Materialien konnten nicht geladen werden" });
     } else {
-      setTemplates((data || []).map(t => ({ ...t, einzelpreis: Number(t.einzelpreis), artikelnummer: (t as any).artikelnummer || null })));
+      setTemplates((data || []).map(t => ({
+        ...t,
+        einzelpreis: Number(t.einzelpreis),
+        netto_preis: Number((t as any).netto_preis) || Number(t.einzelpreis),
+        brutto_preis: Number((t as any).brutto_preis) || 0,
+        ust_satz: Number((t as any).ust_satz) || 20,
+        ist_aktiv: (t as any).ist_aktiv !== false,
+        ist_lagerartikel: (t as any).ist_lagerartikel || false,
+        artikelnummer: (t as any).artikelnummer || null,
+        produktnummer: (t as any).produktnummer || null,
+        produktgruppe: (t as any).produktgruppe || null,
+        kurzbezeichnung: (t as any).kurzbezeichnung || null,
+        langbezeichnung: (t as any).langbezeichnung || null,
+        lieferant: (t as any).lieferant || null,
+      })));
     }
     setLoading(false);
   };
@@ -58,10 +90,15 @@ export default function InvoiceTemplates() {
   const kategorien = [...new Set(templates.map(t => t.kategorie))].sort();
 
   const filtered = templates.filter(t => {
-    const matchesSearch = !search || 
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.beschreibung.toLowerCase().includes(search.toLowerCase()) ||
-      (t.artikelnummer && t.artikelnummer.toLowerCase().includes(search.toLowerCase()));
+    const s = search.toLowerCase();
+    const matchesSearch = !search ||
+      t.name.toLowerCase().includes(s) ||
+      t.beschreibung.toLowerCase().includes(s) ||
+      (t.artikelnummer && t.artikelnummer.toLowerCase().includes(s)) ||
+      (t.produktnummer && t.produktnummer.toLowerCase().includes(s)) ||
+      (t.kurzbezeichnung && t.kurzbezeichnung.toLowerCase().includes(s)) ||
+      (t.langbezeichnung && t.langbezeichnung.toLowerCase().includes(s)) ||
+      (t.lieferant && t.lieferant.toLowerCase().includes(s));
     const matchesKategorie = filterKategorie === "alle" || t.kategorie === filterKategorie;
     return matchesSearch && matchesKategorie;
   });
@@ -73,13 +110,24 @@ export default function InvoiceTemplates() {
 
   const openNew = () => {
     setEditId(null);
-    setForm({ name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "" });
+    setForm({
+      name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
+      produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
+      ist_lagerartikel: false, lieferant: "", produktgruppe: "",
+    });
     setDialogOpen(true);
   };
 
   const openEdit = (t: Template) => {
     setEditId(t.id);
-    setForm({ name: t.name, beschreibung: t.beschreibung, einheit: t.einheit, einzelpreis: t.einzelpreis, kategorie: t.kategorie, artikelnummer: t.artikelnummer || "" });
+    setForm({
+      name: t.name, beschreibung: t.beschreibung, einheit: t.einheit, einzelpreis: t.einzelpreis,
+      kategorie: t.kategorie, artikelnummer: t.artikelnummer || "",
+      produktnummer: t.produktnummer || "", kurzbezeichnung: t.kurzbezeichnung || t.name,
+      langbezeichnung: t.langbezeichnung || t.beschreibung, netto_preis: t.netto_preis,
+      brutto_preis: t.brutto_preis, ust_satz: t.ust_satz, ist_lagerartikel: t.ist_lagerartikel,
+      lieferant: t.lieferant || "", produktgruppe: t.produktgruppe || t.kategorie,
+    });
     setDialogOpen(true);
   };
 
@@ -93,12 +141,21 @@ export default function InvoiceTemplates() {
     if (!user) return;
 
     const payload = {
-      name: form.name,
-      beschreibung: form.beschreibung,
+      name: form.kurzbezeichnung || form.name,
+      beschreibung: form.langbezeichnung || form.beschreibung || form.kurzbezeichnung || form.name,
       einheit: form.einheit,
-      einzelpreis: form.einzelpreis,
-      kategorie: form.kategorie,
-      artikelnummer: form.artikelnummer || null,
+      einzelpreis: form.netto_preis,
+      kategorie: form.produktgruppe || form.kategorie,
+      artikelnummer: form.produktnummer || form.artikelnummer || null,
+      produktnummer: form.produktnummer || null,
+      produktgruppe: form.produktgruppe || null,
+      kurzbezeichnung: form.kurzbezeichnung || form.name,
+      langbezeichnung: form.langbezeichnung || null,
+      netto_preis: form.netto_preis,
+      brutto_preis: form.brutto_preis,
+      ust_satz: form.ust_satz,
+      ist_lagerartikel: form.ist_lagerartikel,
+      lieferant: form.lieferant || null,
     };
 
     if (editId) {
@@ -130,7 +187,7 @@ export default function InvoiceTemplates() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 py-8 max-w-[1400px]">
         <PageHeader title="Materialien" backPath="/" />
 
         {/* Search & Filter Bar */}
@@ -195,40 +252,28 @@ export default function InvoiceTemplates() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Art.-Nr.</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Beschreibung</TableHead>
+                      <TableHead>Prod.-Nr.</TableHead>
+                      <TableHead>Kurzbezeichnung</TableHead>
+                      <TableHead>Langbezeichnung</TableHead>
                       <TableHead>Einheit</TableHead>
-                      <TableHead className="text-right">Preis (€)</TableHead>
-                      <TableHead className="w-20"></TableHead>
+                      <TableHead>USt</TableHead>
+                      <TableHead className="text-right">Netto (€)</TableHead>
+                      <TableHead className="text-right">Brutto (€)</TableHead>
+                      <TableHead>Lager</TableHead>
+                      <TableHead className="w-16"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map(t => (
                       <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(t)}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{t.artikelnummer || "–"}</TableCell>
-                        <TableCell className="font-medium">{t.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{t.beschreibung}</TableCell>
-                        <TableCell>{t.einheit}</TableCell>
-                        <TableCell className="text-right">
-                          <Input
-                            type="number"
-                            value={t.einzelpreis}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              const val = Number(e.target.value);
-                              setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, einzelpreis: val } : x));
-                            }}
-                            onBlur={(e) => {
-                              e.stopPropagation();
-                              handleInlinePrice(t.id, t.einzelpreis);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-24 text-right ml-auto"
-                            min={0}
-                            step={0.01}
-                          />
-                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{t.produktnummer || t.artikelnummer || "–"}</TableCell>
+                        <TableCell className="font-medium max-w-[200px] truncate">{t.kurzbezeichnung || t.name}</TableCell>
+                        <TableCell className="text-muted-foreground max-w-[250px] truncate text-xs">{t.langbezeichnung || t.beschreibung}</TableCell>
+                        <TableCell className="text-xs">{t.einheit}</TableCell>
+                        <TableCell className="text-xs">{t.ust_satz}%</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{t.netto_preis > 0 ? `€ ${t.netto_preis.toFixed(2)}` : "–"}</TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">{t.brutto_preis > 0 ? `€ ${t.brutto_preis.toFixed(2)}` : "–"}</TableCell>
+                        <TableCell>{t.ist_lagerartikel ? <Badge variant="outline" className="text-xs">Lager</Badge> : ""}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}>
                             <Trash2 className="w-4 h-4 text-destructive" />
@@ -244,43 +289,85 @@ export default function InvoiceTemplates() {
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editId ? "Material bearbeiten" : "Neues Material"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label>Name *</Label>
-                  <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
+                  <Label>Produktnummer</Label>
+                  <Input value={form.produktnummer} onChange={(e) => setForm(f => ({ ...f, produktnummer: e.target.value }))} placeholder="z.B. 0050-PCI" />
                 </div>
                 <div>
-                  <Label>Artikelnummer</Label>
-                  <Input value={form.artikelnummer} onChange={(e) => setForm(f => ({ ...f, artikelnummer: e.target.value }))} placeholder="z.B. MAT-001" />
+                  <Label>Produktgruppe</Label>
+                  <Input value={form.produktgruppe} onChange={(e) => setForm(f => ({ ...f, produktgruppe: e.target.value }))} placeholder="z.B. Arbeit, Fliesen" />
+                </div>
+                <div>
+                  <Label>Lieferant</Label>
+                  <Input value={form.lieferant} onChange={(e) => setForm(f => ({ ...f, lieferant: e.target.value }))} placeholder="z.B. Landforst, Ardex" />
                 </div>
               </div>
               <div>
-                <Label>Beschreibung *</Label>
-                <Input value={form.beschreibung} onChange={(e) => setForm(f => ({ ...f, beschreibung: e.target.value }))} />
+                <Label>Kurzbezeichnung *</Label>
+                <Input value={form.kurzbezeichnung} onChange={(e) => setForm(f => ({ ...f, kurzbezeichnung: e.target.value }))} placeholder="Kurzname des Materials" />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Langbezeichnung</Label>
+                <Textarea value={form.langbezeichnung} onChange={(e) => setForm(f => ({ ...f, langbezeichnung: e.target.value }))} placeholder="Ausführliche Beschreibung (wird auf PDF angezeigt)" rows={2} />
+              </div>
+              <div className="grid grid-cols-4 gap-3">
                 <div>
                   <Label>Einheit</Label>
-                  <Input value={form.einheit} onChange={(e) => setForm(f => ({ ...f, einheit: e.target.value }))} />
+                  <Select value={form.einheit} onValueChange={(v) => setForm(f => ({ ...f, einheit: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {einheiten.map(e => (
+                        <SelectItem key={e} value={e}>{e}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label>Einzelpreis (€)</Label>
-                  <Input type="number" value={form.einzelpreis} onChange={(e) => setForm(f => ({ ...f, einzelpreis: Number(e.target.value) }))} min={0} step={0.01} />
+                  <Label>Netto-Preis (€)</Label>
+                  <Input type="number" value={form.netto_preis || ""} onChange={(e) => {
+                    const netto = Number(e.target.value);
+                    setForm(f => ({ ...f, netto_preis: netto, brutto_preis: Math.round(netto * (1 + f.ust_satz / 100) * 100) / 100 }));
+                  }} min={0} step={0.01} />
                 </div>
                 <div>
-                  <Label>Kategorie</Label>
-                  <Input value={form.kategorie} onChange={(e) => setForm(f => ({ ...f, kategorie: e.target.value }))} />
+                  <Label>USt-Satz (%)</Label>
+                  <Select value={String(form.ust_satz)} onValueChange={(v) => {
+                    const ust = Number(v);
+                    setForm(f => ({ ...f, ust_satz: ust, brutto_preis: Math.round(f.netto_preis * (1 + ust / 100) * 100) / 100 }));
+                  }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="13">13%</SelectItem>
+                      <SelectItem value="20">20%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Brutto-Preis (€)</Label>
+                  <Input type="number" value={form.brutto_preis || ""} onChange={(e) => {
+                    const brutto = Number(e.target.value);
+                    setForm(f => ({ ...f, brutto_preis: brutto, netto_preis: f.ust_satz > 0 ? Math.round(brutto / (1 + f.ust_satz / 100) * 100) / 100 : brutto }));
+                  }} min={0} step={0.01} />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="lagerartikel" checked={form.ist_lagerartikel} onCheckedChange={(c) => setForm(f => ({ ...f, ist_lagerartikel: !!c }))} />
+                  <Label htmlFor="lagerartikel" className="cursor-pointer">Lagerartikel</Label>
                 </div>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Abbrechen</Button>
-              <Button onClick={handleSave} className="gap-2">
+              <Button onClick={handleSave} disabled={!form.kurzbezeichnung?.trim()} className="gap-2">
                 <Save className="w-4 h-4" />
                 Speichern
               </Button>
