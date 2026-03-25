@@ -161,11 +161,15 @@ export async function generateInvoicePdf(
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
   const langtextMap: Record<number, string> = {};
+  const langtextExtraHeight: Record<number, number> = {};
   const tableBody = items.map((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
     if (langtext && langtext !== kurztext) {
       langtextMap[idx] = langtext;
+      // Pre-calculate extra height needed (approximate column width ~80mm)
+      const ltLines = pdf.splitTextToSize(langtext, 80);
+      langtextExtraHeight[idx] = ltLines.length * 3.2 + 3;
     }
     return [
       String(item.position).padStart(2, "0"),
@@ -256,11 +260,9 @@ export async function generateInvoicePdf(
     didParseCell: (data: any) => {
       // Increase cell height for rows with langtext
       if (data.section === "body" && data.column.index === 3) {
-        const lt = langtextMap[data.row.index];
-        if (lt) {
-          const ltLines = pdf.splitTextToSize(lt, data.cell.width - 6);
-          const extraHeight = ltLines.length * 3.2 + 3;
-          data.cell.styles.cellPadding = { ...data.cell.styles.cellPadding, bottom: data.cell.styles.cellPadding.bottom + extraHeight };
+        const extra = langtextExtraHeight[data.row.index];
+        if (extra) {
+          data.cell.styles.cellPadding = { ...data.cell.styles.cellPadding, bottom: data.cell.styles.cellPadding.bottom + extra };
         }
       }
       if (data.section === "foot") {
@@ -298,20 +300,22 @@ export async function generateInvoicePdf(
       if (data.section === "body" && data.column.index === 3) {
         const lt = langtextMap[data.row.index];
         if (lt) {
-          const cellX = data.cell.x + 4;
-          const cellWidth = data.cell.width - 6;
-          const ltLines = pdf.splitTextToSize(lt, cellWidth);
-          // Position langtext below kurztext
-          const kurztextHeight = pdf.getTextDimensions(data.cell.text.join("\n"), { fontSize: 9 }).h;
-          const ltY = data.cell.y + data.cell.styles.cellPadding.top + kurztextHeight + 2.5;
-          pdf.setFont("helvetica", "italic");
-          pdf.setFontSize(7.5);
-          pdf.setTextColor(120, 120, 120);
-          pdf.text(ltLines, cellX, ltY);
-          // Reset
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(9);
-          pdf.setTextColor(0, 0, 0);
+          try {
+            const cellX = data.cell.x + 4;
+            const cellWidth = data.cell.width - 6;
+            const ltLines = pdf.splitTextToSize(lt, cellWidth > 10 ? cellWidth : 80);
+            // Position langtext below kurztext content
+            const textLines = Array.isArray(data.cell.text) ? data.cell.text : [String(data.cell.text)];
+            const kurztextLineCount = textLines.filter((l: string) => l.trim()).length || 1;
+            const ltY = data.cell.y + data.cell.styles.cellPadding.top + (kurztextLineCount * 3.5) + 2;
+            pdf.setFont("helvetica", "italic");
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(120, 120, 120);
+            pdf.text(ltLines, cellX, ltY);
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(9);
+            pdf.setTextColor(0, 0, 0);
+          } catch {}
         }
       }
     },
