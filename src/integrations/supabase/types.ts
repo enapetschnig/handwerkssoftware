@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.4"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -35,51 +61,81 @@ export type Database = {
       customers: {
         Row: {
           adresse: string | null
+          anrede: string | null
           ansprechpartner: string | null
           created_at: string | null
           email: string | null
           id: string
+          kundennummer: string | null
           land: string | null
+          nachname: string | null
           name: string
+          nettofrist: number | null
           notizen: string | null
           ort: string | null
           plz: string | null
+          skonto_prozent: number | null
+          skonto_tage: number | null
           telefon: string | null
+          telefon2: string | null
+          titel: string | null
           uid_nummer: string | null
           updated_at: string | null
           user_id: string
+          vorname: string | null
+          zahlungsbedingungen: string | null
         }
         Insert: {
           adresse?: string | null
+          anrede?: string | null
           ansprechpartner?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          kundennummer?: string | null
           land?: string | null
+          nachname?: string | null
           name: string
+          nettofrist?: number | null
           notizen?: string | null
           ort?: string | null
           plz?: string | null
+          skonto_prozent?: number | null
+          skonto_tage?: number | null
           telefon?: string | null
+          telefon2?: string | null
+          titel?: string | null
           uid_nummer?: string | null
           updated_at?: string | null
           user_id: string
+          vorname?: string | null
+          zahlungsbedingungen?: string | null
         }
         Update: {
           adresse?: string | null
+          anrede?: string | null
           ansprechpartner?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          kundennummer?: string | null
           land?: string | null
+          nachname?: string | null
           name?: string
+          nettofrist?: number | null
           notizen?: string | null
           ort?: string | null
           plz?: string | null
+          skonto_prozent?: number | null
+          skonto_tage?: number | null
           telefon?: string | null
+          telefon2?: string | null
+          titel?: string | null
           uid_nummer?: string | null
           updated_at?: string | null
           user_id?: string
+          vorname?: string | null
+          zahlungsbedingungen?: string | null
         }
         Relationships: []
       }
@@ -201,6 +257,7 @@ export type Database = {
         Row: {
           beschreibung: string
           created_at: string
+          customer_id: string | null
           datum: string
           end_time: string
           id: string
@@ -208,6 +265,8 @@ export type Database = {
           kunde_adresse: string | null
           kunde_email: string | null
           kunde_name: string
+          kunde_ort: string | null
+          kunde_plz: string | null
           kunde_telefon: string | null
           notizen: string | null
           pause_minutes: number
@@ -223,6 +282,7 @@ export type Database = {
         Insert: {
           beschreibung: string
           created_at?: string
+          customer_id?: string | null
           datum: string
           end_time: string
           id?: string
@@ -230,6 +290,8 @@ export type Database = {
           kunde_adresse?: string | null
           kunde_email?: string | null
           kunde_name: string
+          kunde_ort?: string | null
+          kunde_plz?: string | null
           kunde_telefon?: string | null
           notizen?: string | null
           pause_minutes?: number
@@ -245,6 +307,7 @@ export type Database = {
         Update: {
           beschreibung?: string
           created_at?: string
+          customer_id?: string | null
           datum?: string
           end_time?: string
           id?: string
@@ -252,6 +315,8 @@ export type Database = {
           kunde_adresse?: string | null
           kunde_email?: string | null
           kunde_name?: string
+          kunde_ort?: string | null
+          kunde_plz?: string | null
           kunde_telefon?: string | null
           notizen?: string | null
           pause_minutes?: number
@@ -264,7 +329,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "disturbances_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       documents: {
         Row: {
@@ -543,13 +616,16 @@ export type Database = {
           id: string
           jahr: number
           kunde_adresse: string | null
+          kunde_anrede: string | null
           kunde_email: string | null
           kunde_land: string | null
           kunde_name: string
           kunde_ort: string | null
           kunde_plz: string | null
           kunde_telefon: string | null
+          kunde_titel: string | null
           kunde_uid: string | null
+          kundennummer: string | null
           laufnummer: number
           leistungsdatum: string | null
           mahnstufe: number | null
@@ -561,7 +637,13 @@ export type Database = {
           project_id: string | null
           rabatt_betrag: number | null
           rabatt_prozent: number | null
+          reverse_charge: boolean | null
+          skonto_prozent: number | null
+          skonto_tage: number | null
           status: string
+          storno_datum: string | null
+          storno_grund: string | null
+          storno_nummer: string | null
           typ: string
           updated_at: string
           user_id: string
@@ -579,13 +661,16 @@ export type Database = {
           id?: string
           jahr?: number
           kunde_adresse?: string | null
+          kunde_anrede?: string | null
           kunde_email?: string | null
           kunde_land?: string | null
           kunde_name: string
           kunde_ort?: string | null
           kunde_plz?: string | null
           kunde_telefon?: string | null
+          kunde_titel?: string | null
           kunde_uid?: string | null
+          kundennummer?: string | null
           laufnummer: number
           leistungsdatum?: string | null
           mahnstufe?: number | null
@@ -597,7 +682,13 @@ export type Database = {
           project_id?: string | null
           rabatt_betrag?: number | null
           rabatt_prozent?: number | null
+          reverse_charge?: boolean | null
+          skonto_prozent?: number | null
+          skonto_tage?: number | null
           status?: string
+          storno_datum?: string | null
+          storno_grund?: string | null
+          storno_nummer?: string | null
           typ?: string
           updated_at?: string
           user_id: string
@@ -615,13 +706,16 @@ export type Database = {
           id?: string
           jahr?: number
           kunde_adresse?: string | null
+          kunde_anrede?: string | null
           kunde_email?: string | null
           kunde_land?: string | null
           kunde_name?: string
           kunde_ort?: string | null
           kunde_plz?: string | null
           kunde_telefon?: string | null
+          kunde_titel?: string | null
           kunde_uid?: string | null
+          kundennummer?: string | null
           laufnummer?: number
           leistungsdatum?: string | null
           mahnstufe?: number | null
@@ -633,7 +727,13 @@ export type Database = {
           project_id?: string | null
           rabatt_betrag?: number | null
           rabatt_prozent?: number | null
+          reverse_charge?: boolean | null
+          skonto_prozent?: number | null
+          skonto_tage?: number | null
           status?: string
+          storno_datum?: string | null
+          storno_grund?: string | null
+          storno_nummer?: string | null
           typ?: string
           updated_at?: string
           user_id?: string
@@ -768,6 +868,35 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mahnung_history: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          mahnstufe: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          mahnstufe: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          mahnstufe?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mahnung_history_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -1311,7 +1440,7 @@ export type Database = {
       }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       next_invoice_number: {
-        Args: { p_jahr?: number; p_typ: string }
+        Args: { p_jahr: number; p_typ: string }
         Returns: string
       }
     }
@@ -1442,6 +1571,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["administrator", "mitarbeiter"],

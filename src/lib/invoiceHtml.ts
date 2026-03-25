@@ -70,6 +70,9 @@ export interface InvoiceHtmlData {
   mahnstufe?: number;
   skonto_prozent?: number;
   skonto_tage?: number;
+  kunde_anrede?: string;
+  kunde_titel?: string;
+  reverse_charge?: boolean;
 }
 
 export interface InvoiceHtmlItem {

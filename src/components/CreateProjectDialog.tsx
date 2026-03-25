@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, UserPlus, Building } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +65,8 @@ export function CreateProjectDialog({
   const [email, setEmail] = useState("");
   const [telefon, setTelefon] = useState("");
   const [uidNummer, setUidNummer] = useState("");
+  const [anrede, setAnrede] = useState("");
+  const [titel, setTitel] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -88,6 +91,8 @@ export function CreateProjectDialog({
     setEmail(c.email || "");
     setTelefon(c.telefon || "");
     setUidNummer(c.uid_nummer || "");
+    setAnrede((c as any).anrede || "");
+    setTitel((c as any).titel || "");
     setCustomerPopoverOpen(false);
     if (!projectName) setProjectName(c.name);
   };
@@ -122,6 +127,8 @@ export function CreateProjectDialog({
             email: email.trim() || undefined,
             telefon: telefon.trim() || undefined,
             uid_nummer: uidNummer.trim() || undefined,
+            anrede: anrede || undefined,
+            titel: titel.trim() || undefined,
           }).eq("id", existing.id);
         } else {
           const { data: newCustomer, error: custErr } = await supabase
@@ -136,6 +143,8 @@ export function CreateProjectDialog({
               email: email.trim() || null,
               telefon: telefon.trim() || null,
               uid_nummer: uidNummer.trim() || null,
+              anrede: anrede || null,
+              titel: titel.trim() || null,
             })
             .select("id")
             .single();
@@ -240,14 +249,33 @@ export function CreateProjectDialog({
 
               <TabsContent value="new" className="space-y-3">
                 <div>
-                  <Label>Kundenname *</Label>
+                  <Label>Firma / Name *</Label>
                   <Input value={customerName} onChange={(e) => { setCustomerName(e.target.value); setSelectedCustomerId(null); }} placeholder="Firma / Name" />
                 </div>
               </TabsContent>
             </Tabs>
 
-            {/* Adresse (always visible) */}
+            {/* Anrede/Titel + Adresse (always visible) */}
             <div className="space-y-3 mt-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Anrede/Firma</Label>
+                  <Select value={anrede || "none"} onValueChange={(v) => setAnrede(v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      <SelectItem value="Herr">Herr</SelectItem>
+                      <SelectItem value="Frau">Frau</SelectItem>
+                      <SelectItem value="Firma">Firma</SelectItem>
+                      <SelectItem value="Divers">Divers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Titel</Label>
+                  <Input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Mag., Dr., Ing." />
+                </div>
+              </div>
               <div>
                 <Label>Adresse</Label>
                 <Input value={adresse} onChange={(e) => setAdresse(e.target.value)} placeholder="Straße + Hausnr." />
