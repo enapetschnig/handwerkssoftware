@@ -216,7 +216,9 @@ export default function InvoiceDetail() {
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
   // Rechnungen sind immer locked nach Speichern (kein Entwurf), Angebote nur wenn nicht Entwurf
-  const isLocked = !isNew && id !== "new" && !!invoiceId && (form.typ === "rechnung" || form.status !== "entwurf");
+  // Rechnungen: komplett locked nach Speichern. Angebote: Positionen editierbar, Kundendaten locked
+  const isLocked = !isNew && id !== "new" && !!invoiceId && form.typ === "rechnung";
+  const isKundeLocked = !isNew && id !== "new" && !!invoiceId; // Kundendaten immer locked nach erstem Speichern
 
   useEffect(() => {
     fetchProjects();
@@ -1345,9 +1347,9 @@ export default function InvoiceDetail() {
             </Card>
           )}
 
-          {/* Kundendaten */}
-          <Card className={isLocked ? "opacity-80" : ""}>
-            <fieldset disabled={isLocked}>
+          {/* Kundendaten — immer locked nach Speichern (für Angebote + Rechnungen) */}
+          <Card className={isKundeLocked ? "opacity-80" : ""}>
+            <fieldset disabled={isKundeLocked}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Kundendaten</CardTitle>
@@ -1935,10 +1937,24 @@ export default function InvoiceDetail() {
                 </Button>
               </>
             ) : (
-              <Button onClick={handlePreview} className="gap-2">
-                <Eye className="w-4 h-4" />
-                Vorschau
-              </Button>
+              <>
+                {!isNew && invoiceId && (
+                  <>
+                    <Button onClick={handleDownloadPdf} variant="outline" className="gap-2">
+                      <Download className="w-4 h-4" />
+                      PDF
+                    </Button>
+                    <Button onClick={handlePrintPdf} variant="outline" className="gap-2">
+                      <Printer className="w-4 h-4" />
+                      Drucken
+                    </Button>
+                  </>
+                )}
+                <Button onClick={handlePreview} className="gap-2">
+                  <Eye className="w-4 h-4" />
+                  Vorschau
+                </Button>
+              </>
             )}
           </div>
         </div>
