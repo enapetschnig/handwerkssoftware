@@ -504,9 +504,10 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
         </div>
         <div>
           <Label>Anrede</Label>
-          <Select value={form.anrede || ""} onValueChange={(v) => setForm(p => ({ ...p, anrede: v }))}>
+          <Select value={form.anrede || "none"} onValueChange={(v) => setForm(p => ({ ...p, anrede: v === "none" ? "" : v }))}>
             <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="none">—</SelectItem>
               <SelectItem value="Herr">Herr</SelectItem>
               <SelectItem value="Frau">Frau</SelectItem>
               <SelectItem value="Firma">Firma</SelectItem>
