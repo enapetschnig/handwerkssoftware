@@ -159,7 +159,7 @@ export async function generateInvoicePdf(
 
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
-  const tableHead = [["Pos.", "Menge", "Einh.", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
+  const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
   const tableBody = items.map(item => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
@@ -238,7 +238,7 @@ export async function generateInvoicePdf(
     columnStyles: {
       0: { halign: "center", cellWidth: 12, textColor: [0, 0, 0] },
       1: { halign: "right", cellWidth: 18 },
-      2: { halign: "center", cellWidth: 14, textColor: [0, 0, 0] },
+      2: { halign: "center", cellWidth: 18, textColor: [0, 0, 0] },
       3: { halign: "left" },
       4: { halign: "right", cellWidth: 24 },
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },

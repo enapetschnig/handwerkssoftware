@@ -158,6 +158,7 @@ export default function InvoiceDetail() {
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("alle");
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [templateMengen, setTemplateMengen] = useState<Record<string, number>>({});
   const [storedPdfs, setStoredPdfs] = useState<StoredPdf[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
@@ -2028,17 +2029,31 @@ export default function InvoiceDetail() {
                   const isSelected = selectedTemplateIds.includes(t.id);
                   const netto = Number((t as any).netto_preis) || t.einzelpreis;
                   return (
-                    <label key={t.id} className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-accent text-sm ${isSelected ? "bg-primary/10" : ""}`}>
+                    <div key={t.id} className={`flex items-center gap-2 p-2 rounded hover:bg-accent text-sm ${isSelected ? "bg-primary/10" : ""}`}>
                       <input type="checkbox" checked={isSelected} onChange={() => {
                         setSelectedTemplateIds(prev => isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]);
-                      }} className="rounded" />
-                      <div className="flex-1 min-w-0">
+                        if (!isSelected) setTemplateMengen(prev => ({ ...prev, [t.id]: 1 }));
+                      }} className="rounded cursor-pointer" />
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
+                        setSelectedTemplateIds(prev => isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]);
+                        if (!isSelected) setTemplateMengen(prev => ({ ...prev, [t.id]: 1 }));
+                      }}>
                         <p className="font-medium truncate">{(t as any).kurzbezeichnung || t.name}</p>
                         {(t as any).langbezeichnung && <p className="text-xs text-muted-foreground truncate">{(t as any).langbezeichnung}</p>}
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0">{t.einheit}</span>
+                      {isSelected && (
+                        <Input
+                          type="number"
+                          value={templateMengen[t.id] || 1}
+                          onChange={(e) => { e.stopPropagation(); setTemplateMengen(prev => ({ ...prev, [t.id]: Number(e.target.value) || 1 })); }}
+                          onClick={(e) => e.stopPropagation()}
+                          min={0.01} step={0.01}
+                          className="w-16 text-right text-xs h-7"
+                        />
+                      )}
+                      <span className="text-xs text-muted-foreground shrink-0 w-12 text-center">{t.einheit}</span>
                       <span className="text-sm font-mono shrink-0 w-20 text-right">{netto > 0 ? `€ ${netto.toFixed(2)}` : "–"}</span>
-                    </label>
+                    </div>
                   );
                 });
               })()}
@@ -2051,20 +2066,22 @@ export default function InvoiceDetail() {
                   const selected = templates.filter(t => selectedTemplateIds.includes(t.id));
                   const newItems = selected.map(t => {
                     const netto = Number((t as any).netto_preis) || t.einzelpreis;
+                    const menge = templateMengen[t.id] || 1;
                     return {
                       position: 1,
                       beschreibung: (t as any).kurzbezeichnung || t.name || t.beschreibung,
                       kurztext: (t as any).kurzbezeichnung || t.name,
                       langtext: (t as any).langbezeichnung || t.beschreibung || "",
-                      menge: 1,
+                      menge,
                       einheit: t.einheit,
                       einzelpreis: netto,
-                      gesamtpreis: netto,
+                      gesamtpreis: Math.round(netto * menge * 100) / 100,
                     } as InvoiceItem;
                   });
                   setItems(prev => mergeItems(prev, newItems));
                   // Dialog bleibt offen — nur Auswahl zurücksetzen
                   setSelectedTemplateIds([]);
+                  setTemplateMengen({});
                   toast({ title: `${newItems.length} Positionen hinzugefügt` });
                 }} className="gap-2">
                   <Plus className="w-4 h-4" />
