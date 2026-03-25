@@ -279,7 +279,7 @@ export default function InvoiceDetail() {
   }, [id]);
 
   const fetchCustomers = async () => {
-    const { data } = await supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon").order("name");
+    const { data } = await supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon, skonto_prozent, skonto_tage, nettofrist, zahlungsbedingungen").order("name");
     if (data) setCustomers(data);
   };
 
@@ -1301,8 +1301,7 @@ export default function InvoiceDetail() {
                               key={c.id}
                               value={c.name}
                               onSelect={() => {
-                                setForm(prev => ({
-                                  ...prev,
+                                const updates: any = {
                                   customer_id: c.id,
                                   kunde_name: c.name,
                                   kunde_adresse: c.adresse || "",
@@ -1312,8 +1311,34 @@ export default function InvoiceDetail() {
                                   kunde_email: c.email || "",
                                   kunde_telefon: c.telefon || "",
                                   kunde_uid: c.uid_nummer || "",
-                                }));
+                                };
+                                // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
+                                const hints: string[] = [];
+                                if (form.typ === "rechnung") {
+                                  const custSkonto = Number((c as any).skonto_prozent) || 0;
+                                  const custSkontoTage = Number((c as any).skonto_tage) || 0;
+                                  const custNettofrist = Number((c as any).nettofrist) || 0;
+                                  if (custSkonto > 0) {
+                                    updates.skonto_prozent = custSkonto;
+                                    updates.skonto_tage = custSkontoTage;
+                                    hints.push(`Skonto: ${custSkonto}% / ${custSkontoTage} Tage`);
+                                  }
+                                  if (custNettofrist > 0) {
+                                    updates.zahlungsbedingungen = `${custNettofrist} Tage`;
+                                    // Recalculate due date
+                                    if (form.datum) {
+                                      const due = new Date(form.datum + "T12:00:00");
+                                      due.setDate(due.getDate() + custNettofrist);
+                                      updates.faellig_am = due.toISOString().split("T")[0];
+                                    }
+                                    hints.push(`Zahlungsfrist: ${custNettofrist} Tage`);
+                                  }
+                                }
+                                setForm(prev => ({ ...prev, ...updates }));
                                 setCustomerPopoverOpen(false);
+                                if (hints.length > 0) {
+                                  toast({ title: "Kundeneinstellungen übernommen", description: hints.join(" · ") });
+                                }
                               }}
                             >
                               <div>
@@ -1411,29 +1436,45 @@ export default function InvoiceDetail() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {form.typ === "rechnung" && (
                   <div>
-                    <Label>Zahlbar bis</Label>
-                    <Select
-                      value={form.zahlungsbedingungen}
-                      onValueChange={(v) => {
-                        updateField("zahlungsbedingungen", v);
-                        const daysMatch = v.match(/(\d+)/);
-                        const days = v === "sofort" ? 0 : daysMatch ? parseInt(daysMatch[1]) : 14;
-                        if (form.datum) {
-                          const due = new Date(form.datum);
-                          due.setDate(due.getDate() + days);
-                          updateField("faellig_am", format(due, "yyyy-MM-dd"));
+                    <Label>Zahlungsfrist</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={form.zahlungsbedingungen || "14 Tage"}
+                        onValueChange={(v) => {
+                          if (v === "manuell") return;
+                          updateField("zahlungsbedingungen", v);
+                          const daysMatch = v.match(/(\d+)/);
+                          const days = v === "sofort" ? 0 : daysMatch ? parseInt(daysMatch[1]) : 14;
+                          if (form.datum) {
+                            const due = new Date(form.datum + "T12:00:00");
+                            due.setDate(due.getDate() + days);
+                            updateField("faellig_am", format(due, "yyyy-MM-dd"));
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sofort">Sofort fällig</SelectItem>
+                          <SelectItem value="7 Tage">7 Tage</SelectItem>
+                          <SelectItem value="14 Tage">14 Tage</SelectItem>
+                          <SelectItem value="30 Tage">30 Tage</SelectItem>
+                          <SelectItem value="60 Tage">60 Tage</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="mt-1.5">
+                      <Label className="text-xs text-muted-foreground">Oder manuell: Fällig am</Label>
+                      <Input type="date" value={form.faellig_am} onChange={(e) => {
+                        updateField("faellig_am", e.target.value);
+                        // Calculate days from datum
+                        if (form.datum && e.target.value) {
+                          const d1 = new Date(form.datum + "T12:00:00");
+                          const d2 = new Date(e.target.value + "T12:00:00");
+                          const days = Math.round((d2.getTime() - d1.getTime()) / 86400000);
+                          updateField("zahlungsbedingungen", `${days} Tage`);
                         }
-                      }}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sofort">Sofort fällig</SelectItem>
-                        <SelectItem value="7 Tage">7 Tage</SelectItem>
-                        <SelectItem value="14 Tage">14 Tage</SelectItem>
-                        <SelectItem value="30 Tage">30 Tage</SelectItem>
-                        <SelectItem value="60 Tage">60 Tage</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      }} className="mt-0.5" />
+                    </div>
                   </div>
                 )}
                 {form.typ === "rechnung" && (

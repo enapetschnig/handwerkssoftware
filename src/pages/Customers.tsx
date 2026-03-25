@@ -634,18 +634,14 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Input value={form.land} onChange={(e) => setForm(p => ({ ...p, land: e.target.value }))} />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>E-Mail</Label>
           <Input type="email" value={form.email} onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))} />
         </div>
         <div>
-          <Label>Telefon 1</Label>
+          <Label>Telefon</Label>
           <Input value={form.telefon} onChange={(e) => setForm(p => ({ ...p, telefon: e.target.value }))} />
-        </div>
-        <div>
-          <Label>Telefon 2</Label>
-          <Input value={form.telefon2} onChange={(e) => setForm(p => ({ ...p, telefon2: e.target.value }))} />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3">
