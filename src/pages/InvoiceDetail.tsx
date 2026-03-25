@@ -155,6 +155,9 @@ export default function InvoiceDetail() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateFilter, setTemplateFilter] = useState("alle");
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [storedPdfs, setStoredPdfs] = useState<StoredPdf[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
@@ -1777,9 +1780,18 @@ export default function InvoiceDetail() {
                         <TableCell>
                           <Input
                             value={item.beschreibung}
-                            onChange={(e) => updateItem(idx, "beschreibung", e.target.value)}
-                            placeholder="Beschreibung der Leistung"
+                            onChange={(e) => { updateItem(idx, "beschreibung", e.target.value); updateItem(idx, "kurztext", e.target.value); }}
+                            placeholder="Kurzbezeichnung"
                           />
+                          {(item.langtext || !isLocked) && (
+                            <textarea
+                              value={item.langtext || ""}
+                              onChange={(e) => updateItem(idx, "langtext", e.target.value)}
+                              placeholder="Langtext / Details (optional, wird auf PDF angezeigt)"
+                              className="mt-1 w-full text-xs border rounded px-2 py-1 resize-none bg-muted/30 min-h-[28px]"
+                              rows={1}
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={item.menge} onChange={(e) => updateItem(idx, "menge", Number(e.target.value))} min={0} step={0.01} className="text-right" />
@@ -1968,37 +1980,91 @@ export default function InvoiceDetail() {
           </div>
         </div>
 
-        {/* Template Picker Dialog */}
-        <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        {/* Template Picker Dialog — Suche + Filter + Multi-Select */}
+        <Dialog open={templateDialogOpen} onOpenChange={(open) => {
+          setTemplateDialogOpen(open);
+          if (!open) setTemplateSearch("");
+          if (!open) setTemplateFilter("alle");
+          if (!open) setSelectedTemplateIds([]);
+        }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Material einfügen</DialogTitle>
+              <DialogTitle>Materialien einfügen</DialogTitle>
             </DialogHeader>
-            {Object.keys(groupedTemplates).length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">Keine Materialien vorhanden</p>
-            ) : (
-              Object.entries(groupedTemplates).sort(([a], [b]) => a.localeCompare(b)).map(([kategorie, tpls]) => (
-                <div key={kategorie} className="mb-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">{kategorie}</h4>
-                  <div className="space-y-1">
-                    {tpls.map(t => (
-                      <Button
-                        key={t.id}
-                        variant="ghost"
-                        className="w-full justify-between text-left h-auto py-2"
-                        onClick={() => addFromTemplate(t)}
-                      >
-                        <div>
-                          <div className="font-medium">{t.name}</div>
-                          <div className="text-xs text-muted-foreground">{t.beschreibung}</div>
-                        </div>
-                        <span className="text-sm font-mono ml-4 shrink-0">€ {t.einzelpreis.toFixed(2)} / {t.einheit}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
+            <div className="flex gap-3 mb-3">
+              <Input
+                placeholder="Suchen..."
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                className="flex-1"
+              />
+              <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Alle Gruppen" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alle">Alle Gruppen</SelectItem>
+                  {Object.keys(groupedTemplates).sort().map(k => (
+                    <SelectItem key={k} value={k}>{k}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="overflow-y-auto flex-1 space-y-1 border rounded-md p-2">
+              {(() => {
+                const s = templateSearch.toLowerCase();
+                const filtered = templates.filter(t => {
+                  const matchSearch = !s || t.name.toLowerCase().includes(s) || (t.beschreibung && t.beschreibung.toLowerCase().includes(s)) || ((t as any).kurzbezeichnung && (t as any).kurzbezeichnung.toLowerCase().includes(s));
+                  const matchFilter = templateFilter === "alle" || t.kategorie === templateFilter;
+                  return matchSearch && matchFilter;
+                });
+                if (filtered.length === 0) return <p className="text-center text-muted-foreground py-8">Keine Materialien gefunden</p>;
+                return filtered.map(t => {
+                  const isSelected = selectedTemplateIds.includes(t.id);
+                  const netto = Number((t as any).netto_preis) || t.einzelpreis;
+                  return (
+                    <label key={t.id} className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-accent text-sm ${isSelected ? "bg-primary/10" : ""}`}>
+                      <input type="checkbox" checked={isSelected} onChange={() => {
+                        setSelectedTemplateIds(prev => isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]);
+                      }} className="rounded" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{(t as any).kurzbezeichnung || t.name}</p>
+                        {(t as any).langbezeichnung && <p className="text-xs text-muted-foreground truncate">{(t as any).langbezeichnung}</p>}
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">{t.einheit}</span>
+                      <span className="text-sm font-mono shrink-0 w-20 text-right">{netto > 0 ? `€ ${netto.toFixed(2)}` : "–"}</span>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-sm text-muted-foreground">{selectedTemplateIds.length} ausgewählt</span>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Abbrechen</Button>
+                <Button disabled={selectedTemplateIds.length === 0} onClick={() => {
+                  const selected = templates.filter(t => selectedTemplateIds.includes(t.id));
+                  const newItems = selected.map(t => {
+                    const netto = Number((t as any).netto_preis) || t.einzelpreis;
+                    return {
+                      position: 1,
+                      beschreibung: (t as any).kurzbezeichnung || t.name || t.beschreibung,
+                      kurztext: (t as any).kurzbezeichnung || t.name,
+                      langtext: (t as any).langbezeichnung || t.beschreibung || "",
+                      menge: 1,
+                      einheit: t.einheit,
+                      einzelpreis: netto,
+                      gesamtpreis: netto,
+                    } as InvoiceItem;
+                  });
+                  setItems(prev => mergeItems(prev, newItems));
+                  setTemplateDialogOpen(false);
+                  setSelectedTemplateIds([]);
+                  toast({ title: `${newItems.length} Positionen hinzugefügt` });
+                }} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  {selectedTemplateIds.length > 0 ? `${selectedTemplateIds.length} hinzufügen` : "Hinzufügen"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
         {/* PDF Preview Dialog — works both before and after saving */}

@@ -88,6 +88,8 @@ export default function InvoiceTemplates() {
   };
 
   const kategorien = [...new Set(templates.map(t => t.kategorie))].sort();
+  const produktgruppen = [...new Set(templates.map(t => t.produktgruppe).filter(Boolean))].sort() as string[];
+  const lieferanten = [...new Set(templates.map(t => t.lieferant).filter(Boolean))].sort() as string[];
 
   const filtered = templates.filter(t => {
     const s = search.toLowerCase();
@@ -301,11 +303,39 @@ export default function InvoiceTemplates() {
                 </div>
                 <div>
                   <Label>Produktgruppe</Label>
-                  <Input value={form.produktgruppe} onChange={(e) => setForm(f => ({ ...f, produktgruppe: e.target.value }))} placeholder="z.B. Arbeit, Fliesen" />
+                  <Select value={form.produktgruppe || "none"} onValueChange={(v) => {
+                    if (v === "_new") {
+                      const newGrp = prompt("Neue Produktgruppe:");
+                      if (newGrp?.trim()) setForm(f => ({ ...f, produktgruppe: newGrp.trim() }));
+                    } else {
+                      setForm(f => ({ ...f, produktgruppe: v === "none" ? "" : v }));
+                    }
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {produktgruppen.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                      <SelectItem value="_new" className="text-primary font-medium">+ Neue Gruppe...</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Lieferant</Label>
-                  <Input value={form.lieferant} onChange={(e) => setForm(f => ({ ...f, lieferant: e.target.value }))} placeholder="z.B. Landforst, Ardex" />
+                  <Select value={form.lieferant || "none"} onValueChange={(v) => {
+                    if (v === "_new") {
+                      const newLief = prompt("Neuer Lieferant:");
+                      if (newLief?.trim()) setForm(f => ({ ...f, lieferant: newLief.trim() }));
+                    } else {
+                      setForm(f => ({ ...f, lieferant: v === "none" ? "" : v }));
+                    }
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {lieferanten.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                      <SelectItem value="_new" className="text-primary font-medium">+ Neuer Lieferant...</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div>
@@ -316,7 +346,7 @@ export default function InvoiceTemplates() {
                 <Label>Langbezeichnung</Label>
                 <Textarea value={form.langbezeichnung} onChange={(e) => setForm(f => ({ ...f, langbezeichnung: e.target.value }))} placeholder="Ausführliche Beschreibung (wird auf PDF angezeigt)" rows={2} />
               </div>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <Label>Einheit</Label>
                   <Select value={form.einheit} onValueChange={(v) => setForm(f => ({ ...f, einheit: v }))}>
