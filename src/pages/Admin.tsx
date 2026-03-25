@@ -1018,41 +1018,59 @@ export default function Admin() {
 
             {/* Einheiten */}
             <div className="border-t pt-4 space-y-3">
-              <h4 className="font-medium text-sm">Einheiten</h4>
+              <h4 className="font-medium text-sm">Mengeneinheiten</h4>
               <p className="text-sm text-muted-foreground">
-                Kommagetrennte Liste aller verfügbaren Einheiten (werden überall verwendet: Rechnungen, Angebote, Lieferscheine, Regieberichte, Materialien).
+                Verfügbare Einheiten für Materialien, Rechnungen, Angebote, Lieferscheine und Regieberichte.
               </p>
-              <Textarea
-                value={einheitenStr}
-                onChange={(e) => setEinheitenStr(e.target.value)}
-                rows={2}
-                placeholder="Stk.,m²,lfm,Std.,Pauschal,kg,Liter,Tube"
-              />
-              <div className="flex flex-wrap gap-1">
-                {einheitenStr.split(",").map((e, i) => e.trim()).filter(Boolean).map((e, i) => (
-                  <Badge key={i} variant="outline" className="text-xs">{e}</Badge>
+              <div className="flex flex-wrap gap-1.5">
+                {einheitenStr.split(",").map(e => e.trim()).filter(Boolean).map((e, i) => (
+                  <Badge key={i} variant="secondary" className="text-sm px-2.5 py-1 gap-1">
+                    {e}
+                    <button
+                      className="ml-1 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        const updated = einheitenStr.split(",").map(x => x.trim()).filter(x => x && x !== e).join(",");
+                        setEinheitenStr(updated);
+                      }}
+                    >×</button>
+                  </Badge>
                 ))}
               </div>
-              <Button
-                onClick={async () => {
-                  setSavingSettings(true);
-                  try {
-                    await supabase.from("app_settings").upsert([
-                      { key: "einheiten", value: einheitenStr.trim(), updated_at: new Date().toISOString() },
-                    ]);
-                    toast({ title: "Einheiten gespeichert" });
-                  } catch (err: any) {
-                    toast({ variant: "destructive", title: "Fehler", description: err.message });
-                  } finally {
-                    setSavingSettings(false);
-                  }
-                }}
-                disabled={savingSettings || loadingSettings}
-                size="sm"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Einheiten speichern
-              </Button>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Neue Einheit hinzufügen..."
+                  className="max-w-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val && !einheitenStr.split(",").map(x => x.trim()).includes(val)) {
+                        setEinheitenStr(prev => prev ? `${prev},${val}` : val);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  onClick={async () => {
+                    setSavingSettings(true);
+                    try {
+                      await supabase.from("app_settings").upsert([
+                        { key: "einheiten", value: einheitenStr.trim(), updated_at: new Date().toISOString() },
+                      ]);
+                      toast({ title: "Einheiten gespeichert" });
+                    } catch (err: any) {
+                      toast({ variant: "destructive", title: "Fehler", description: err.message });
+                    } finally {
+                      setSavingSettings(false);
+                    }
+                  }}
+                  disabled={savingSettings || loadingSettings}
+                  size="sm"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Speichern
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
