@@ -527,6 +527,7 @@ export default function InvoiceDetail() {
         kunde_uid: form.kunde_uid || null,
         kunde_anrede: (form as any).kunde_anrede || null,
         kunde_titel: (form as any).kunde_titel || null,
+        reverse_charge: (form as any).reverse_charge || false,
         datum: form.datum,
         faellig_am: form.faellig_am || null,
         leistungsdatum: form.leistungsdatum || null,
@@ -1576,10 +1577,35 @@ export default function InvoiceDetail() {
                 </div>
                 )}
               </div>
+              {form.typ === "rechnung" && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                  <input
+                    type="checkbox"
+                    id="reverse_charge"
+                    checked={(form as any).reverse_charge || false}
+                    onChange={(e) => {
+                      updateField("reverse_charge" as any, e.target.checked);
+                      if (e.target.checked) {
+                        updateField("mwst_satz", 0);
+                      } else {
+                        updateField("mwst_satz", 20);
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  <div>
+                    <Label htmlFor="reverse_charge" className="cursor-pointer font-medium">Reverse Charge (Leistung in EU-Ausland)</Label>
+                    <p className="text-xs text-muted-foreground">Steuerschuldnerschaft geht auf den Leistungsempfänger über — keine USt auf der Rechnung</p>
+                  </div>
+                </div>
+              )}
+              {(form as any).reverse_charge && !form.kunde_uid && (
+                <p className="text-xs text-red-600 font-medium">UID-Nummer des Kunden ist bei Reverse Charge Pflicht!</p>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>MwSt-Satz (%)</Label>
-                  <Input type="number" value={form.mwst_satz} onChange={(e) => updateField("mwst_satz", Number(e.target.value))} className="w-32" />
+                  <Input type="number" value={form.mwst_satz} onChange={(e) => updateField("mwst_satz", Number(e.target.value))} className="w-32" disabled={(form as any).reverse_charge} />
                 </div>
                 <div>
                   <Label>Rabatt (%)</Label>
@@ -1906,6 +1932,7 @@ export default function InvoiceDetail() {
             kunde_uid: form.kunde_uid,
             kunde_anrede: (form as any).kunde_anrede || "",
             kunde_titel: (form as any).kunde_titel || "",
+            reverse_charge: (form as any).reverse_charge || false,
             datum: form.datum,
             faellig_am: form.faellig_am,
             leistungsdatum: form.leistungsdatum,

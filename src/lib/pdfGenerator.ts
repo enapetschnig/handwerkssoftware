@@ -180,9 +180,16 @@ export async function generateInvoicePdf(
     tableFoot.push(["", "", "", "Zwischensumme", "", fmtCurrency(positionenNetto)]);
     tableFoot.push(["", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, "", `- ${fmtCurrency(rabattWert)}`]);
   }
-  tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-  tableFoot.push(["", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag))]);
-  tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+  const isReverseCharge = (invoice as any).reverse_charge === true;
+
+  if (isReverseCharge) {
+    // Reverse Charge: Nur Rechnungsbetrag (= Nettobetrag), keine USt
+    tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+  } else {
+    tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+    tableFoot.push(["", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag))]);
+    tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+  }
 
   const footerMargin = 32; // Space for page footer (22mm from bottom + buffer)
 
@@ -273,6 +280,20 @@ export async function generateInvoicePdf(
     pdf.setTextColor(0, 0, 0);
     pdf.text(`Anmerkung: ${invoice.notizen}`, ml, y, { maxWidth: contentWidth });
     y += 8;
+  }
+
+  // ======= REVERSE CHARGE HINWEIS =======
+  if (isReverseCharge) {
+    y += 4;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge)", ml, y);
+    y += 4;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text("gemäß § 13b Abs. 2 Nr. 1 UStG. Die Umsatzsteuerschuld geht auf den Leistungsempfänger über.", ml, y);
+    y += 6;
   }
 
   // ======= CLOSING TEXT =======
