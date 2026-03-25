@@ -143,9 +143,12 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
                 bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
                 rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
                 skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
+                kunde_anrede: (inv as any).kunde_anrede || "", kunde_titel: (inv as any).kunde_titel || "",
+                reverse_charge: (inv as any).reverse_charge || false,
               },
               (items || []).map((it: any) => ({
                 position: it.position, beschreibung: it.beschreibung,
+                kurztext: it.kurztext || it.beschreibung, langtext: it.langtext || "",
                 menge: Number(it.menge), einheit: it.einheit || "Stk.",
                 einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
               })),

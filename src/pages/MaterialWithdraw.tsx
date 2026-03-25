@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trash2, Package, Plus, FileText, ArrowRight } from "lucide-react";
+import { Trash2, Package, Plus, FileText, ArrowRight, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -198,6 +198,10 @@ export default function MaterialWithdraw() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2.5">
+                  <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                  <span>Wähle ein Projekt aus, um die Angebotspositionen automatisch zu laden. Bei reiner Materialabholung einfach „Kein Projekt" auswählen.</span>
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={submitting} className="bg-orange-600 hover:bg-orange-700">

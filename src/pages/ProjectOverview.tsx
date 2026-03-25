@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +18,7 @@ type DocumentCategory = {
 const ProjectOverview = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [projectName, setProjectName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [lieferscheinCount, setLieferscheinCount] = useState(0);
@@ -144,6 +146,29 @@ const ProjectOverview = () => {
     navigate(`/projects/${projectId}/photos`);
   };
 
+  const handleMaterialentnahme = async () => {
+    if (!projectId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const today = new Date().toISOString().split("T")[0];
+    // Check for existing Lieferschein today
+    const { data: existing } = await supabase.from("lieferscheine")
+      .select("id").eq("project_id", projectId).eq("datum", today)
+      .order("created_at", { ascending: false }).limit(1);
+    if (existing?.[0]) {
+      navigate(`/material/${existing[0].id}`);
+    } else {
+      const { data: created, error } = await supabase.from("lieferscheine")
+        .insert({ project_id: projectId, user_id: user.id, datum: today })
+        .select("id").single();
+      if (created) {
+        navigate(`/material/${created.id}`);
+      } else {
+        toast({ variant: "destructive", title: "Fehler", description: error?.message || "Konnte nicht erstellt werden" });
+      }
+    }
+  };
+
   // Filter categories based on admin status
   const visibleCategories = categories.filter(
     (category) => !category.adminOnly || isAdmin
@@ -196,6 +221,25 @@ const ProjectOverview = () => {
               </CardContent>
             </Card>
           ))}
+
+          {/* Materialentnahme — direkter Einstieg */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow border-orange-200"
+            onClick={handleMaterialentnahme}
+          >
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="text-orange-600"><ArrowUp className="h-8 w-8" /></div>
+              </div>
+              <CardTitle className="text-xl">Materialentnahme</CardTitle>
+              <CardDescription>Material entnehmen oder zurückgeben</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50">
+                Materialentnahme starten
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Lieferscheine */}
           <Card

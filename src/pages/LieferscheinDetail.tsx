@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic } from "lucide-react";
+import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +58,8 @@ export default function LieferscheinDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [returningEntry, setReturningEntry] = useState<MaterialEntry | null>(null);
   const [voiceTyp, setVoiceTyp] = useState<"entnahme" | "rueckgabe" | null>(null);
+  const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     init();
@@ -85,6 +87,7 @@ export default function LieferscheinDetail() {
       setLsProjectId(ls.project_id || null);
       setLsProject((ls.projects as any)?.name || null);
       setLsDatum(ls.datum || "");
+      await fetchAngebotPositionen(ls.project_id || null);
     }
 
     // Fetch entries
@@ -103,6 +106,21 @@ export default function LieferscheinDetail() {
         ...e,
         profiles: profileMap.get(e.user_id) || null,
       })));
+    }
+  };
+
+  const fetchAngebotPositionen = async (projectId: string | null) => {
+    if (!projectId) { setAngebotPositionen([]); return; }
+    const { data: angebote } = await supabase.from("invoices")
+      .select("id").eq("project_id", projectId).eq("typ", "angebot")
+      .order("datum", { ascending: false }).limit(1);
+    if (angebote?.[0]) {
+      const { data: items } = await supabase.from("invoice_items")
+        .select("position, beschreibung, menge, einheit")
+        .eq("invoice_id", angebote[0].id).order("position");
+      setAngebotPositionen((items || []).map(i => ({ ...i, menge: Number(i.menge) })));
+    } else {
+      setAngebotPositionen([]);
     }
   };
 
@@ -215,6 +233,7 @@ export default function LieferscheinDetail() {
                 const proj = projects.find(p => p.id === newPid);
                 setLsProject(proj?.name || null);
                 await supabase.from("lieferscheine").update({ project_id: newPid }).eq("id", id);
+                await fetchAngebotPositionen(newPid);
                 toast({ title: newPid ? `Projekt: ${proj?.name}` : "Projekt entfernt" });
               }}
             >
@@ -232,6 +251,29 @@ export default function LieferscheinDetail() {
           {lsDatum && <span className="text-muted-foreground">{new Date(lsDatum).toLocaleDateString("de-AT")}</span>}
         </div>
 
+        {/* Hilfe */}
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => setShowHelp(!showHelp)} className="gap-1.5 text-muted-foreground">
+            <HelpCircle className="h-4 w-4" />
+            Wie funktioniert's?
+            {showHelp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </Button>
+          {showHelp && (
+            <Card className="mt-2 border-blue-200 bg-blue-50/50">
+              <CardContent className="pt-4 pb-3 text-sm space-y-1.5">
+                <p className="font-medium">So funktioniert die Materialentnahme:</p>
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                  <li><strong>Projekt auswählen</strong> — Angebotspositionen werden automatisch geladen</li>
+                  <li><strong>Material entnehmen</strong> — Per Klick auf eine Angebotsposition oder manuell eingeben</li>
+                  <li><strong>Per Sprache</strong> — Einfach sagen: "Position 1, 25 Quadratmeter" oder neues Material nennen</li>
+                  <li><strong>Rückgabe</strong> — Nicht verbrauchtes Material zurückbuchen</li>
+                  <li><strong>Übersicht</strong> — Zeigt immer den aktuellen Stand (Entnommen / Zurück / Verbraucht)</li>
+                </ol>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
         {/* Buttons */}
         {!showForm && (
           <div className="flex gap-2 flex-wrap">
@@ -244,6 +286,60 @@ export default function LieferscheinDetail() {
               Material zurückbringen
             </Button>
           </div>
+        )}
+
+        {/* Angebotspositionen */}
+        {angebotPositionen.length > 0 && !showForm && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                Angebotspositionen
+              </CardTitle>
+              <CardDescription>Positionen aus dem Angebot — klicke auf "Entnehmen" um Material zu erfassen</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">Pos</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead className="text-right">Soll-Menge</TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {angebotPositionen.map((p) => (
+                    <TableRow key={p.position}>
+                      <TableCell className="text-muted-foreground text-center font-medium">{String(p.position).padStart(2, "0")}</TableCell>
+                      <TableCell className="font-medium">{p.beschreibung}</TableCell>
+                      <TableCell className="text-right">{p.menge} {p.einheit}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50"
+                          onClick={() => {
+                            setFormTyp("entnahme");
+                            setFormMaterial(p.beschreibung);
+                            setFormMenge("");
+                            setFormEinheit(p.einheit || "Stk.");
+                            setFormNotizen("");
+                            setReturningEntry(null);
+                            setShowForm(true);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                          Entnehmen
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         )}
 
         {/* Form */}
@@ -314,12 +410,21 @@ export default function LieferscheinDetail() {
         {voiceTyp && (
           <VoiceRecorder
             typ={voiceTyp}
-            existingItems={summary.map((s, idx) => ({
-              position: idx + 1,
-              material: s.material,
-              menge: String(s.verbraucht),
-              einheit: s.einheit,
-            }))}
+            existingItems={
+              voiceTyp === "entnahme" && angebotPositionen.length > 0
+                ? angebotPositionen.map(p => ({
+                    position: p.position,
+                    material: p.beschreibung,
+                    menge: String(p.menge),
+                    einheit: p.einheit,
+                  }))
+                : summary.map((s, idx) => ({
+                    position: idx + 1,
+                    material: s.material,
+                    menge: String(s.verbraucht),
+                    einheit: s.einheit,
+                  }))
+            }
             onAccept={async (voiceItems) => {
               if (!currentUserId || !id) return;
               let skipped = 0;

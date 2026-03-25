@@ -109,6 +109,7 @@ interface TemplateItem {
   einheit: string;
   einzelpreis: number;
   kategorie: string;
+  ist_favorit?: boolean;
 }
 
 interface StoredPdf {
@@ -269,11 +270,16 @@ export default function InvoiceDetail() {
             rabatt_betrag: data.rabatt_betrag || 0,
             skonto_prozent: data.skonto_prozent || 0,
             skonto_tage: data.skonto_tage || 0,
+            kunde_anrede: data.kunde_anrede || "",
+            kunde_titel: data.kunde_titel || "",
+            reverse_charge: data.reverse_charge || false,
           }));
           if (data.items?.length > 0) {
             setItems(data.items.map((it: any, idx: number) => ({
               position: idx + 1,
               beschreibung: it.beschreibung || "",
+              kurztext: it.kurztext || it.beschreibung || "",
+              langtext: it.langtext || "",
               menge: it.menge || 1,
               einheit: it.einheit || "Stk.",
               einzelpreis: it.einzelpreis || 0,
@@ -299,7 +305,7 @@ export default function InvoiceDetail() {
 
   const fetchTemplates = async () => {
     const { data } = await supabase.from("invoice_templates").select("*").order("kategorie, name");
-    if (data) setTemplates(data.map(t => ({ ...t, einzelpreis: Number(t.einzelpreis) })));
+    if (data) setTemplates(data.map(t => ({ ...t, einzelpreis: Number(t.einzelpreis), ist_favorit: (t as any).ist_favorit || false })));
   };
 
   const loadStoredPdfs = async (invId: string) => {
@@ -354,6 +360,9 @@ export default function InvoiceDetail() {
       storno_nummer: (data as any).storno_nummer || "",
       storno_datum: (data as any).storno_datum || "",
       storno_grund: (data as any).storno_grund || "",
+      kunde_anrede: (data as any).kunde_anrede || "",
+      kunde_titel: (data as any).kunde_titel || "",
+      reverse_charge: (data as any).reverse_charge || false,
     });
 
     const { data: itemsData } = await supabase
@@ -526,8 +535,8 @@ export default function InvoiceDetail() {
         fetchCustomers();
       }
 
-      // Rechnungen sind immer mindestens "offen", Angebote können "entwurf" sein
-      const saveStatus = (form.typ === "rechnung" || form.status === "entwurf") ? "offen" : form.status;
+      // Rechnungen sind immer mindestens "offen", Angebote behalten ihren Status (auch "entwurf")
+      const saveStatus = form.typ === "rechnung" ? "offen" : (form.status || "offen");
 
       const invoicePayload = {
         status: saveStatus,
@@ -647,7 +656,7 @@ export default function InvoiceDetail() {
 
   const handlePreview = () => {
     // Open preview directly — don't save automatically
-    setPreviewSaved(!isNew && !!invoiceId && form.status !== "entwurf");
+    setPreviewSaved(!isNew && !!invoiceId && form.typ === "rechnung" && form.status !== "entwurf");
     setPreviewOpen(true);
   };
 
@@ -902,6 +911,11 @@ export default function InvoiceDetail() {
       mwst_satz: form.mwst_satz,
       rabatt_prozent: form.rabatt_prozent,
       rabatt_betrag: form.rabatt_betrag,
+      skonto_prozent: form.skonto_prozent,
+      skonto_tage: form.skonto_tage,
+      kunde_anrede: (form as any).kunde_anrede || "",
+      kunde_titel: (form as any).kunde_titel || "",
+      reverse_charge: (form as any).reverse_charge || false,
       items: items,
     };
     sessionStorage.setItem("convertToInvoice", JSON.stringify(convertData));
@@ -2028,7 +2042,11 @@ export default function InvoiceDetail() {
                   return matchSearch && matchFilter;
                 });
                 if (filtered.length === 0) return <p className="text-center text-muted-foreground py-8">Keine Materialien gefunden</p>;
-                return filtered.map(t => {
+
+                const favoriten = filtered.filter(t => t.ist_favorit);
+                const restliche = filtered.filter(t => !t.ist_favorit);
+
+                const renderItem = (t: TemplateItem) => {
                   const isSelected = selectedTemplateIds.includes(t.id);
                   const netto = Number((t as any).netto_preis) || t.einzelpreis;
                   return (
@@ -2058,7 +2076,20 @@ export default function InvoiceDetail() {
                       <span className="text-sm font-mono shrink-0 w-20 text-right">{netto > 0 ? `€ ${netto.toFixed(2)}` : "–"}</span>
                     </div>
                   );
-                });
+                };
+
+                return (
+                  <>
+                    {favoriten.length > 0 && (
+                      <>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 pt-1">⭐ Häufig verwendet</p>
+                        {favoriten.map(renderItem)}
+                        {restliche.length > 0 && <hr className="my-2 border-border" />}
+                      </>
+                    )}
+                    {restliche.map(renderItem)}
+                  </>
+                );
               })()}
             </div>
             {addedFromDialog.length > 0 && (

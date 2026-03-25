@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Trash2, Save, Package, Search, Filter, Upload } from "lucide-react";
+import { Plus, Trash2, Save, Package, Search, Filter, Upload, Star } from "lucide-react";
 import { MaterialFileImport } from "@/components/MaterialFileImport";
 import { Textarea } from "@/components/ui/textarea";
 import { useEinheiten } from "@/hooks/useEinheiten";
@@ -40,6 +40,7 @@ interface Template {
   ist_aktiv: boolean;
   ist_lagerartikel: boolean;
   lieferant: string | null;
+  ist_favorit: boolean;
 }
 
 export default function InvoiceTemplates() {
@@ -82,6 +83,7 @@ export default function InvoiceTemplates() {
         kurzbezeichnung: (t as any).kurzbezeichnung || null,
         langbezeichnung: (t as any).langbezeichnung || null,
         lieferant: (t as any).lieferant || null,
+        ist_favorit: (t as any).ist_favorit || false,
       })));
     }
     setLoading(false);
@@ -254,6 +256,7 @@ export default function InvoiceTemplates() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10"></TableHead>
                       <TableHead>Prod.-Nr.</TableHead>
                       <TableHead>Kurzbezeichnung</TableHead>
                       <TableHead>Langbezeichnung</TableHead>
@@ -268,6 +271,16 @@ export default function InvoiceTemplates() {
                   <TableBody>
                     {items.map(t => (
                       <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(t)}>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async (e) => {
+                            e.stopPropagation();
+                            const newVal = !t.ist_favorit;
+                            await supabase.from("invoice_templates").update({ ist_favorit: newVal } as any).eq("id", t.id);
+                            setTemplates(prev => prev.map(item => item.id === t.id ? { ...item, ist_favorit: newVal } : item));
+                          }}>
+                            <Star className={`w-4 h-4 ${t.ist_favorit ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+                          </Button>
+                        </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{t.produktnummer || t.artikelnummer || "–"}</TableCell>
                         <TableCell className="font-medium max-w-[200px] truncate">{t.kurzbezeichnung || t.name}</TableCell>
                         <TableCell className="text-muted-foreground max-w-[250px] truncate text-xs">{t.langbezeichnung || t.beschreibung}</TableCell>

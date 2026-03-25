@@ -160,17 +160,18 @@ export async function generateInvoicePdf(
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  const tableBody = items.map(item => {
+  const langtextMap: Record<number, string> = {};
+  const tableBody = items.map((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
-    const beschreibung = langtext && langtext !== kurztext
-      ? `${kurztext}\n${langtext}`
-      : kurztext;
+    if (langtext && langtext !== kurztext) {
+      langtextMap[idx] = langtext;
+    }
     return [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      beschreibung,
+      kurztext,
       fmtCurrency(Number(item.einzelpreis)),
       fmtCurrency(Number(item.gesamtpreis)),
     ];
@@ -200,7 +201,16 @@ export async function generateInvoicePdf(
     tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
   }
 
-  const footerMargin = 32; // Space for page footer (22mm from bottom + buffer)
+  // Calculate closing section height to reserve space via margin.bottom
+  const skontoProzent = (invoice as any).skonto_prozent || 0;
+  const skontoTage = (invoice as any).skonto_tage || 0;
+  let closingHeight = 20; // Closing-Text + base spacing
+  if (invoice.notizen) closingHeight += 16;
+  if (isReverseCharge) closingHeight += 14;
+  if (!isAngebot && skontoProzent > 0 && skontoTage > 0) closingHeight += 26;
+  if (!isAngebot) closingHeight += 55; // Bank + QR + Hinweis + Vielen Dank
+  const pageFooterZone = 25; // Page footer at pageHeight - 22mm + buffer
+  const effectiveMarginBottom = closingHeight + pageFooterZone;
 
   autoTable(pdf, {
     startY: y,
@@ -210,7 +220,7 @@ export async function generateInvoicePdf(
     showFoot: "lastPage",
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: footerMargin },
+    margin: { left: ml, right: mr, bottom: effectiveMarginBottom },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -244,6 +254,15 @@ export async function generateInvoicePdf(
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
+      // Increase cell height for rows with langtext
+      if (data.section === "body" && data.column.index === 3) {
+        const lt = langtextMap[data.row.index];
+        if (lt) {
+          const ltLines = pdf.splitTextToSize(lt, data.cell.width - 6);
+          const extraHeight = ltLines.length * 3.2 + 3;
+          data.cell.styles.cellPadding = { ...data.cell.styles.cellPadding, bottom: data.cell.styles.cellPadding.bottom + extraHeight };
+        }
+      }
       if (data.section === "foot") {
         const rowLabel = data.row.raw?.[3] || "";
 
@@ -272,6 +291,27 @@ export async function generateInvoicePdf(
         // Rabatt row: red text
         if (rowLabel.startsWith("Rabatt")) {
           data.cell.styles.textColor = [204, 0, 0];
+        }
+      }
+    },
+    didDrawCell: (data: any) => {
+      if (data.section === "body" && data.column.index === 3) {
+        const lt = langtextMap[data.row.index];
+        if (lt) {
+          const cellX = data.cell.x + 4;
+          const cellWidth = data.cell.width - 6;
+          const ltLines = pdf.splitTextToSize(lt, cellWidth);
+          // Position langtext below kurztext
+          const kurztextHeight = pdf.getTextDimensions(data.cell.text.join("\n"), { fontSize: 9 }).h;
+          const ltY = data.cell.y + data.cell.styles.cellPadding.top + kurztextHeight + 2.5;
+          pdf.setFont("helvetica", "italic");
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text(ltLines, cellX, ltY);
+          // Reset
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9);
+          pdf.setTextColor(0, 0, 0);
         }
       }
     },
@@ -326,8 +366,6 @@ export async function generateInvoicePdf(
   if (y > pageHeight - 70) { pdf.addPage(); y = 20; }
 
   // ======= SKONTO INFO (only for Rechnung with Skonto) =======
-  const skontoProzent = (invoice as any).skonto_prozent || 0;
-  const skontoTage = (invoice as any).skonto_tage || 0;
   if (!isAngebot && skontoProzent > 0 && skontoTage > 0) {
     const brutto = Number(invoice.brutto_summe);
     const skontoAbzug = brutto * (skontoProzent / 100);
@@ -389,23 +427,23 @@ export async function generateInvoicePdf(
       } catch {}
     }
 
-    y += 10;
+    y += 20;
 
     // Hinweistext (Silikon/Acryl)
-    if (y + 25 > pageHeight - 30) { pdf.addPage(); y = 20; }
+    if (y + 30 > pageHeight - 30) { pdf.addPage(); y = 20; }
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.5);
+    pdf.setFontSize(7.5);
     pdf.setTextColor(100, 100, 100);
     const hinweis = "Hinweis: Elastische Verfugungen (Silikon/Acryl) sind aufgrund ihrer stofflichen Eigenschaften als Wartungsfuge anzusehen und gelten daher nicht als Abdichtung. Ihre Funktion muss in regelmäßigen Abständen überprüft und das Material gegebenenfalls erneuert werden, um Folgeschäden zu vermeiden.";
     const hinweisLines = pdf.splitTextToSize(hinweis, contentWidth);
     pdf.text(hinweisLines, ml, y);
-    y += hinweisLines.length * 3 + 4;
+    y += hinweisLines.length * 3.5 + 6;
 
     // Vielen Dank
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
     pdf.setTextColor(0, 0, 0);
-    pdf.text("Vielen Dank für Ihren Auftrag!", ml, y);
+    pdf.text("Vielen Dank für Ihren Auftrag!", pageWidth / 2, y, { align: "center" });
     y += 8;
   }
 

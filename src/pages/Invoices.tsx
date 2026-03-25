@@ -136,7 +136,8 @@ export default function Invoices() {
     const { data, error } = await supabase
       .from("invoices")
       .select("id, typ, nummer, status, kunde_name, datum, brutto_summe, netto_summe, project_id, faellig_am, mahnstufe, gueltig_bis, bezahlt_betrag, archiviert, storno_nummer, storno_datum")
-      .order("datum", { ascending: false });
+      .order("datum", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Rechnungen konnten nicht geladen werden" });
