@@ -1462,18 +1462,20 @@ export default function InvoiceDetail() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="mt-1.5">
-                      <Label className="text-xs text-muted-foreground">Oder manuell: Fällig am</Label>
-                      <Input type="date" value={form.faellig_am} onChange={(e) => {
-                        updateField("faellig_am", e.target.value);
-                        // Calculate days from datum
-                        if (form.datum && e.target.value) {
-                          const d1 = new Date(form.datum + "T12:00:00");
-                          const d2 = new Date(e.target.value + "T12:00:00");
-                          const days = Math.round((d2.getTime() - d1.getTime()) / 86400000);
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground whitespace-nowrap">Oder manuell:</Label>
+                      <Input type="number" min={0} placeholder="Tage" className="w-20" onChange={(e) => {
+                        const days = parseInt(e.target.value);
+                        if (!isNaN(days) && days >= 0) {
                           updateField("zahlungsbedingungen", `${days} Tage`);
+                          if (form.datum) {
+                            const due = new Date(form.datum + "T12:00:00");
+                            due.setDate(due.getDate() + days);
+                            updateField("faellig_am", format(due, "yyyy-MM-dd"));
+                          }
                         }
-                      }} className="mt-0.5" />
+                      }} />
+                      <span className="text-xs text-muted-foreground">Tage</span>
                     </div>
                   </div>
                 )}
