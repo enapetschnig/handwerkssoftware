@@ -158,14 +158,21 @@ export async function generateInvoicePdf(
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einh.", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  const tableBody = items.map(item => [
-    String(item.position).padStart(2, "0"),
-    fmt(Number(item.menge)),
-    item.einheit || "Stk.",
-    item.beschreibung,
-    fmtCurrency(Number(item.einzelpreis)),
-    fmtCurrency(Number(item.gesamtpreis)),
-  ]);
+  const tableBody = items.map(item => {
+    const kurztext = (item as any).kurztext || item.beschreibung;
+    const langtext = (item as any).langtext || "";
+    const beschreibung = langtext && langtext !== kurztext
+      ? `${kurztext}\n${langtext}`
+      : kurztext;
+    return [
+      String(item.position).padStart(2, "0"),
+      fmt(Number(item.menge)),
+      item.einheit || "Stk.",
+      beschreibung,
+      fmtCurrency(Number(item.einzelpreis)),
+      fmtCurrency(Number(item.gesamtpreis)),
+    ];
+  });
 
   // Build totals rows for the table footer
   const rabattProzent = Number(invoice.rabatt_prozent) || 0;

@@ -47,6 +47,8 @@ interface InvoiceItem {
   id?: string;
   position: number;
   beschreibung: string;
+  kurztext?: string;
+  langtext?: string;
   menge: number;
   einheit: string;
   einzelpreis: number;
@@ -360,6 +362,8 @@ export default function InvoiceDetail() {
         id: it.id,
         position: it.position,
         beschreibung: it.beschreibung,
+        kurztext: (it as any).kurztext || it.beschreibung,
+        langtext: (it as any).langtext || "",
         menge: Number(it.menge),
         einheit: it.einheit || "Stk.",
         einzelpreis: Number(it.einzelpreis),
@@ -394,13 +398,16 @@ export default function InvoiceDetail() {
   };
 
   const addFromTemplate = (t: TemplateItem) => {
+    const netto = Number((t as any).netto_preis) || t.einzelpreis;
     const newItem: InvoiceItem = {
       position: 1,
-      beschreibung: t.beschreibung,
+      beschreibung: (t as any).kurzbezeichnung || t.name || t.beschreibung,
+      kurztext: (t as any).kurzbezeichnung || t.name,
+      langtext: (t as any).langbezeichnung || t.beschreibung || "",
       menge: 1,
       einheit: t.einheit,
-      einzelpreis: t.einzelpreis,
-      gesamtpreis: t.einzelpreis,
+      einzelpreis: netto,
+      gesamtpreis: netto,
     };
     setItems(prev => mergeItems(prev, [newItem]));
     setTemplateDialogOpen(false);
@@ -592,6 +599,8 @@ export default function InvoiceDetail() {
         invoice_id: savedId!,
         position: idx + 1,
         beschreibung: item.beschreibung,
+        kurztext: item.kurztext || item.beschreibung,
+        langtext: item.langtext || null,
         menge: item.menge,
         einheit: item.einheit,
         einzelpreis: item.einzelpreis,

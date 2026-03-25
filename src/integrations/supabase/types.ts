@@ -497,6 +497,8 @@ export type Database = {
           gesamtpreis: number
           id: string
           invoice_id: string
+          kurztext: string | null
+          langtext: string | null
           menge: number
           position: number
         }
@@ -508,6 +510,8 @@ export type Database = {
           gesamtpreis?: number
           id?: string
           invoice_id: string
+          kurztext?: string | null
+          langtext?: string | null
           menge?: number
           position?: number
         }
@@ -519,6 +523,8 @@ export type Database = {
           gesamtpreis?: number
           id?: string
           invoice_id?: string
+          kurztext?: string | null
+          langtext?: string | null
           menge?: number
           position?: number
         }
@@ -571,35 +577,65 @@ export type Database = {
         Row: {
           artikelnummer: string | null
           beschreibung: string
+          brutto_preis: number | null
           created_at: string | null
           einheit: string | null
           einzelpreis: number | null
           id: string
+          ist_aktiv: boolean | null
+          ist_lagerartikel: boolean | null
           kategorie: string | null
+          kurzbezeichnung: string | null
+          langbezeichnung: string | null
+          lieferant: string | null
           name: string
+          netto_preis: number | null
+          produktgruppe: string | null
+          produktnummer: string | null
           user_id: string
+          ust_satz: number | null
         }
         Insert: {
           artikelnummer?: string | null
           beschreibung: string
+          brutto_preis?: number | null
           created_at?: string | null
           einheit?: string | null
           einzelpreis?: number | null
           id?: string
+          ist_aktiv?: boolean | null
+          ist_lagerartikel?: boolean | null
           kategorie?: string | null
+          kurzbezeichnung?: string | null
+          langbezeichnung?: string | null
+          lieferant?: string | null
           name: string
+          netto_preis?: number | null
+          produktgruppe?: string | null
+          produktnummer?: string | null
           user_id: string
+          ust_satz?: number | null
         }
         Update: {
           artikelnummer?: string | null
           beschreibung?: string
+          brutto_preis?: number | null
           created_at?: string | null
           einheit?: string | null
           einzelpreis?: number | null
           id?: string
+          ist_aktiv?: boolean | null
+          ist_lagerartikel?: boolean | null
           kategorie?: string | null
+          kurzbezeichnung?: string | null
+          langbezeichnung?: string | null
+          lieferant?: string | null
           name?: string
+          netto_preis?: number | null
+          produktgruppe?: string | null
+          produktnummer?: string | null
           user_id?: string
+          ust_satz?: number | null
         }
         Relationships: []
       }
