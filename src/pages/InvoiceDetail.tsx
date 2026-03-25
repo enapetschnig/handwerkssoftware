@@ -159,6 +159,7 @@ export default function InvoiceDetail() {
   const [templateFilter, setTemplateFilter] = useState("alle");
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [templateMengen, setTemplateMengen] = useState<Record<string, number>>({});
+  const [addedFromDialog, setAddedFromDialog] = useState<{ name: string; menge: number; einheit: string }[]>([]);
   const [storedPdfs, setStoredPdfs] = useState<StoredPdf[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
@@ -1994,6 +1995,8 @@ export default function InvoiceDetail() {
           if (!open) setTemplateSearch("");
           if (!open) setTemplateFilter("alle");
           if (!open) setSelectedTemplateIds([]);
+          if (!open) setAddedFromDialog([]);
+          if (!open) setTemplateMengen({});
         }}>
           <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
             <DialogHeader>
@@ -2058,6 +2061,18 @@ export default function InvoiceDetail() {
                 });
               })()}
             </div>
+            {addedFromDialog.length > 0 && (
+              <div className="border-t pt-2 mt-2">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Bereits hinzugefügt ({addedFromDialog.length}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {addedFromDialog.map((a, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
+                      {a.menge > 1 ? `${a.menge} ${a.einheit}` : ""} {a.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center pt-2">
               <span className="text-sm text-muted-foreground">{selectedTemplateIds.length} ausgewählt</span>
               <div className="flex gap-2">
@@ -2079,6 +2094,8 @@ export default function InvoiceDetail() {
                     } as InvoiceItem;
                   });
                   setItems(prev => mergeItems(prev, newItems));
+                  // Track was hinzugefügt wurde
+                  setAddedFromDialog(prev => [...prev, ...newItems.map(i => ({ name: i.beschreibung, menge: i.menge, einheit: i.einheit }))]);
                   // Dialog bleibt offen — nur Auswahl zurücksetzen
                   setSelectedTemplateIds([]);
                   setTemplateMengen({});
