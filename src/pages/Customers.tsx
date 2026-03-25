@@ -105,8 +105,6 @@ export default function Customers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [vatChecking, setVatChecking] = useState(false);
-  const [vatResult, setVatResult] = useState<{ valid: boolean; name?: string; address?: string; error?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoice[]>([]);
@@ -154,9 +152,25 @@ export default function Customers() {
     (c.email && c.email.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const openNew = () => {
+  const openNew = async () => {
     setEditId(null);
-    setForm(emptyForm);
+    // Auto-generate next Kundennummer
+    let nextKnr = "";
+    try {
+      const { data } = await supabase
+        .from("customers")
+        .select("kundennummer")
+        .not("kundennummer", "is", null)
+        .order("kundennummer", { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.kundennummer) {
+        const num = parseInt(data.kundennummer);
+        if (!isNaN(num)) nextKnr = String(num + 1);
+      }
+    } catch {}
+    if (!nextKnr) nextKnr = "10001";
+    setForm({ ...emptyForm, kundennummer: nextKnr });
     setDialogOpen(true);
   };
 
@@ -191,6 +205,20 @@ export default function Customers() {
     if (!form.name.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Name ist erforderlich" });
       return;
+    }
+
+    // Duplikat-Check Kundennummer
+    if (form.kundennummer?.trim()) {
+      const { data: existing } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("kundennummer", form.kundennummer.trim())
+        .neq("id", editId || "00000000-0000-0000-0000-000000000000")
+        .maybeSingle();
+      if (existing) {
+        toast({ variant: "destructive", title: "Kundennummer existiert bereits", description: `Die Nummer ${form.kundennummer} ist bereits vergeben.` });
+        return;
+      }
     }
 
     setSaving(true);
@@ -495,6 +523,10 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
   saving: boolean;
   editId: string | null;
 }) {
+  const [vatChecking, setVatChecking] = useState(false);
+  const [vatResult, setVatResult] = useState<{ valid: boolean; name?: string; address?: string; error?: string } | null>(null);
+  const { toast } = useToast();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
