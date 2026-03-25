@@ -121,16 +121,18 @@ export async function generateInvoicePdf(
   let metaY = y - 14;
   pdf.setFontSize(9);
   const datumFormatted = fmtDate(invoice.datum);
+  const kundennummer = (invoice as any).kundennummer || "";
   const metaRows: [string, string][] = [
     [`${typLabel} Nr.`, invoice.nummer || "–"],
-    ["Datum", datumFormatted],
+    ["Belegdatum", datumFormatted],
   ];
+  if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
+  if (invoice.kunde_uid) metaRows.push(["Ihre UID", invoice.kunde_uid]);
   if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
   if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", fmtDate(invoice.gueltig_bis!)]);
   if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen.replace(/ netto$/i, "")]);
-  if (firmenUid) metaRows.push(["UID-Nr.", firmenUid]);
-  if (invoice.kunde_uid) metaRows.push(["Kunden-UID", invoice.kunde_uid]);
+  if (firmenUid) metaRows.push(["Unsere UID", firmenUid]);
 
   metaRows.forEach(([label, value]) => {
     pdf.setTextColor(0, 0, 0);
@@ -309,11 +311,19 @@ export async function generateInvoicePdf(
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
   const zahlungsTage = invoice.zahlungsbedingungen?.match(/(\d+)/)?.[1] || "14";
-  const closingText = isAngebot
-    ? "Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung."
-    : `Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`;
-  pdf.text(closingText, ml, y, { maxWidth: contentWidth });
-  y += 8;
+  if (isAngebot) {
+    pdf.text("Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.", ml, y, { maxWidth: contentWidth });
+    y += 8;
+  } else {
+    pdf.text(`Wir bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`, ml, y, { maxWidth: contentWidth });
+    y += 5;
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Bei E-Banking bitte als Zahlungsreferenz Rechnungsnummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, ml, y, { maxWidth: contentWidth });
+    y += 8;
+  }
+  // Page break check for remaining content
+  if (y > pageHeight - 70) { pdf.addPage(); y = 20; }
 
   // ======= SKONTO INFO (only for Rechnung with Skonto) =======
   const skontoProzent = (invoice as any).skonto_prozent || 0;
@@ -378,6 +388,25 @@ export async function generateInvoicePdf(
         pdf.text("Zahlen mit Code", pageWidth - mr - 11, y + 16, { align: "center" });
       } catch {}
     }
+
+    y += 10;
+
+    // Hinweistext (Silikon/Acryl)
+    if (y + 25 > pageHeight - 30) { pdf.addPage(); y = 20; }
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(100, 100, 100);
+    const hinweis = "Hinweis: Elastische Verfugungen (Silikon/Acryl) sind aufgrund ihrer stofflichen Eigenschaften als Wartungsfuge anzusehen und gelten daher nicht als Abdichtung. Ihre Funktion muss in regelmäßigen Abständen überprüft und das Material gegebenenfalls erneuert werden, um Folgeschäden zu vermeiden.";
+    const hinweisLines = pdf.splitTextToSize(hinweis, contentWidth);
+    pdf.text(hinweisLines, ml, y);
+    y += hinweisLines.length * 3 + 4;
+
+    // Vielen Dank
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("Vielen Dank für Ihren Auftrag!", ml, y);
+    y += 8;
   }
 
   // ======= FOOTER on every page =======
