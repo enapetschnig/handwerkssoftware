@@ -84,6 +84,8 @@ export default function Customers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [vatChecking, setVatChecking] = useState(false);
+  const [vatResult, setVatResult] = useState<{ valid: boolean; name?: string; address?: string; error?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoice[]>([]);
@@ -474,7 +476,49 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
       </div>
       <div>
         <Label>UID-Nummer</Label>
-        <Input value={form.uid_nummer} onChange={(e) => setForm(p => ({ ...p, uid_nummer: e.target.value }))} placeholder="ATU12345678" />
+        <div className="flex gap-2">
+          <Input value={form.uid_nummer} onChange={(e) => setForm(p => ({ ...p, uid_nummer: e.target.value }))} placeholder="ATU12345678" className="flex-1" />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!form.uid_nummer || form.uid_nummer.length < 4 || vatChecking}
+            onClick={async () => {
+              setVatChecking(true);
+              setVatResult(null);
+              try {
+                const { data, error } = await supabase.functions.invoke("check-vat", {
+                  body: { vatNumber: form.uid_nummer.replace(/\s/g, "") },
+                });
+                if (error) throw error;
+                setVatResult(data);
+                if (data.valid) {
+                  toast({ title: "UID gültig", description: data.name ? `${data.name}` : "UID-Nummer ist gültig" });
+                  // Auto-fill name if empty
+                  if (data.name && !form.name.trim()) {
+                    setForm(p => ({ ...p, name: data.name.trim() }));
+                  }
+                  if (data.address && !form.adresse.trim()) {
+                    setForm(p => ({ ...p, adresse: data.address.trim() }));
+                  }
+                } else {
+                  toast({ variant: "destructive", title: "UID ungültig", description: data.error || "UID-Nummer konnte nicht verifiziert werden" });
+                }
+              } catch (err: any) {
+                toast({ variant: "destructive", title: "Prüfung fehlgeschlagen", description: err.message });
+              } finally {
+                setVatChecking(false);
+              }
+            }}
+          >
+            {vatChecking ? "..." : "Prüfen"}
+          </Button>
+        </div>
+        {vatResult && (
+          <p className={`text-xs mt-1 ${vatResult.valid ? "text-green-600" : "text-red-600"}`}>
+            {vatResult.valid ? `✓ Gültig${vatResult.name ? `: ${vatResult.name}` : ""}` : `✗ ${vatResult.error || "Ungültig"}`}
+          </p>
+        )}
       </div>
       <div>
         <Label>Adresse</Label>
