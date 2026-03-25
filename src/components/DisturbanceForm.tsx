@@ -526,7 +526,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             </div>
             <div className="space-y-3">
               <div>
-                <Label htmlFor="kundeName">Kundenname *</Label>
+                <Label htmlFor="kundeName">Firma / Name *</Label>
                 <Input
                   id="kundeName"
                   value={formData.kundeName}

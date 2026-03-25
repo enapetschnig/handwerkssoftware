@@ -535,7 +535,7 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Input value={form.kundennummer} onChange={(e) => setForm(p => ({ ...p, kundennummer: e.target.value }))} placeholder="z.B. 10001" />
         </div>
         <div>
-          <Label>Anrede</Label>
+          <Label>Anrede/Firma</Label>
           <Select value={form.anrede || "none"} onValueChange={(v) => setForm(p => ({ ...p, anrede: v === "none" ? "" : v }))}>
             <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
             <SelectContent>
@@ -552,18 +552,8 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Input value={form.titel} onChange={(e) => setForm(p => ({ ...p, titel: e.target.value }))} placeholder="Mag., Dr., Ing." />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Vorname</Label>
-          <Input value={form.vorname} onChange={(e) => setForm(p => ({ ...p, vorname: e.target.value }))} />
-        </div>
-        <div>
-          <Label>Nachname</Label>
-          <Input value={form.nachname} onChange={(e) => setForm(p => ({ ...p, nachname: e.target.value }))} />
-        </div>
-      </div>
       <div>
-        <Label>Firma / Anzeigename *</Label>
+        <Label>Firma / Name *</Label>
         <Input value={form.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Firmenname oder Personenname" />
       </div>
       <div>

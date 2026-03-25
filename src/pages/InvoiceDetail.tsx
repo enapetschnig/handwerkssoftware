@@ -1362,12 +1362,32 @@ export default function InvoiceDetail() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Kundenname *</Label>
+                  <Label>Firma / Name *</Label>
                   <Input value={form.kunde_name} onChange={(e) => updateField("kunde_name", e.target.value)} placeholder="Firmenname / Name" />
                 </div>
                 <div>
                   <Label>UID-Nummer</Label>
-                  <Input value={form.kunde_uid} onChange={(e) => updateField("kunde_uid", e.target.value)} placeholder="ATU12345678" />
+                  <div className="flex gap-2">
+                    <Input value={form.kunde_uid} onChange={(e) => updateField("kunde_uid", e.target.value)} placeholder="ATU12345678" className="flex-1" />
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      disabled={!form.kunde_uid || form.kunde_uid.length < 4}
+                      onClick={async () => {
+                        try {
+                          const { data, error } = await supabase.functions.invoke("check-vat", {
+                            body: { vatNumber: form.kunde_uid.replace(/\s/g, "") },
+                          });
+                          if (error) throw error;
+                          if (data.valid) {
+                            toast({ title: "UID gültig", description: data.name || "Verifiziert" });
+                            if (data.name && !form.kunde_name.trim()) updateField("kunde_name", data.name.trim());
+                          } else {
+                            toast({ variant: "destructive", title: "UID ungültig", description: data.error || "Nicht verifizierbar" });
+                          }
+                        } catch { toast({ variant: "destructive", title: "Prüfung fehlgeschlagen" }); }
+                      }}
+                    >Prüfen</Button>
+                  </div>
                 </div>
               </div>
               <div>
