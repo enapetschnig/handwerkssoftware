@@ -265,6 +265,7 @@ export default function Invoices() {
         },
         (invItems || []).map((it: any) => ({
           position: it.position, beschreibung: it.beschreibung,
+          kurztext: it.kurztext || it.beschreibung, langtext: it.langtext || "",
           menge: Number(it.menge), einheit: it.einheit || "Stk.",
           einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
         })),
@@ -344,6 +345,7 @@ export default function Invoices() {
         },
         (invItems || []).map((it: any) => ({
           position: it.position, beschreibung: it.beschreibung,
+          kurztext: it.kurztext || it.beschreibung, langtext: it.langtext || "",
           menge: Number(it.menge), einheit: it.einheit || "Stk.",
           einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
         })),

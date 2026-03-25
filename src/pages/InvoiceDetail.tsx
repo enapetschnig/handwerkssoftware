@@ -413,7 +413,7 @@ export default function InvoiceDetail() {
       gesamtpreis: netto,
     };
     setItems(prev => mergeItems(prev, [newItem]));
-    setTemplateDialogOpen(false);
+    // Dialog bleibt offen
     toast({ title: "Position hinzugefügt", description: t.name });
   };
 
@@ -1786,10 +1786,17 @@ export default function InvoiceDetail() {
                           {(item.langtext || !isLocked) && (
                             <textarea
                               value={item.langtext || ""}
-                              onChange={(e) => updateItem(idx, "langtext", e.target.value)}
+                              onChange={(e) => {
+                                updateItem(idx, "langtext", e.target.value);
+                                // Auto-resize
+                                e.target.style.height = "auto";
+                                e.target.style.height = e.target.scrollHeight + "px";
+                              }}
+                              onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
                               placeholder="Langtext / Details (optional, wird auf PDF angezeigt)"
-                              className="mt-1 w-full text-xs border rounded px-2 py-1 resize-none bg-muted/30 min-h-[28px]"
-                              rows={1}
+                              className="mt-1 w-full text-xs border rounded px-2 py-1 resize-none bg-muted/30"
+                              style={{ minHeight: "28px", height: item.langtext ? "auto" : "28px" }}
+                              rows={item.langtext ? Math.max(2, item.langtext.split("\n").length) : 1}
                             />
                           )}
                         </TableCell>
@@ -2056,7 +2063,7 @@ export default function InvoiceDetail() {
                     } as InvoiceItem;
                   });
                   setItems(prev => mergeItems(prev, newItems));
-                  setTemplateDialogOpen(false);
+                  // Dialog bleibt offen — nur Auswahl zurücksetzen
                   setSelectedTemplateIds([]);
                   toast({ title: `${newItems.length} Positionen hinzugefügt` });
                 }} className="gap-2">
@@ -2111,6 +2118,8 @@ export default function InvoiceDetail() {
           items={items.map((item, idx) => ({
             position: idx + 1,
             beschreibung: item.beschreibung,
+            kurztext: item.kurztext || item.beschreibung,
+            langtext: item.langtext || "",
             menge: item.menge,
             einheit: item.einheit,
             einzelpreis: item.einzelpreis,
