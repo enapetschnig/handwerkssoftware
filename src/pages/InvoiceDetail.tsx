@@ -1280,25 +1280,72 @@ export default function InvoiceDetail() {
             </Card>
           )}
 
-          {/* Kundendaten */}
-          {fromAngebotId ? (
-            /* Kompakte Read-Only Ansicht bei Angebot→Rechnung Umwandlung */
-            <Card className="bg-muted/30">
+          {/* Projekt-Auswahl (nur bei neuen Rechnungen, vor den Kundendaten) */}
+          {!isLocked && form.typ === "rechnung" && (
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Kundendaten <span className="text-xs font-normal text-muted-foreground ml-2">vom Angebot übernommen</span></CardTitle>
+                <CardTitle className="text-base">Projekt (optional)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                  {form.kunde_name && <div><span className="text-muted-foreground">Name:</span> <strong>{form.kunde_name}</strong></div>}
-                  {form.kunde_adresse && <div><span className="text-muted-foreground">Adresse:</span> {form.kunde_adresse}</div>}
-                  {(form.kunde_plz || form.kunde_ort) && <div><span className="text-muted-foreground">Ort:</span> {form.kunde_plz} {form.kunde_ort}</div>}
-                  {form.kunde_uid && <div><span className="text-muted-foreground">UID:</span> {form.kunde_uid}</div>}
-                  {form.kunde_email && <div><span className="text-muted-foreground">E-Mail:</span> {form.kunde_email}</div>}
-                  {form.kunde_telefon && <div><span className="text-muted-foreground">Telefon:</span> {form.kunde_telefon}</div>}
-                </div>
+                <Select value={form.project_id || "none"} onValueChange={async (v) => {
+                  const projectId = v === "none" ? null : v;
+                  updateField("project_id", projectId);
+                  if (projectId) {
+                    const project = projects.find(p => p.id === projectId);
+                    if (project && (project as any).customer_id) {
+                      const { data: cust } = await supabase
+                        .from("customers")
+                        .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
+                        .eq("id", (project as any).customer_id)
+                        .single();
+                      if (cust) {
+                        setForm(prev => ({
+                          ...prev,
+                          customer_id: cust.id,
+                          kunde_name: cust.name,
+                          kunde_adresse: cust.adresse || "",
+                          kunde_plz: cust.plz || "",
+                          kunde_ort: cust.ort || "",
+                          kunde_land: cust.land || "Österreich",
+                          kunde_email: cust.email || "",
+                          kunde_telefon: cust.telefon || "",
+                          kunde_uid: cust.uid_nummer || "",
+                          kunde_anrede: cust.anrede || "",
+                          kunde_titel: cust.titel || "",
+                          kundennummer: cust.kundennummer || "",
+                          skonto_prozent: Number(cust.skonto_prozent) || 0,
+                          skonto_tage: Number(cust.skonto_tage) || 0,
+                        } as any));
+                        const custNettofrist = Number(cust.nettofrist) || 0;
+                        if (custNettofrist > 0) {
+                          updateField("zahlungsbedingungen", `${custNettofrist} Tage`);
+                          if (form.datum) {
+                            const due = new Date(form.datum + "T12:00:00");
+                            due.setDate(due.getDate() + custNettofrist);
+                            updateField("faellig_am", due.toISOString().split("T")[0]);
+                          }
+                        }
+                        toast({ title: "Kundendaten vom Projekt übernommen", description: cust.name });
+                      }
+                    }
+                  }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Kein Projekt" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Kein Projekt</SelectItem>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.project_id && form.customer_id && (
+                  <p className="text-xs text-green-600 mt-2">Kundendaten wurden automatisch vom Projekt übernommen</p>
+                )}
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {/* Kundendaten */}
           <Card className={isLocked ? "opacity-80" : ""}>
             <fieldset disabled={isLocked}>
             <CardHeader>
@@ -1465,10 +1512,26 @@ export default function InvoiceDetail() {
                   <Input value={form.kunde_telefon} onChange={(e) => updateField("kunde_telefon", e.target.value)} />
                 </div>
               </div>
+              {/* Zahlungseinstellungen (vom Kunden) */}
+              {form.typ === "rechnung" && (form.skonto_prozent > 0 || form.skonto_tage > 0 || (form as any).zahlungsbedingungen) && (
+                <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Zahlungseinstellungen vom Kunden</p>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    {form.skonto_prozent > 0 && (
+                      <div><span className="text-muted-foreground">Skonto:</span> <strong>{form.skonto_prozent}%</strong></div>
+                    )}
+                    {form.skonto_tage > 0 && (
+                      <div><span className="text-muted-foreground">Skonto-Tage:</span> <strong>{form.skonto_tage}</strong></div>
+                    )}
+                    {form.zahlungsbedingungen && (
+                      <div><span className="text-muted-foreground">Zahlungsfrist:</span> <strong>{form.zahlungsbedingungen}</strong></div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
             </fieldset>
           </Card>
-          )}
 
           {/* Rechnungsdetails */}
           <Card className={isLocked ? "opacity-80" : ""}>
@@ -1579,68 +1642,7 @@ export default function InvoiceDetail() {
                     )}
                   </div>
                 )}
-                {form.typ === "rechnung" && (
-                <div>
-                  <Label>Projekt (optional)</Label>
-                  <Select value={form.project_id || "none"} onValueChange={async (v) => {
-                    const projectId = v === "none" ? null : v;
-                    updateField("project_id", projectId);
-                    // Auto-fill customer data from project
-                    if (projectId) {
-                      const project = projects.find(p => p.id === projectId);
-                      if (project && (project as any).customer_id) {
-                        const { data: cust } = await supabase
-                          .from("customers")
-                          .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
-                          .eq("id", (project as any).customer_id)
-                          .single();
-                        if (cust) {
-                          setForm(prev => ({
-                            ...prev,
-                            customer_id: cust.id,
-                            kunde_name: cust.name,
-                            kunde_adresse: cust.adresse || "",
-                            kunde_plz: cust.plz || "",
-                            kunde_ort: cust.ort || "",
-                            kunde_land: cust.land || "Österreich",
-                            kunde_email: cust.email || "",
-                            kunde_telefon: cust.telefon || "",
-                            kunde_uid: cust.uid_nummer || "",
-                            kunde_anrede: cust.anrede || "",
-                            kunde_titel: cust.titel || "",
-                            kundennummer: cust.kundennummer || "",
-                          } as any));
-                          // Übernehme Skonto/Zahlungsfrist
-                          const hints: string[] = [];
-                          const custSkonto = Number(cust.skonto_prozent) || 0;
-                          const custSkontoTage = Number(cust.skonto_tage) || 0;
-                          const custNettofrist = Number(cust.nettofrist) || 0;
-                          if (custSkonto > 0) {
-                            updateField("skonto_prozent", custSkonto);
-                            updateField("skonto_tage", custSkontoTage);
-                            hints.push(`Skonto: ${custSkonto}%`);
-                          }
-                          if (custNettofrist > 0) {
-                            updateField("zahlungsbedingungen", `${custNettofrist} Tage`);
-                            hints.push(`Zahlungsfrist: ${custNettofrist} Tage`);
-                          }
-                          toast({ title: "Kundendaten vom Projekt übernommen", description: hints.length > 0 ? hints.join(" · ") : cust.name });
-                        }
-                      }
-                    }
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Kein Projekt" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Kein Projekt</SelectItem>
-                      {projects.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                )}
+                {/* Projekt-Auswahl ist jetzt oben als eigene Card */}
               </div>
               {form.typ === "rechnung" && (
                 <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
