@@ -279,7 +279,7 @@ export default function InvoiceDetail() {
   }, [id]);
 
   const fetchCustomers = async () => {
-    const { data } = await supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon, skonto_prozent, skonto_tage, nettofrist, zahlungsbedingungen").order("name");
+    const { data } = await supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon, skonto_prozent, skonto_tage, nettofrist, zahlungsbedingungen, anrede, titel, kundennummer").order("name");
     if (data) setCustomers(data);
   };
 
@@ -1311,6 +1311,9 @@ export default function InvoiceDetail() {
                                   kunde_email: c.email || "",
                                   kunde_telefon: c.telefon || "",
                                   kunde_uid: c.uid_nummer || "",
+                                  kunde_anrede: (c as any).anrede || "",
+                                  kunde_titel: (c as any).titel || "",
+                                  kundennummer: (c as any).kundennummer || "",
                                 };
                                 // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
                                 const hints: string[] = [];
@@ -1360,6 +1363,29 @@ export default function InvoiceDetail() {
               )}
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Kundennr.</Label>
+                  <Input value={(form as any).kundennummer || ""} onChange={(e) => updateField("kundennummer" as any, e.target.value)} placeholder="z.B. 10001" />
+                </div>
+                <div>
+                  <Label>Anrede/Firma</Label>
+                  <Select value={(form as any).kunde_anrede || "none"} onValueChange={(v) => updateField("kunde_anrede" as any, v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      <SelectItem value="Herr">Herr</SelectItem>
+                      <SelectItem value="Frau">Frau</SelectItem>
+                      <SelectItem value="Firma">Firma</SelectItem>
+                      <SelectItem value="Divers">Divers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Titel</Label>
+                  <Input value={(form as any).kunde_titel || ""} onChange={(e) => updateField("kunde_titel" as any, e.target.value)} placeholder="Mag., Dr., Ing." />
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Firma / Name *</Label>
