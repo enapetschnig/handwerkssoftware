@@ -86,10 +86,20 @@ export async function generateInvoicePdf(
   y += 6;
 
   // Recipient
+  const kundeAnrede = (invoice as any).kunde_anrede || "";
+  const kundeTitel = (invoice as any).kunde_titel || "";
+  if (kundeAnrede) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(kundeAnrede, ml, y + 2);
+    y += 5;
+  }
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
   pdf.setTextColor(0, 0, 0);
-  pdf.text(invoice.kunde_name || "–", ml, y + 2);
+  const displayName = kundeTitel ? `${kundeTitel} ${invoice.kunde_name}` : (invoice.kunde_name || "–");
+  pdf.text(displayName, ml, y + 2);
   y += 6;
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
