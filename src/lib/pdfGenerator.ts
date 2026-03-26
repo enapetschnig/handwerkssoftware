@@ -162,21 +162,21 @@ export async function generateInvoicePdf(
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  // Track which rows have langtext for visual styling in didDrawCell
-  const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
+  // Pre-calculate langtext extra height BEFORE autoTable (avoids recursion in hooks)
+  const descColW = pageWidth - ml - mr - 12 - 18 - 18 - 24 - 26 - 8; // ~74mm Beschreibung col
+  const langtextInfo: Record<number, { kurztext: string; langtext: string; extraH: number }> = {};
   const tableBody = items.map((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
-    let beschreibung = kurztext;
     if (langtext && langtext !== kurztext) {
-      langtextInfo[idx] = { kurztext, langtext };
-      beschreibung = `${kurztext}\n${langtext}`;
+      const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
+      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.1 + 5 };
     }
     return [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      beschreibung,
+      kurztext, // ONLY kurztext in cell — langtext drawn manually in didDrawCell
       fmtCurrency(Number(item.einzelpreis)),
       fmtCurrency(Number(item.gesamtpreis)),
     ];
@@ -198,7 +198,6 @@ export async function generateInvoicePdf(
   const isReverseCharge = (invoice as any).reverse_charge === true;
 
   if (isReverseCharge) {
-    // Reverse Charge: Nur Rechnungsbetrag (= Nettobetrag), keine USt
     tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
   } else {
     tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
@@ -206,16 +205,12 @@ export async function generateInvoicePdf(
     tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
   }
 
-  // Calculate closing section height to reserve space via margin.bottom
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
-  let closingHeight = 35; // Closing-Text + base spacing + Puffer für Positionen
-  if (invoice.notizen) closingHeight += 16;
-  if (isReverseCharge) closingHeight += 14;
-  if (!isAngebot && skontoProzent > 0 && skontoTage > 0) closingHeight += 26;
-  if (!isAngebot) closingHeight += 55; // Bank + QR + Hinweis + Vielen Dank
-  const pageFooterZone = 25; // Page footer at pageHeight - 22mm + buffer
-  const effectiveMarginBottom = closingHeight + pageFooterZone;
+
+  // Normal margin.bottom — only page footer zone, NOT the closing section
+  // This keeps first pages full. Closing section handles its own page breaks after autoTable.
+  const footerMargin = 32;
 
   autoTable(pdf, {
     startY: y,
@@ -225,7 +220,7 @@ export async function generateInvoicePdf(
     showFoot: "lastPage",
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: effectiveMarginBottom },
+    margin: { left: ml, right: mr, bottom: footerMargin },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -259,23 +254,24 @@ export async function generateInvoicePdf(
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
+      // Reserve extra cell height for langtext (safe: uses pre-calculated values, no pdf calls)
+      if (data.section === "body" && data.column.index === 3) {
+        const info = langtextInfo[data.row.index];
+        if (info) {
+          data.cell.styles.cellPadding = { top: 3, left: 2, right: 2, bottom: 3 + info.extraH };
+        }
+      }
       if (data.section === "foot") {
         const rowLabel = data.row.raw?.[3] || "";
-
-        // Footer labels in column 3 (Beschreibung) — right-aligned
         if (data.column.index === 3) {
           data.cell.styles.halign = "right";
           data.cell.styles.fontStyle = "normal";
           data.cell.styles.fontSize = 9;
         }
-
-        // First footer row: thick line above as separator from positions
         if (data.row.index === 0) {
           data.cell.styles.lineWidth = { top: 0.8 };
           data.cell.styles.lineColor = [0, 0, 0];
         }
-
-        // Bruttobetrag row: bold, red line above
         if (rowLabel === "Bruttobetrag") {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 10;
@@ -283,8 +279,6 @@ export async function generateInvoicePdf(
           data.cell.styles.lineWidth = { top: 0.8 };
           data.cell.styles.lineColor = [0, 0, 0];
         }
-
-        // Rabatt row: red text
         if (rowLabel.startsWith("Rabatt")) {
           data.cell.styles.textColor = [204, 0, 0];
         }
@@ -295,25 +289,33 @@ export async function generateInvoicePdf(
         const info = langtextInfo[data.row.index];
         if (info) {
           try {
-            const padL = 2, padT = 3, padR = 2;
-            const cellW = data.cell.width - padL - padR;
-            const cellX = data.cell.x + padL;
-            // Count kurztext lines to find where langtext starts
+            const cellW = data.cell.width - 4;
+            const cellX = data.cell.x + 2;
+            // Kurztext height (already drawn by autoTable)
             const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
-            const lineH = 9 * 0.3528 * 1.15; // 9pt → mm with line spacing
+            const lineH = 9 * 0.3528 * 1.15;
             const kurztextH = kurztextLines.length * lineH;
-            const ltY = data.cell.y + padT + kurztextH + 4;
+            const ltY = data.cell.y + 3 + kurztextH + 3.5;
             const ltLines = pdf.splitTextToSize(info.langtext, cellW);
             const ltLineH = 7.5 * 0.3528 * 1.15;
             const ltH = ltLines.length * ltLineH + 1;
-            // Light background over FULL table width (all columns)
-            pdf.setFillColor(243, 243, 247);
-            pdf.rect(ml, ltY - 2, pageWidth - ml - mr, ltH + 2, "F");
-            // Draw langtext in italic gray (only in Beschreibung column)
+            // Light background over FULL table width
+            pdf.setFillColor(245, 245, 250);
+            pdf.rect(ml, ltY - 2.5, pageWidth - ml - mr, ltH + 3, "F");
+            // Separator line above langtext
+            pdf.setDrawColor(210, 210, 215);
+            pdf.setLineWidth(0.15);
+            pdf.line(ml, ltY - 2.5, pageWidth - mr, ltY - 2.5);
+            // Draw langtext in italic gray
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
             pdf.setTextColor(100, 100, 100);
             pdf.text(ltLines, cellX, ltY);
+            // Separator line below langtext (row bottom)
+            const bottomY = ltY + ltH + 0.5;
+            pdf.setDrawColor(180, 180, 180);
+            pdf.setLineWidth(0.2);
+            pdf.line(ml, bottomY, pageWidth - mr, bottomY);
             // Reset
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(9);
@@ -325,8 +327,6 @@ export async function generateInvoicePdf(
   });
 
   y = (pdf as any).lastAutoTable.finalY + 4;
-
-  // Totals are now part of the autoTable footer — no separate drawing needed
 
   // ======= NOTES =======
   if (invoice.notizen) {
