@@ -209,25 +209,51 @@ export async function generateInvoicePdf(
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
 
-  // margin.bottom reserves space for the closing section (Zahlungstext, Skonto, Bank, QR,
-  // Hinweis, Vielen Dank) so it ALWAYS lands on the same page as the last positions + totals.
-  // autoTable with showFoot:"lastPage" keeps totals with positions. margin.bottom ensures
-  // the closing section fits below. On early pages this reserves some unused space at the
-  // bottom, but keeps ~20+ positions per page which is fine.
+  // Calculate closing section height (everything AFTER the table: notes → "Vielen Dank")
   const pageFooterH = 25; // page footer at pageHeight-22 + buffer
-  let closingH = 15; // base spacing for closing text
+  let closingH = 15; // base spacing
   if (invoice.notizen) closingH += 12;
   if (isReverseCharge) closingH += 14;
   if (!isAngebot) {
-    closingH += 13; // Zahlungstext + Zahlungsreferenz
+    closingH += 13; // Zahlungstext + ref
     if (skontoProzent > 0 && skontoTage > 0) closingH += 24;
     closingH += 40; // Bank + QR + Hinweis + Vielen Dank
   } else {
-    closingH += 8; // Angebot closing text
+    closingH += 8;
   }
-  // Add ~30mm extra so autoTable pushes a few positions to the last page
-  // (prevents the closing section from standing alone without positions)
-  const footerMargin = pageFooterH + closingH + 30;
+
+  // Estimate total table body height (including langtext) to determine margin strategy
+  const descW = contentWidth - 12 - 18 - 18 - 24 - 26; // Beschreibung column width
+  let totalBodyH = 0;
+  items.forEach((item, idx) => {
+    const kt = (item as any).kurztext || item.beschreibung;
+    const lt = (item as any).langtext || "";
+    const ktLines = pdf.splitTextToSize(kt, descW > 20 ? descW : 70);
+    let rowH = ktLines.length * 3.7 + 6; // text + padding
+    if (lt && lt !== kt) {
+      const ltLines = pdf.splitTextToSize(lt, descW > 20 ? descW : 70);
+      rowH += ltLines.length * 3.1 + 2;
+    }
+    totalBodyH += rowH;
+  });
+  const tableHeaderH = 10; // table header row
+  const tableFootH = tableFoot.length * 7; // totals rows
+
+  // Calculate how much space is left on the last page with small margin (32mm)
+  const smallMargin = 32;
+  const firstPageContentH = pageHeight - y - smallMargin - tableHeaderH;
+  const nextPageContentH = pageHeight - 15 - smallMargin; // 15mm top margin on subsequent pages
+  let remainingH = totalBodyH + tableFootH;
+  remainingH -= firstPageContentH;
+  while (remainingH > nextPageContentH) remainingH -= nextPageContentH;
+  // remainingH = how much of the last page is used by table content
+  // lastPageFree = free space below table on last page
+  const lastPageFree = (remainingH > 0 ? nextPageContentH - remainingH : firstPageContentH - totalBodyH - tableFootH);
+  const closingFits = lastPageFree >= closingH + 5;
+
+  // If closing fits with small margin → use small margin (pages stay full)
+  // If not → use large margin that reserves space (a few less positions per page, but everything fits)
+  const footerMargin = closingFits ? smallMargin : (pageFooterH + closingH + 30);
 
   autoTable(pdf, {
     startY: y,
