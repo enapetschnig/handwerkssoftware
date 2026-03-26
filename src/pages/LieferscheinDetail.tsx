@@ -62,7 +62,7 @@ export default function LieferscheinDetail() {
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [lsStatus, setLsStatus] = useState<string>("offen");
-  const [positionenOpen, setPositionenOpen] = useState(false);
+  const [positionenOpen, setPositionenOpen] = useState(true);
   const [returnDialog, setReturnDialog] = useState<{ material: string; einheit: string; max: number } | null>(null);
   const [returnMenge, setReturnMenge] = useState("");
   const isAbgeschlossen = lsStatus === "abgeschlossen";
