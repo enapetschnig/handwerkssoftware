@@ -4,6 +4,7 @@ import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, He
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -62,6 +63,8 @@ export default function LieferscheinDetail() {
   const [showHelp, setShowHelp] = useState(false);
   const [lsStatus, setLsStatus] = useState<string>("offen");
   const [positionenOpen, setPositionenOpen] = useState(false);
+  const [returnDialog, setReturnDialog] = useState<{ material: string; einheit: string; max: number } | null>(null);
+  const [returnMenge, setReturnMenge] = useState("");
   const isAbgeschlossen = lsStatus === "abgeschlossen";
 
   useEffect(() => {
@@ -405,47 +408,26 @@ export default function LieferscheinDetail() {
             </CardHeader>
             <CardContent className="space-y-1.5 pt-0">
               {summary.map((s, idx) => (
-                <div key={idx} className="border rounded-lg p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium leading-tight flex-1">{s.material}</p>
-                    <span className="text-sm font-bold shrink-0">{s.verbraucht} {s.einheit}</span>
+                <div key={idx} className="border rounded-lg p-2.5 flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-tight">{s.material}</p>
+                    <div className="flex gap-2 text-xs mt-0.5">
+                      <span className="text-orange-600 font-medium">{s.entnommen} {s.einheit}</span>
+                      {s.zurueck > 0 && <span className="text-green-600">↓ {s.zurueck} zurück</span>}
+                    </div>
                   </div>
-                  {s.zurueck > 0 && (
-                    <p className="text-xs text-green-600 mt-0.5">↓ {s.zurueck} zurückgegeben</p>
-                  )}
-                  {/* Inline Zurückgeben */}
-                  {s.verbraucht > 0 && !isAbgeschlossen && (
-                    <div className="flex gap-2 items-center mt-2">
-                      <Input
-                        type="number" step="0.1" min="0"
-                        placeholder="Menge zurück"
-                        className="h-8 text-sm flex-1"
-                        id={`ret-${idx}`}
-                      />
-                      <span className="text-xs text-muted-foreground shrink-0 w-10">{s.einheit}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-bold">{s.verbraucht} {s.einheit}</span>
+                    {s.verbraucht > 0 && !isAbgeschlossen && (
                       <Button
                         variant="outline" size="sm"
-                        className="gap-1 h-8 shrink-0 text-green-700 border-green-300 hover:bg-green-50 text-xs"
-                        onClick={async () => {
-                          const input = document.getElementById(`ret-${idx}`) as HTMLInputElement;
-                          const menge = input?.value?.trim();
-                          if (!menge || !currentUserId || !id) { toast({ variant: "destructive", title: "Menge eingeben" }); return; }
-                          const returnAmount = parseFloat(menge);
-                          if (returnAmount > s.verbraucht) { toast({ variant: "destructive", title: "Zu viel", description: `Max. ${s.verbraucht} ${s.einheit}` }); return; }
-                          const { error } = await supabase.from("material_entries").insert({
-                            lieferschein_id: id, project_id: null, user_id: currentUserId,
-                            material: s.material, menge, einheit: s.einheit || "Stk.",
-                            einzelpreis: 0, typ: "rueckgabe", notizen: null,
-                            datum: new Date().toISOString().split("T")[0],
-                          });
-                          if (error) { toast({ variant: "destructive", title: "Fehler" }); }
-                          else { toast({ title: `${menge} ${s.einheit} zurückgegeben` }); if (input) input.value = ""; fetchData(); }
-                        }}
+                        className="gap-1 h-8 text-green-700 border-green-300 hover:bg-green-50 text-xs"
+                        onClick={() => { setReturnDialog({ material: s.material, einheit: s.einheit, max: s.verbraucht }); setReturnMenge(""); }}
                       >
                         <RotateCcw className="h-3 w-3" /> Zurück
                       </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -587,6 +569,67 @@ export default function LieferscheinDetail() {
           </Card>
         )}
       </main>
+
+      {/* Rückgabe-Dialog — öffnet sich oben, kein Scrollen */}
+      <Dialog open={!!returnDialog} onOpenChange={(open) => { if (!open) setReturnDialog(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <RotateCcw className="h-4 w-4 text-green-600" />
+              Material zurückgeben
+            </DialogTitle>
+          </DialogHeader>
+          {returnDialog && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{returnDialog.material}</p>
+              <p className="text-xs text-muted-foreground">Max. {returnDialog.max} {returnDialog.einheit} zurückgebbar</p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number" step="0.1" min="0" max={returnDialog.max}
+                  placeholder="Menge"
+                  className="flex-1"
+                  value={returnMenge}
+                  onChange={(e) => setReturnMenge(e.target.value)}
+                  autoFocus
+                />
+                <span className="text-sm text-muted-foreground shrink-0">{returnDialog.einheit}</span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 gap-1"
+                  disabled={!returnMenge.trim() || submitting}
+                  onClick={async () => {
+                    const menge = returnMenge.trim();
+                    if (!menge || !currentUserId || !id || !returnDialog) return;
+                    const amount = parseFloat(menge);
+                    if (amount > returnDialog.max) {
+                      toast({ variant: "destructive", title: "Zu viel", description: `Max. ${returnDialog.max} ${returnDialog.einheit}` });
+                      return;
+                    }
+                    setSubmitting(true);
+                    const { error } = await supabase.from("material_entries").insert({
+                      lieferschein_id: id, project_id: null, user_id: currentUserId,
+                      material: returnDialog.material, menge, einheit: returnDialog.einheit,
+                      einzelpreis: 0, typ: "rueckgabe", notizen: null,
+                      datum: new Date().toISOString().split("T")[0],
+                    });
+                    setSubmitting(false);
+                    if (error) { toast({ variant: "destructive", title: "Fehler" }); }
+                    else {
+                      toast({ title: `${menge} ${returnDialog.einheit} zurückgegeben` });
+                      setReturnDialog(null);
+                      fetchData();
+                    }
+                  }}
+                >
+                  <RotateCcw className="h-4 w-4" /> Zurückgeben
+                </Button>
+                <Button variant="outline" onClick={() => setReturnDialog(null)}>Abbrechen</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
