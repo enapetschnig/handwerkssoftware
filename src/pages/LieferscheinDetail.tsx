@@ -454,22 +454,20 @@ export default function LieferscheinDetail() {
             {positionenOpen && <CardContent className="space-y-1.5 pt-2">
               {angebotPositionen.map((p) => {
                 const s = summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim());
-                const done = s && s.verbraucht >= p.menge && p.menge > 0;
                 return (
-                  <div key={p.position} className={`border rounded-lg p-2.5 ${done ? "bg-green-50/50 border-green-200" : ""}`}>
+                  <div key={p.position} className="border rounded-lg p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-xs text-muted-foreground font-mono shrink-0">{String(p.position).padStart(2, "0")}</span>
-                        <p className={`text-sm leading-tight truncate ${done ? "text-green-700" : ""}`}>{p.beschreibung}</p>
+                        <p className="text-sm leading-tight truncate">{p.beschreibung}</p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-xs text-muted-foreground">{p.menge} {p.einheit}</span>
-                        {done && <span className="text-green-600 text-xs">✓</span>}
-                        {s && !done && <span className="text-xs text-orange-600">{s.verbraucht}/{p.menge}</span>}
+                        {s && <span className="text-xs text-orange-600">{s.verbraucht}/{p.menge}</span>}
                       </div>
                     </div>
-                    {/* Quick Entnehmen */}
-                    {!done && (
+                    {/* Quick Entnehmen — immer verfügbar */}
+                    {(
                       <div className="flex gap-2 items-center mt-1.5">
                         <Input type="number" step="0.1" min="0" placeholder="Menge" className="h-7 text-xs flex-1" id={`ap-${p.position}`} />
                         <Button size="sm" className="gap-1 h-7 shrink-0 bg-orange-600 hover:bg-orange-700 text-xs px-2"

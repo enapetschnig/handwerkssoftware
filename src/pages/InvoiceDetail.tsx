@@ -2287,17 +2287,43 @@ export default function InvoiceDetail() {
           onClose={() => setImportProjectOpen(false)}
           projectId={form.project_id}
           onImport={(importedItems) => {
-            const newItems = importedItems.map((item, idx) => ({
-              position: items.length + idx + 1,
-              beschreibung: item.beschreibung,
-              menge: item.menge,
-              einheit: item.einheit,
-              einzelpreis: item.einzelpreis,
-              gesamtpreis: item.menge * item.einzelpreis,
-            }));
-            setItems(prev => mergeItems(prev, newItems));
+            setItems(prev => {
+              // Replace matching positions (same beschreibung) with imported menge
+              let updated = prev.map(existing => {
+                const match = importedItems.find(imp =>
+                  imp.beschreibung.toLowerCase().trim() === existing.beschreibung.toLowerCase().trim()
+                );
+                if (match) {
+                  return {
+                    ...existing,
+                    menge: match.menge,
+                    einzelpreis: match.einzelpreis || existing.einzelpreis,
+                    gesamtpreis: match.menge * (match.einzelpreis || existing.einzelpreis),
+                  };
+                }
+                return existing;
+              });
+              // Add new positions that don't exist yet
+              const newOnes = importedItems.filter(imp =>
+                !prev.some(ex => ex.beschreibung.toLowerCase().trim() === imp.beschreibung.toLowerCase().trim())
+              );
+              if (newOnes.length > 0) {
+                const additions = newOnes.map((item, idx) => ({
+                  position: updated.length + idx + 1,
+                  beschreibung: item.beschreibung,
+                  menge: item.menge,
+                  einheit: item.einheit,
+                  einzelpreis: item.einzelpreis,
+                  gesamtpreis: item.menge * item.einzelpreis,
+                }));
+                updated = [...updated, ...additions];
+              }
+              return updated.map((item, idx) => ({ ...item, position: idx + 1 }));
+            });
             setImportProjectOpen(false);
-            toast({ title: "Aus Projekt importiert", description: `${newItems.length} Positionen hinzugefügt` });
+            const replaced = importedItems.filter(imp => items.some(ex => ex.beschreibung.toLowerCase().trim() === imp.beschreibung.toLowerCase().trim())).length;
+            const added = importedItems.length - replaced;
+            toast({ title: "Aus Projekt importiert", description: `${replaced} Positionen aktualisiert${added > 0 ? `, ${added} neu hinzugefügt` : ""}` });
           }}
         />
 

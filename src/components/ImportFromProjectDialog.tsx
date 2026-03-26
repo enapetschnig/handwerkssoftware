@@ -249,6 +249,10 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
           </DialogTitle>
         </DialogHeader>
 
+        <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2">
+          Materialien importieren aus Verbrauch laut Materiallieferscheine. Mengen aus Lieferscheinen ersetzen die Angebotspositionen, Preise werden aus dem Angebot übernommen.
+        </p>
+
         {!projectId ? (
           <p className="text-center py-8 text-muted-foreground">
             Bitte zuerst ein Projekt auswählen.
