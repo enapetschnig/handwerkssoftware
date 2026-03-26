@@ -61,7 +61,7 @@ export default function LieferscheinDetail() {
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [lsStatus, setLsStatus] = useState<string>("offen");
-  const [positionenOpen, setPositionenOpen] = useState(true);
+  const [positionenOpen, setPositionenOpen] = useState(false);
   const isAbgeschlossen = lsStatus === "abgeschlossen";
 
   useEffect(() => {
@@ -331,17 +331,23 @@ export default function LieferscheinDetail() {
           )}
         </div>
 
-        {/* 2. Action Buttons — prominent */}
+        {/* 2. Sprach-Buttons — groß und klar */}
         {!isAbgeschlossen && !voiceTyp && !showForm && (
-          <div className="grid grid-cols-2 gap-2">
-            <Button onClick={() => setVoiceTyp("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700 h-12 text-sm">
-              <Mic className="h-5 w-5" />
-              Entnehmen
+          <div className="space-y-2">
+            <Button onClick={() => setVoiceTyp("entnahme")} className="w-full gap-3 bg-orange-600 hover:bg-orange-700 h-14 text-base">
+              <Mic className="h-6 w-6" />
+              Material per Sprache entnehmen
             </Button>
-            <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2 h-12 text-sm">
-              <Mic className="h-5 w-5" />
-              Zurückgeben
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2 h-10 text-sm">
+                <Mic className="h-4 w-4" />
+                Per Sprache zurückgeben
+              </Button>
+              <Button onClick={() => openForm("entnahme")} variant="outline" className="gap-2 h-10 text-sm">
+                <Plus className="h-4 w-4" />
+                Manuell eingeben
+              </Button>
+            </div>
           </div>
         )}
 
@@ -388,93 +394,117 @@ export default function LieferscheinDetail() {
           />
         )}
 
-        {/* 4. Materialliste — EINE einzige Liste */}
-        {(materialList.length > 0 || !isAbgeschlossen) && (
-          <Card>
+        {/* 4. ENTNOMMEN — Hauptansicht: Was wurde genommen? */}
+        {summary.length > 0 && (
+          <Card className="border-orange-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Materialliste</CardTitle>
-              {materialList.some(m => m.entnommen > 0) && (
-                <CardDescription>{materialList.filter(m => m.entnommen > 0).length} von {materialList.length} entnommen</CardDescription>
-              )}
+              <CardTitle className="text-base flex items-center gap-2">
+                <ArrowUp className="h-4 w-4 text-orange-600" />
+                Entnommen ({summary.length})
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 pt-0">
-              {materialList.map((m) => {
-                const done = m.isAngebot && m.verbraucht >= m.soll && m.soll > 0;
-                return (
-                  <div key={`${m.isAngebot ? "a" : "e"}-${m.pos}`} className={`border rounded-lg p-2.5 ${done ? "bg-green-50/50 border-green-200" : ""}`}>
-                    {/* Row 1: Position + Material + Status */}
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs text-muted-foreground font-mono mt-0.5 shrink-0 w-5">{String(m.pos).padStart(2, "0")}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium leading-tight ${done ? "text-green-700" : ""}`}>{m.material}</p>
-                        <div className="flex gap-2 mt-0.5 text-xs text-muted-foreground">
-                          {m.isAngebot && <span>Soll: {m.soll} {m.einheit}</span>}
-                          {m.entnommen > 0 && <span className="text-orange-600">↑ {m.entnommen}</span>}
-                          {m.zurueck > 0 && <span className="text-green-600">↓ {m.zurueck}</span>}
-                          {m.verbraucht > 0 && <span className="font-medium text-foreground">= {m.verbraucht} {m.einheit}</span>}
-                        </div>
-                      </div>
-                      {done && <span className="text-green-600 text-sm shrink-0">✓</span>}
+              {summary.map((s, idx) => (
+                <div key={idx} className="border rounded-lg p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium leading-tight flex-1">{s.material}</p>
+                    <span className="text-sm font-bold shrink-0">{s.verbraucht} {s.einheit}</span>
+                  </div>
+                  {s.zurueck > 0 && (
+                    <p className="text-xs text-green-600 mt-0.5">↓ {s.zurueck} zurückgegeben</p>
+                  )}
+                  {/* Inline Zurückgeben */}
+                  {s.verbraucht > 0 && !isAbgeschlossen && (
+                    <div className="flex gap-2 items-center mt-2">
+                      <Input
+                        type="number" step="0.1" min="0"
+                        placeholder="Menge zurück"
+                        className="h-8 text-sm flex-1"
+                        id={`ret-${idx}`}
+                      />
+                      <span className="text-xs text-muted-foreground shrink-0 w-10">{s.einheit}</span>
+                      <Button
+                        variant="outline" size="sm"
+                        className="gap-1 h-8 shrink-0 text-green-700 border-green-300 hover:bg-green-50 text-xs"
+                        onClick={async () => {
+                          const input = document.getElementById(`ret-${idx}`) as HTMLInputElement;
+                          const menge = input?.value?.trim();
+                          if (!menge || !currentUserId || !id) { toast({ variant: "destructive", title: "Menge eingeben" }); return; }
+                          const returnAmount = parseFloat(menge);
+                          if (returnAmount > s.verbraucht) { toast({ variant: "destructive", title: "Zu viel", description: `Max. ${s.verbraucht} ${s.einheit}` }); return; }
+                          const { error } = await supabase.from("material_entries").insert({
+                            lieferschein_id: id, project_id: null, user_id: currentUserId,
+                            material: s.material, menge, einheit: s.einheit || "Stk.",
+                            einzelpreis: 0, typ: "rueckgabe", notizen: null,
+                            datum: new Date().toISOString().split("T")[0],
+                          });
+                          if (error) { toast({ variant: "destructive", title: "Fehler" }); }
+                          else { toast({ title: `${menge} ${s.einheit} zurückgegeben` }); if (input) input.value = ""; fetchData(); }
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3" /> Zurück
+                      </Button>
                     </div>
-                    {/* Row 2: Input + Button (only if not closed) */}
-                    {!isAbgeschlossen && (
-                      <div className="flex gap-2 items-center mt-2">
-                        <Input
-                          type="number" step="0.1" min="0"
-                          placeholder="Menge"
-                          className="h-8 text-sm flex-1"
-                          id={`ml-${m.isAngebot ? "a" : "e"}-${m.pos}`}
-                        />
-                        <span className="text-xs text-muted-foreground shrink-0 w-10">{m.einheit}</span>
-                        <Button
-                          size="sm"
-                          className="gap-1 h-8 shrink-0 bg-orange-600 hover:bg-orange-700 text-xs"
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 5. ANGEBOTSPOSITIONEN — eingeklappt als Referenz */}
+        {angebotPositionen.length > 0 && !isAbgeschlossen && (
+          <Card>
+            <CardHeader className="pb-0 cursor-pointer" onClick={() => setPositionenOpen(!positionenOpen)}>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5" />
+                  Angebotspositionen ({angebotPositionen.length})
+                </CardTitle>
+                {positionenOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+              </div>
+            </CardHeader>
+            {positionenOpen && <CardContent className="space-y-1.5 pt-2">
+              {angebotPositionen.map((p) => {
+                const s = summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim());
+                const done = s && s.verbraucht >= p.menge && p.menge > 0;
+                return (
+                  <div key={p.position} className={`border rounded-lg p-2.5 ${done ? "bg-green-50/50 border-green-200" : ""}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">{String(p.position).padStart(2, "0")}</span>
+                        <p className={`text-sm leading-tight truncate ${done ? "text-green-700" : ""}`}>{p.beschreibung}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-muted-foreground">{p.menge} {p.einheit}</span>
+                        {done && <span className="text-green-600 text-xs">✓</span>}
+                        {s && !done && <span className="text-xs text-orange-600">{s.verbraucht}/{p.menge}</span>}
+                      </div>
+                    </div>
+                    {/* Quick Entnehmen */}
+                    {!done && (
+                      <div className="flex gap-2 items-center mt-1.5">
+                        <Input type="number" step="0.1" min="0" placeholder="Menge" className="h-7 text-xs flex-1" id={`ap-${p.position}`} />
+                        <Button size="sm" className="gap-1 h-7 shrink-0 bg-orange-600 hover:bg-orange-700 text-xs px-2"
                           onClick={async () => {
-                            const input = document.getElementById(`ml-${m.isAngebot ? "a" : "e"}-${m.pos}`) as HTMLInputElement;
+                            const input = document.getElementById(`ap-${p.position}`) as HTMLInputElement;
                             const menge = input?.value?.trim();
                             if (!menge || !currentUserId || !id) { toast({ variant: "destructive", title: "Menge eingeben" }); return; }
                             const { error } = await supabase.from("material_entries").insert({
                               lieferschein_id: id, project_id: null, user_id: currentUserId,
-                              material: m.material, menge, einheit: m.einheit || "Stk.",
+                              material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
                               einzelpreis: 0, typ: "entnahme", notizen: null,
                               datum: new Date().toISOString().split("T")[0],
                             });
-                            if (error) { toast({ variant: "destructive", title: "Fehler" }); }
-                            else { toast({ title: `${menge} ${m.einheit} entnommen` }); if (input) input.value = ""; fetchData(); }
+                            if (!error) { toast({ title: `${menge} ${p.einheit} entnommen` }); if (input) input.value = ""; fetchData(); }
                           }}
-                        >
-                          <ArrowUp className="h-3 w-3" /> Entnehmen
-                        </Button>
-                        {m.verbraucht > 0 && (
-                          <Button
-                            variant="outline" size="sm"
-                            className="gap-1 h-8 shrink-0 text-green-700 border-green-300 text-xs"
-                            onClick={() => {
-                              setFormTyp("rueckgabe"); setFormMaterial(m.material); setFormMenge("");
-                              setFormEinheit(m.einheit); setFormNotizen(""); setReturningEntry(null);
-                              setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                          </Button>
-                        )}
+                        ><ArrowUp className="h-3 w-3" /> Entnehmen</Button>
                       </div>
                     )}
                   </div>
                 );
               })}
-
-              {/* + Material hinzufügen */}
-              {!isAbgeschlossen && (
-                <Button
-                  variant="ghost" size="sm"
-                  className="w-full gap-1.5 text-muted-foreground mt-1"
-                  onClick={() => openForm("entnahme")}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Weiteres Material hinzufügen
-                </Button>
-              )}
-            </CardContent>
+            </CardContent>}
           </Card>
         )}
 
