@@ -246,26 +246,61 @@ const MyHours = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap text-sm">
-                          {new Date(entry.datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}
-                        </TableCell>
-                        <TableCell className="text-sm">{entry.projects?.name || '-'}</TableCell>
-                        <TableCell className="text-center text-sm">{entry.start_time?.substring(0, 5) || '-'}</TableCell>
-                        <TableCell className="text-center text-sm">{entry.end_time?.substring(0, 5) || '-'}</TableCell>
-                        <TableCell className="text-center text-sm">{entry.pause_minutes ? `${entry.pause_minutes} Min` : '-'}</TableCell>
-                        <TableCell className="text-right font-semibold">{entry.stunden.toFixed(2)} h</TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="ghost" onClick={() => { setEditingEntry(entry); setShowEditDialog(true); }} disabled={!isCurrentMonth(entry.datum)} className="h-7 w-7 p-0">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {(() => {
+                      // Group entries by date
+                      const grouped = new Map<string, TimeEntry[]>();
+                      entries.forEach(e => {
+                        const list = grouped.get(e.datum) || [];
+                        list.push(e);
+                        grouped.set(e.datum, list);
+                      });
+                      const rows: React.ReactNode[] = [];
+                      grouped.forEach((dayEntries, datum) => {
+                        const dayTotal = dayEntries.reduce((s, e) => s + e.stunden, 0);
+                        const dateObj = new Date(datum + "T12:00:00");
+                        const sollH = getTotalWorkingHours(dateObj);
+                        const dayDiff = dayTotal - sollH;
+                        dayEntries.forEach((entry, idx) => {
+                          rows.push(
+                            <TableRow key={entry.id} className={idx > 0 ? "border-t-0" : ""}>
+                              {idx === 0 ? (
+                                <TableCell className="font-medium whitespace-nowrap text-sm align-top" rowSpan={dayEntries.length}>
+                                  {dateObj.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
+                                </TableCell>
+                              ) : null}
+                              <TableCell className="text-sm">{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</TableCell>
+                              <TableCell className="text-sm">{entry.projects?.name || '-'}</TableCell>
+                              <TableCell className="text-center text-sm">{entry.start_time?.substring(0, 5) || '-'}</TableCell>
+                              <TableCell className="text-center text-sm">{entry.end_time?.substring(0, 5) || '-'}</TableCell>
+                              <TableCell className="text-center text-sm">{entry.pause_minutes ? `${entry.pause_minutes} Min` : '-'}</TableCell>
+                              <TableCell className="text-right font-semibold">{entry.stunden.toFixed(2)} h</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="ghost" onClick={() => { setEditingEntry(entry); setShowEditDialog(true); }} disabled={!isCurrentMonth(entry.datum)} className="h-7 w-7 p-0">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+                        // Day summary row (only if multiple entries)
+                        if (dayEntries.length > 1) {
+                          rows.push(
+                            <TableRow key={`sum-${datum}`} className="bg-muted/30">
+                              <TableCell colSpan={6} className="text-right text-xs text-muted-foreground py-1">
+                                Tagesgesamt: <span className="font-medium text-foreground">{dayTotal.toFixed(2)} h</span>
+                                {sollH > 0 && (
+                                  <span className={`ml-2 ${dayDiff >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                    ({dayDiff >= 0 ? "+" : ""}{dayDiff.toFixed(2)})
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell colSpan={2}></TableCell>
+                            </TableRow>
+                          );
+                        }
+                      });
+                      return rows;
+                    })()}
                   </TableBody>
                   <TableFooter>
                     <TableRow>
