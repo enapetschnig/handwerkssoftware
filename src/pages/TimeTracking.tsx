@@ -1270,21 +1270,21 @@ const TimeTracking = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>Von</Label>
-                      <Input
-                        type="time"
-                        step={900}
-                        value={absenceData.absenceStartTime}
-                        onChange={(e) => setAbsenceData({ ...absenceData, absenceStartTime: e.target.value })}
-                      />
+                      <Select value={absenceData.absenceStartTime} onValueChange={(v) => setAbsenceData({ ...absenceData, absenceStartTime: v })}>
+                        <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Bis</Label>
-                      <Input
-                        type="time"
-                        step={900}
-                        value={absenceData.absenceEndTime}
-                        onChange={(e) => setAbsenceData({ ...absenceData, absenceEndTime: e.target.value })}
-                      />
+                      <Select value={absenceData.absenceEndTime} onValueChange={(v) => setAbsenceData({ ...absenceData, absenceEndTime: v })}>
+                        <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="space-y-1.5">

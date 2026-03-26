@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -115,29 +116,13 @@ const MyHours = () => {
 
     setSavingEdit(true);
 
-    // Berechne Stunden basierend auf Vormittag und Nachmittag
-    const morningStart = editingEntry.start_time ? new Date(`2000-01-01T${editingEntry.start_time}`) : null;
-    // Morning End: immer 12:00
-    const morningEndTime = "12:00";
-    const morningEnd = new Date(`2000-01-01T${morningEndTime}`);
-    
+    // Einfache Berechnung: (Ende - Start - Pause) / 60
     let calculatedHours = 0;
-    
-    if (morningStart) {
-      // Vormittagsstunden
-      const morningMs = morningEnd.getTime() - morningStart.getTime();
-      const morningMinutes = morningMs / (1000 * 60);
-      calculatedHours += morningMinutes / 60;
-      
-      // Nachmittagsstunden (wenn vorhanden)
-      if (editingEntry.end_time) {
-        const afternoonEnd = new Date(`2000-01-01T${editingEntry.end_time}`);
-        const pauseMinutes = editingEntry.pause_minutes || 0;
-        const afternoonStartTime = new Date(morningEnd.getTime() + pauseMinutes * 60 * 1000);
-        const afternoonMs = afternoonEnd.getTime() - afternoonStartTime.getTime();
-        const afternoonMinutes = Math.max(0, afternoonMs / (1000 * 60));
-        calculatedHours += afternoonMinutes / 60;
-      }
+    if (editingEntry.start_time && editingEntry.end_time) {
+      const [sH, sM] = editingEntry.start_time.split(':').map(Number);
+      const [eH, eM] = editingEntry.end_time.split(':').map(Number);
+      const totalMin = (eH * 60 + eM) - (sH * 60 + sM) - (editingEntry.pause_minutes || 0);
+      calculatedHours = Math.max(0, totalMin / 60);
     }
 
     const { error } = await supabase
@@ -364,84 +349,39 @@ const MyHours = () => {
                 />
               </div>
 
-              {/* Vormittag */}
-              <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                <h3 className="font-semibold text-sm">Vormittag</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-morning-start">Beginn</Label>
-                    <Input
-                      id="edit-morning-start"
-                      type="time"
-                      value={editingEntry.start_time || '07:30'}
-                      onChange={(e) => setEditingEntry({...editingEntry, start_time: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-morning-end">Ende</Label>
-                    <Input
-                      id="edit-morning-end"
-                      type="time"
-                      value="12:00"
-                      disabled
-                      className="bg-muted"
-                    />
-                  </div>
+              {/* Von / Bis */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Von</Label>
+                  <Select value={editingEntry.start_time || "07:00"} onValueChange={(v) => setEditingEntry({...editingEntry, start_time: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Bis</Label>
+                  <Select value={editingEntry.end_time || "16:00"} onValueChange={(v) => setEditingEntry({...editingEntry, end_time: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Unterbrechung */}
-              <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                <h3 className="font-semibold text-sm">Unterbrechung</h3>
-                <div>
-                  <Label htmlFor="edit-pause">Dauer (Minuten)</Label>
-                  <Input
-                    id="edit-pause"
-                    type="number"
-                    min="0"
-                    value={editingEntry.pause_minutes || 0}
-                    onChange={(e) => setEditingEntry({...editingEntry, pause_minutes: parseInt(e.target.value) || 0})}
-                  />
+              {/* Pause */}
+              <div className="space-y-1.5">
+                <Label>Pause</Label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[{ label: "Keine", value: 0 }, { label: "30 Min", value: 30 }, { label: "45 Min", value: 45 }, { label: "1 Std", value: 60 }].map(opt => (
+                    <Button key={opt.value} type="button" variant={(editingEntry.pause_minutes || 0) === opt.value ? "default" : "outline"} size="sm" className="h-9 text-xs"
+                      onClick={() => setEditingEntry({...editingEntry, pause_minutes: opt.value})}>
+                      {opt.label}
+                    </Button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Nachmittag */}
-              <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                <h3 className="font-semibold text-sm">Nachmittag</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-afternoon-start">Beginn</Label>
-                    <Input
-                      id="edit-afternoon-start"
-                      type="time"
-                      value={(() => {
-                        const dayOfWeek = new Date(editingEntry.datum).getDay();
-                        const isFriday = dayOfWeek === 5;
-                        const morningEnd = isFriday ? "12:30" : "12:00";
-                        const [hours, minutes] = morningEnd.split(':').map(Number);
-                        const pauseMinutes = editingEntry.pause_minutes || 0;
-                        const totalMinutes = hours * 60 + minutes + pauseMinutes;
-                        return `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
-                      })()}
-                      disabled
-                      className="bg-muted"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-afternoon-end">Ende</Label>
-                    <Input
-                      id="edit-afternoon-end"
-                      type="time"
-                      value={editingEntry.end_time || ''}
-                      onChange={(e) => setEditingEntry({...editingEntry, end_time: e.target.value})}
-                    />
-                  </div>
-                </div>
-                {new Date(editingEntry.datum).getDay() === 5 && (
-                  <p className="text-xs text-muted-foreground">
-                    Freitags ist die Normalarbeitszeit 7:30-12:30 Uhr. Nachmittag nur bei Überstunden.
-                  </p>
-                )}
               </div>
 
               <div className="flex gap-2 pt-4">
