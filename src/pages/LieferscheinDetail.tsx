@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, HelpCircle, ChevronDown, ChevronUp, Lock, LockOpen } from "lucide-react";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,8 @@ export default function LieferscheinDetail() {
   const [voiceTyp, setVoiceTyp] = useState<"entnahme" | "rueckgabe" | null>(null);
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [lsStatus, setLsStatus] = useState<string>("offen");
+  const isAbgeschlossen = lsStatus === "abgeschlossen";
 
   useEffect(() => {
     init();
@@ -87,6 +89,7 @@ export default function LieferscheinDetail() {
       setLsProjectId(ls.project_id || null);
       setLsProject((ls.projects as any)?.name || null);
       setLsDatum(ls.datum || "");
+      setLsStatus((ls as any).status || "offen");
       await fetchAngebotPositionen(ls.project_id || null);
     }
 
@@ -249,7 +252,33 @@ export default function LieferscheinDetail() {
             </Select>
           </div>
           {lsDatum && <span className="text-muted-foreground">{new Date(lsDatum).toLocaleDateString("de-AT")}</span>}
+          {/* Abschließen / Wieder öffnen */}
+          {isAbgeschlossen ? (
+            <Button variant="outline" size="sm" className="gap-1.5 text-green-700 border-green-300" onClick={async () => {
+              await supabase.from("lieferscheine").update({ status: "offen" } as any).eq("id", id);
+              setLsStatus("offen");
+              toast({ title: "Lieferschein wieder geöffnet" });
+            }}>
+              <LockOpen className="h-3.5 w-3.5" /> Wieder öffnen
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
+              await supabase.from("lieferscheine").update({ status: "abgeschlossen" } as any).eq("id", id);
+              setLsStatus("abgeschlossen");
+              toast({ title: "Lieferschein abgeschlossen" });
+            }}>
+              <Lock className="h-3.5 w-3.5" /> Abschließen
+            </Button>
+          )}
         </div>
+
+        {/* Abgeschlossen-Hinweis */}
+        {isAbgeschlossen && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 border rounded-md p-2.5">
+            <Lock className="h-4 w-4 shrink-0" />
+            <span>Dieser Lieferschein ist abgeschlossen. Es können keine Buchungen mehr vorgenommen werden.</span>
+          </div>
+        )}
 
         {/* Hilfe */}
         <div>
@@ -275,7 +304,7 @@ export default function LieferscheinDetail() {
         </div>
 
         {/* Action Buttons */}
-        {!showForm && !voiceTyp && (
+        {!showForm && !voiceTyp && !isAbgeschlossen && (
           <div className="flex gap-2 flex-wrap">
             <Button onClick={() => setVoiceTyp("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700">
               <Mic className="h-4 w-4" />
@@ -293,7 +322,7 @@ export default function LieferscheinDetail() {
         )}
 
         {/* Angebotspositionen — always visible, with inline quantity input */}
-        {angebotPositionen.length > 0 && !showForm && !voiceTyp && (
+        {angebotPositionen.length > 0 && !showForm && !voiceTyp && !isAbgeschlossen && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -424,11 +453,13 @@ export default function LieferscheinDetail() {
           <VoiceRecorder
             typ={voiceTyp}
             existingItems={
-              voiceTyp === "entnahme" && angebotPositionen.length > 0
+              angebotPositionen.length > 0
                 ? angebotPositionen.map(p => ({
                     position: p.position,
                     material: p.beschreibung,
-                    menge: String(p.menge),
+                    menge: voiceTyp === "rueckgabe"
+                      ? String(summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim())?.verbraucht || 0)
+                      : String(p.menge),
                     einheit: p.einheit,
                   }))
                 : summary.map((s, idx) => ({
