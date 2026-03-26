@@ -171,7 +171,9 @@ export async function generateInvoicePdf(
     if (langtext && langtext !== kurztext) {
       const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
       // extraH = Abstand Kurztext→Langtext (1.5) + Langtext-Höhe + minimales Padding (1)
-      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltLines.length * 3.04 + 1 };
+      // Zeilenhöhe: erste Zeile zählt nicht extra (ist im Abstand enthalten), jede weitere +2.65mm
+      const ltH = 2.65 + (ltLines.length > 1 ? (ltLines.length - 1) * 2.65 : 0);
+      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltH + 0.5 };
     }
     return [
       String(item.position).padStart(2, "0"),
