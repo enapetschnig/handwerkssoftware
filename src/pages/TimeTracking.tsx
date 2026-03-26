@@ -51,6 +51,7 @@ interface TimeBlock {
   endTime: string;
   pauseStart: string;
   pauseEnd: string;
+  pauseDuration: number; // 0, 30, 45, 60 minutes
   selectedEmployees: string[];
   manualHours: string;
   disturbanceId: string;
@@ -73,6 +74,7 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   endTime,
   pauseStart,
   pauseEnd,
+  pauseDuration: 30, // 30 Minuten vorausgewählt
   selectedEmployees: [],
   manualHours: "",
   disturbanceId: "",
@@ -316,13 +318,7 @@ const TimeTracking = () => {
 
   // Calculate pause minutes for a block
   const calculateBlockPauseMinutes = (block: TimeBlock): number => {
-    if (!block.pauseStart || !block.pauseEnd) return 0;
-    
-    const [pauseStartH, pauseStartM] = block.pauseStart.split(':').map(Number);
-    const [pauseEndH, pauseEndM] = block.pauseEnd.split(':').map(Number);
-    
-    const pauseMinutes = (pauseEndH * 60 + pauseEndM) - (pauseStartH * 60 + pauseStartM);
-    return Math.max(0, pauseMinutes);
+    return block.pauseDuration || 0;
   };
 
   // Calculate hours for a single block
@@ -548,7 +544,12 @@ const TimeTracking = () => {
         return;
       }
 
-      // Tätigkeit and Projekt are now optional - no validation needed
+      // Projekt ist Pflicht bei Baustelle
+      if (block.locationType === "baustelle" && !block.projectId) {
+        toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Bitte ein Projekt auswählen` });
+        setSaving(false);
+        return;
+      }
     }
 
     // Check for overlaps between blocks
@@ -624,8 +625,11 @@ const TimeTracking = () => {
     let hasError = false;
 
     for (const block of timeBlocks) {
-      const blockHours = calculateBlockHours(block);
       const pauseMinutes = calculateBlockPauseMinutes(block);
+      const blockHours = calculateBlockHours(block);
+      // Calculate pause_start/end (Mittagszeit 12:00)
+      const pauseStartCalc = pauseMinutes > 0 ? "12:00" : null;
+      const pauseEndCalc = pauseMinutes > 0 ? `${12 + Math.floor(pauseMinutes / 60)}:${String(pauseMinutes % 60).padStart(2, "0")}` : null;
 
       // Determine DB location_type (regie is stored as baustelle)
       const dbLocationType = block.locationType === "regie" ? "baustelle" : block.locationType;
@@ -646,8 +650,8 @@ const TimeTracking = () => {
         start_time: block.startTime,
         end_time: block.endTime,
         pause_minutes: pauseMinutes,
-        pause_start: block.pauseStart || null,
-        pause_end: block.pauseEnd || null,
+        pause_start: pauseStartCalc,
+        pause_end: pauseEndCalc,
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
@@ -663,8 +667,8 @@ const TimeTracking = () => {
         start_time: block.startTime,
         end_time: block.endTime,
         pause_minutes: pauseMinutes,
-        pause_start: block.pauseStart || null,
-        pause_end: block.pauseEnd || null,
+        pause_start: pauseStartCalc,
+        pause_end: pauseEndCalc,
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
@@ -869,7 +873,7 @@ const TimeTracking = () => {
                             <div>
                               <RadioGroupItem value="werkstatt" id={`werkstatt-${block.id}`} className="peer sr-only" />
                               <Label htmlFor={`werkstatt-${block.id}`} className="flex h-12 cursor-pointer items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary text-sm">
-                                🔧 Werkstatt
+                                🏢 Firma
                               </Label>
                             </div>
                           </RadioGroup>
@@ -878,7 +882,7 @@ const TimeTracking = () => {
                         {/* Project selection - only for Baustelle */}
                         {block.locationType === "baustelle" && (
                           <div className="space-y-2">
-                            <Label>Projekt <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>Projekt *</Label>
                             <Select
                               value={block.projectId}
                               onValueChange={(value) => {
@@ -984,24 +988,26 @@ const TimeTracking = () => {
                             />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label>Pause von <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Input
-                              type="time"
-                              step={900}
-                              value={block.pauseStart}
-                              onChange={(e) => updateBlock(block.id, { pauseStart: e.target.value })}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>Pause bis <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Input
-                              type="time"
-                              step={900}
-                              value={block.pauseEnd}
-                              onChange={(e) => updateBlock(block.id, { pauseEnd: e.target.value })}
-                            />
+                        <div className="space-y-1.5">
+                          <Label>Pause</Label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {[
+                              { label: "Keine", value: 0 },
+                              { label: "30 Min", value: 30 },
+                              { label: "45 Min", value: 45 },
+                              { label: "1 Std", value: 60 },
+                            ].map(opt => (
+                              <Button
+                                key={opt.value}
+                                type="button"
+                                variant={block.pauseDuration === opt.value ? "default" : "outline"}
+                                size="sm"
+                                className="h-9 text-xs"
+                                onClick={() => updateBlock(block.id, { pauseDuration: opt.value })}
+                              >
+                                {opt.label}
+                              </Button>
+                            ))}
                           </div>
                         </div>
                         {/* Regelarbeitszeit button */}
@@ -1013,11 +1019,19 @@ const TimeTracking = () => {
                             const dateObj = new Date(selectedDate);
                             const defaults = getDefaultWorkTimes(dateObj);
                             if (defaults) {
+                              // Calculate pause duration from defaults
+                              let defaultPause = 30;
+                              if (defaults.pauseStart && defaults.pauseEnd) {
+                                const [ps, pm] = defaults.pauseStart.split(':').map(Number);
+                                const [pe, pem] = defaults.pauseEnd.split(':').map(Number);
+                                defaultPause = (pe * 60 + pem) - (ps * 60 + pm);
+                              } else {
+                                defaultPause = 0; // Freitag: keine Pause
+                              }
                               updateBlock(block.id, {
                                 startTime: defaults.startTime,
                                 endTime: defaults.endTime,
-                                pauseStart: defaults.pauseStart,
-                                pauseEnd: defaults.pauseEnd,
+                                pauseDuration: defaultPause,
                               });
                             }
                           }}
