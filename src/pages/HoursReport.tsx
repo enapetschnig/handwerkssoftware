@@ -638,9 +638,9 @@ export default function HoursReport() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[100px]">Datum</TableHead>
-                          <TableHead>Vormittag</TableHead>
+                          <TableHead>Von</TableHead>
+                          <TableHead>Bis</TableHead>
                           <TableHead>Pause</TableHead>
-                          <TableHead>Nachmittag</TableHead>
                           <TableHead className="text-right">Stunden</TableHead>
                           <TableHead className="text-right">Überstunden</TableHead>
                           <TableHead>Ort</TableHead>
@@ -691,8 +691,8 @@ export default function HoursReport() {
                               const lunchBreak = calculateLunchBreak(entry);
                               const overtime = calculateOvertime(day.date, entry.stunden);
                               const project = projects[entry.project_id];
-                              const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🔧" : "";
-                              const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Werkstatt" : "";
+                              const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏢" : "";
+                              const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Firma" : "";
                               const projektName = entry.taetigkeit === "Urlaub" || entry.taetigkeit === "Krankenstand"
                                 ? entry.taetigkeit
                                 : (project?.name || "");
@@ -717,27 +717,9 @@ export default function HoursReport() {
                                       </div>
                                     )}
                                   </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-1">
-                                      <span>{entry.start_time?.substring(0, 5)}</span>
-                                      <span>-</span>
-                                      <span>{day.isFriday ? "12:30" : "12:00"}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    {lunchBreak && entry.pause_minutes > 0 && (
-                                      <span className="text-sm">{lunchBreak.start} - {lunchBreak.end}</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {lunchBreak && (
-                                      <div className="flex items-center gap-1">
-                                        <span>{lunchBreak.end}</span>
-                                        <span>-</span>
-                                        <span>{entry.end_time?.substring(0, 5)}</span>
-                                      </div>
-                                    )}
-                                  </TableCell>
+                                  <TableCell>{entry.start_time?.substring(0, 5) || '-'}</TableCell>
+                                  <TableCell>{entry.end_time?.substring(0, 5) || '-'}</TableCell>
+                                  <TableCell>{entry.pause_minutes > 0 ? `${entry.pause_minutes} Min` : '-'}</TableCell>
                                   <TableCell className="text-right font-medium">
                                     {entry.stunden.toFixed(2)} h
                                     {hasMultipleEntries && isLastEntry && (
