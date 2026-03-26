@@ -148,22 +148,24 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
           {(state === "idle" || state === "recording") && (
             <div className="text-xs text-muted-foreground bg-muted/50 rounded p-3">
               {typ === "entnahme" ? (
-                <>Sag z.B.: <strong>"Ich habe 40 Quadratmeter Fliesen 60x60 und 5 Sack Fliesenkleber mitgenommen"</strong></>
+                <>Sag z.B.: <strong>"Position 1, 2 Stück"</strong> oder <strong>"40 Quadratmeter Fliesen 60x60 mitgenommen"</strong></>
               ) : (
-                <>Sag z.B.: <strong>"Position 1, davon gebe ich 10 Stück zurück"</strong> oder <strong>"Ich bringe 5 Quadratmeter Fliesen zurück"</strong></>
+                <>Sag z.B.: <strong>"Position 1, 10 Stück zurück"</strong> oder <strong>"5 Quadratmeter Fliesen zurückgeben"</strong></>
               )}
             </div>
           )}
 
-          {/* Show existing positions for return reference - ALWAYS visible during recording */}
-          {typ === "rueckgabe" && existingItems && existingItems.length > 0 && (
-            <div className="bg-green-50 border border-green-200 rounded p-3 space-y-1">
-              <p className="text-xs font-medium text-green-800">Entnommene Positionen:</p>
+          {/* Show positions reference - for BOTH entnahme and rueckgabe */}
+          {existingItems && existingItems.length > 0 && (
+            <div className={`rounded p-3 space-y-1 ${typ === "entnahme" ? "bg-orange-50 border border-orange-200" : "bg-green-50 border border-green-200"}`}>
+              <p className={`text-xs font-medium ${typ === "entnahme" ? "text-orange-800" : "text-green-800"}`}>
+                {typ === "entnahme" ? "Angebotspositionen:" : "Entnommene Positionen:"}
+              </p>
               {existingItems.map((item) => (
-                <div key={item.position} className="text-xs text-green-700 flex gap-2">
-                  <span className="font-bold min-w-[50px]">Pos {item.position}:</span>
-                  <span>{item.material}</span>
-                  <span className="text-green-500">({item.menge} {item.einheit})</span>
+                <div key={item.position} className={`text-xs flex gap-2 ${typ === "entnahme" ? "text-orange-700" : "text-green-700"}`}>
+                  <span className="font-bold min-w-[40px]">Pos {item.position}:</span>
+                  <span className="flex-1">{item.material}</span>
+                  <span className={typ === "entnahme" ? "text-orange-500" : "text-green-500"}>({item.menge} {item.einheit})</span>
                 </div>
               ))}
             </div>

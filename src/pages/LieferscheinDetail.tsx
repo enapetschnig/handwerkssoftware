@@ -416,68 +416,58 @@ export default function LieferscheinDetail() {
               </div>
               <CardDescription>Menge eingeben und auf "Entnehmen" klicken</CardDescription>
             </CardHeader>
-            {positionenOpen && <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">Pos</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead className="text-right w-[80px]">Soll</TableHead>
-                    <TableHead className="w-[90px]">Menge</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {angebotPositionen.map((p) => (
-                    <TableRow key={p.position}>
-                      <TableCell className="text-muted-foreground text-center font-medium">{String(p.position).padStart(2, "0")}</TableCell>
-                      <TableCell className="font-medium">{p.beschreibung}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{p.menge} {p.einheit}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          placeholder="Menge"
-                          className="h-8 text-sm w-full"
-                          id={`menge-${p.position}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50 w-full"
-                          onClick={async () => {
-                            const input = document.getElementById(`menge-${p.position}`) as HTMLInputElement;
-                            const menge = input?.value?.trim();
-                            if (!menge || !currentUserId || !id) {
-                              toast({ variant: "destructive", title: "Menge eingeben" });
-                              return;
-                            }
-                            const { error } = await supabase.from("material_entries").insert({
-                              lieferschein_id: id, project_id: null, user_id: currentUserId,
-                              material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
-                              einzelpreis: 0, typ: "entnahme", notizen: null,
-                              datum: new Date().toISOString().split("T")[0],
-                            });
-                            if (error) {
-                              toast({ variant: "destructive", title: "Fehler", description: error.message });
-                            } else {
-                              toast({ title: `${menge} ${p.einheit} ${p.beschreibung} entnommen` });
-                              if (input) input.value = "";
-                              fetchData();
-                            }
-                          }}
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                          Entnehmen
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            {positionenOpen && <CardContent className="space-y-2 pt-0">
+              {angebotPositionen.map((p) => (
+                <div key={p.position} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground font-medium">Pos {String(p.position).padStart(2, "0")}</span>
+                      <p className="font-medium text-sm leading-tight">{p.beschreibung}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{p.menge} {p.einheit}</span>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Menge"
+                      className="h-9 text-sm flex-1"
+                      id={`menge-${p.position}`}
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0 w-10">{p.einheit}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50 h-9 shrink-0"
+                      onClick={async () => {
+                        const input = document.getElementById(`menge-${p.position}`) as HTMLInputElement;
+                        const menge = input?.value?.trim();
+                        if (!menge || !currentUserId || !id) {
+                          toast({ variant: "destructive", title: "Menge eingeben" });
+                          return;
+                        }
+                        const { error } = await supabase.from("material_entries").insert({
+                          lieferschein_id: id, project_id: null, user_id: currentUserId,
+                          material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
+                          einzelpreis: 0, typ: "entnahme", notizen: null,
+                          datum: new Date().toISOString().split("T")[0],
+                        });
+                        if (error) {
+                          toast({ variant: "destructive", title: "Fehler", description: error.message });
+                        } else {
+                          toast({ title: `${menge} ${p.einheit} ${p.beschreibung} entnommen` });
+                          if (input) input.value = "";
+                          fetchData();
+                        }
+                      }}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      Entnehmen
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>}
           </Card>
         )}

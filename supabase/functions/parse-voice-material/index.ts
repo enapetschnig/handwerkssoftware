@@ -67,12 +67,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Step 2: GPT-4o-mini parsing
     let systemPrompt = "";
+    const positionsContext = existingItems?.map(
+      (p) => `Position ${p.position}: ${p.material} (${p.menge} ${p.einheit})`
+    ).join("\n") || "";
+
     if (typ === "entnahme") {
       systemPrompt = `Du bist ein Assistent für Materialerfassung auf einer Baustelle.
 Der Benutzer spricht auf Deutsch und beschreibt welches Material er mitnimmt/entnimmt.
 Extrahiere aus dem gesprochenen Text eine Liste von Materialien mit Menge und Einheit.
 
-Gültige Einheiten: Stk., m², lfm, kg, Sack, Eimer, Pkg.
+${positionsContext ? `Verfügbare Angebotspositionen:\n${positionsContext}\n\nWICHTIG: Wenn der Benutzer "Position 1" oder "Pos 1" sagt, verwende den EXAKTEN Material-Namen und die Einheit von Position 1 aus der Liste oben.\nWenn er das Material beschreibt (z.B. "Fliesen"), ordne es der passendsten Position zu und verwende deren exakten Namen und Einheit.\nDer Benutzer kann auch neues Material nennen, das nicht in der Liste steht — dann erstelle einen neuen Eintrag.` : ""}
+
+Gültige Einheiten: Stk., m², lfm, kg, Sack, Eimer, Pkg., Pauschal
 
 Antworte NUR mit validem JSON in diesem Format:
 {"items": [{"material": "Fliesen 60x60 anthrazit", "menge": 40, "einheit": "m²"}]}
@@ -80,16 +86,12 @@ Antworte NUR mit validem JSON in diesem Format:
 Wenn du keine Materialien erkennst, antworte: {"items": []}
 Keine zusätzlichen Erklärungen, nur JSON.`;
     } else {
-      const positionsContext = existingItems?.map(
-        (p) => `Position ${p.position}: ${p.material} (${p.menge} ${p.einheit})`
-      ).join("\n") || "Keine Positionen vorhanden";
-
       systemPrompt = `Du bist ein Assistent für Material-Rückgabe auf einer Baustelle.
 Der Benutzer spricht auf Deutsch und beschreibt welches Material er zurückgibt.
 Er kann sich auf bestehende Positionen beziehen (z.B. "von Position 1 gebe ich 5 zurück") oder das Material direkt benennen.
 
-Bestehende entnommene Positionen:
-${positionsContext}
+Bestehende Positionen:
+${positionsContext || "Keine Positionen vorhanden"}
 
 WICHTIG: Du MUSST die Material-Namen EXAKT so verwenden wie sie in den bestehenden Positionen stehen!
 Wenn der Benutzer "Position 1" sagt, verwende den exakten Material-Namen von Position 1.
