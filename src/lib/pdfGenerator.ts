@@ -302,6 +302,11 @@ export async function generateInvoicePdf(
             pdf.setFontSize(7.5);
             pdf.setTextColor(120, 120, 120);
             pdf.text(ltLines, cellX, ltY);
+            // Redraw bottom border (white rect covered it)
+            const borderY = data.cell.y + data.cell.height;
+            pdf.setDrawColor(180, 180, 180);
+            pdf.setLineWidth(0.2);
+            pdf.line(data.cell.x, borderY, data.cell.x + data.cell.width, borderY);
             // Reset
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(9);
