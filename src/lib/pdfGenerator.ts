@@ -170,7 +170,7 @@ export async function generateInvoicePdf(
     const langtext = (item as any).langtext || "";
     if (langtext && langtext !== kurztext) {
       const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
-      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.1 + 1.5 };
+      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.0 + 0.5 };
     }
     return [
       String(item.position).padStart(2, "0"),
@@ -297,20 +297,11 @@ export async function generateInvoicePdf(
             const kurztextH = kurztextLines.length * lineH;
             const ltY = data.cell.y + 3 + kurztextH + 1.5;
             const ltLines = pdf.splitTextToSize(info.langtext, cellW);
-            const ltLineH = 7.5 * 0.3528 * 1.15;
-            const ltH = ltLines.length * ltLineH;
-            // Light background over FULL table width — directly under kurztext, tight fit
-            pdf.setFillColor(245, 245, 250);
-            pdf.rect(ml, ltY - 1, pageWidth - ml - mr, ltH + 2, "F");
-            // Draw langtext in italic gray — no separator above, flows from kurztext
+            // Draw langtext in italic gray — small gap below kurztext, no background
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
-            pdf.setTextColor(100, 100, 100);
+            pdf.setTextColor(120, 120, 120);
             pdf.text(ltLines, cellX, ltY);
-            // Row separator line at bottom of langtext background
-            pdf.setDrawColor(180, 180, 180);
-            pdf.setLineWidth(0.2);
-            pdf.line(ml, ltY + ltH + 1, pageWidth - mr, ltY + ltH + 1);
             // Reset
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(9);
