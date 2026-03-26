@@ -321,8 +321,8 @@ export default function LieferscheinDetail() {
           </div>
         )}
 
-        {/* Angebotspositionen — always visible, with inline quantity input */}
-        {angebotPositionen.length > 0 && !showForm && !voiceTyp && !isAbgeschlossen && (
+        {/* Angebotspositionen — always visible (except when closed) */}
+        {angebotPositionen.length > 0 && !isAbgeschlossen && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -444,51 +444,6 @@ export default function LieferscheinDetail() {
                   <Button type="button" variant="outline" onClick={() => { setShowForm(false); setReturningEntry(null); }}>Abbrechen</Button>
                 </div>
               </form>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Voice: show positions list as reference ABOVE the recorder */}
-        {voiceTyp && angebotPositionen.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                {voiceTyp === "entnahme" ? "Angebotspositionen — Soll-Mengen" : "Entnommene Mengen"}
-              </CardTitle>
-              <CardDescription>
-                {voiceTyp === "entnahme"
-                  ? "Sag z.B. „Position 1, 25 Quadratmeter entnommen""
-                  : "Sag z.B. „Position 1, 10 Stück zurückgeben""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pb-3">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">Pos</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead className="text-right w-[100px]">{voiceTyp === "entnahme" ? "Soll" : "Entnommen"}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {angebotPositionen.map(p => {
-                    const entnommen = summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim());
-                    return (
-                      <TableRow key={p.position}>
-                        <TableCell className="text-muted-foreground text-center font-medium">{String(p.position).padStart(2, "0")}</TableCell>
-                        <TableCell className="font-medium text-sm">{p.beschreibung}</TableCell>
-                        <TableCell className="text-right">
-                          {voiceTyp === "entnahme"
-                            ? `${p.menge} ${p.einheit}`
-                            : `${entnommen?.verbraucht || 0} ${p.einheit}`
-                          }
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         )}
