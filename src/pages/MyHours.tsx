@@ -70,41 +70,6 @@ const MyHours = () => {
     setLoading(false);
   };
 
-  const calculateMorningEnd = (entry: TimeEntry) => {
-    // Fallback für alte Einträge ohne Zeitangaben
-    if (!entry.start_time || !entry.end_time) {
-      return "Alte Buchung";
-    }
-    if (!entry.pause_minutes || entry.pause_minutes === 0) {
-      return entry.end_time?.substring(0, 5) || '-';
-    }
-    // Mo-Do: 12:00, Fr: 12:00 (keine Pause)
-    return "12:00";
-  };
-
-  const calculateAfternoonStart = (entry: TimeEntry) => {
-    // Fallback für alte Einträge
-    if (!entry.start_time || !entry.end_time) return '-';
-    if (!entry.pause_minutes || entry.pause_minutes === 0) return '-';
-    
-    const morningEnd = calculateMorningEnd(entry);
-    if (morningEnd === '-' || morningEnd === "Alte Buchung") return '-';
-    
-    const [hours, minutes] = morningEnd.split(':').map(Number);
-    const totalMinutes = hours * 60 + minutes + entry.pause_minutes;
-    return `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
-  };
-
-  const formatPauseTime = (entry: TimeEntry) => {
-    // Fallback für alte Einträge
-    if (!entry.start_time || !entry.end_time) return '-';
-    if (!entry.pause_minutes || entry.pause_minutes === 0) return '-';
-    const morningEnd = calculateMorningEnd(entry);
-    const afternoonStart = calculateAfternoonStart(entry);
-    if (morningEnd === '-' || morningEnd === "Alte Buchung" || afternoonStart === '-') return '-';
-    return `${morningEnd} - ${afternoonStart}`;
-  };
-
   const isCurrentMonth = (datum: string) => {
     const entryDate = new Date(datum);
     const [year, month] = selectedMonth.split('-').map(Number);
