@@ -202,7 +202,7 @@ export async function generateInvoicePdf(
     tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
   } else {
     tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-    tableFoot.push(["", "", "", `USt. ${Number(invoice.mwst_satz).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag))]);
+    tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
     tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
   }
 
@@ -396,7 +396,7 @@ export async function generateInvoicePdf(
     y += 4;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    pdf.text("gemäß § 13b Abs. 2 Nr. 1 UStG. Die Umsatzsteuerschuld geht auf den Leistungsempfänger über.", ml, y);
+    pdf.text("Gemäß § 19 Abs. 1 UStG geht die Steuerschuld auf den Leistungsempfänger über.", ml, y);
     y += 6;
   }
 

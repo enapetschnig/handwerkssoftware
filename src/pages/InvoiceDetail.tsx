@@ -367,6 +367,7 @@ export default function InvoiceDetail() {
       kunde_anrede: (data as any).kunde_anrede || "",
       kunde_titel: (data as any).kunde_titel || "",
       reverse_charge: (data as any).reverse_charge || false,
+      kundennummer: (data as any).kundennummer || "",
     });
 
     const { data: itemsData } = await supabase
@@ -408,6 +409,8 @@ export default function InvoiceDetail() {
     setItems(prev => [...prev, {
       position: prev.length + 1,
       beschreibung: "",
+      kurztext: "",
+      langtext: "",
       menge: 1,
       einheit: "Stk.",
       einzelpreis: 0,
@@ -573,6 +576,7 @@ export default function InvoiceDetail() {
         mahnstufe: form.mahnstufe,
         skonto_prozent: form.skonto_prozent || 0,
         skonto_tage: form.skonto_tage || 0,
+        kundennummer: (form as any).kundennummer || null,
       };
 
       if (isNew || !savedId) {
@@ -867,6 +871,13 @@ export default function InvoiceDetail() {
           project_id: form.project_id || null,
           rabatt_prozent: form.rabatt_prozent,
           rabatt_betrag: form.rabatt_betrag,
+          kunde_anrede: (form as any).kunde_anrede || null,
+          kunde_titel: (form as any).kunde_titel || null,
+          reverse_charge: (form as any).reverse_charge || false,
+          skonto_prozent: form.skonto_prozent || 0,
+          skonto_tage: form.skonto_tage || 0,
+          gueltig_bis: form.gueltig_bis || null,
+          customer_id: form.customer_id || null,
         })
         .select("id")
         .single();
@@ -877,6 +888,8 @@ export default function InvoiceDetail() {
         invoice_id: newInvoice.id,
         position: idx + 1,
         beschreibung: item.beschreibung,
+        kurztext: (item as any).kurztext || item.beschreibung,
+        langtext: (item as any).langtext || null,
         menge: item.menge,
         einheit: item.einheit,
         einzelpreis: item.einzelpreis,
@@ -934,10 +947,17 @@ export default function InvoiceDetail() {
   const handleCancel = async () => {
     if (!invoiceId) return;
     try {
-      const { error } = await supabase.from("invoices").update({ status: "storniert" }).eq("id", invoiceId);
+      const stornoNummer = `S-${form.nummer || invoiceId.substring(0, 8)}`;
+      const stornoDatum = new Date().toISOString().split("T")[0];
+      const { error } = await supabase.from("invoices").update({
+        status: "storniert",
+        storno_nummer: stornoNummer,
+        storno_datum: stornoDatum,
+        storno_grund: "Storniert durch Benutzer",
+      }).eq("id", invoiceId);
       if (error) throw error;
-      updateField("status", "storniert");
-      toast({ title: "Storniert", description: "Rechnung wurde storniert" });
+      setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: "Storniert durch Benutzer" }));
+      toast({ title: "Storniert", description: `Stornonummer: ${stornoNummer}` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Fehler", description: err.message || "Stornierung fehlgeschlagen" });
     }

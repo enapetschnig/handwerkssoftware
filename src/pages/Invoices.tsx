@@ -135,7 +135,7 @@ export default function Invoices() {
   const fetchInvoices = async () => {
     const { data, error } = await supabase
       .from("invoices")
-      .select("id, typ, nummer, status, kunde_name, datum, brutto_summe, netto_summe, project_id, faellig_am, mahnstufe, gueltig_bis, bezahlt_betrag, archiviert, storno_nummer, storno_datum")
+      .select("id, typ, nummer, status, kunde_name, datum, brutto_summe, netto_summe, project_id, faellig_am, mahnstufe, gueltig_bis, bezahlt_betrag, archiviert, storno_nummer, storno_datum, kundennummer")
       .order("datum", { ascending: false })
       .order("created_at", { ascending: false });
 
