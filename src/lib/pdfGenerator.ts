@@ -209,9 +209,23 @@ export async function generateInvoicePdf(
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
 
-  // Normal margin.bottom — only page footer zone, NOT the closing section
-  // This keeps first pages full. Closing section handles its own page breaks after autoTable.
-  const footerMargin = 32;
+  // margin.bottom = page footer (22mm from bottom) + closing section height
+  // This ensures the closing section fits on the same page as the last positions.
+  const pageFooter = 25; // page footer zone (22mm from bottom + 3mm buffer)
+  let closingH = 15; // base: closing text + spacing
+  if (invoice.notizen) closingH += 12;
+  if (isReverseCharge) closingH += 14;
+  if (!isAngebot) {
+    closingH += 13; // Zahlungstext + Zahlungsreferenz
+    if (skontoProzent > 0 && skontoTage > 0) closingH += 24; // Skonto-Box
+    closingH += 5;  // Bankverbindung
+    closingH += 22; // QR-Code
+    closingH += 14; // Hinweistext (Silikon)
+    closingH += 10; // "Vielen Dank"
+  } else {
+    closingH += 8; // Angebot-Schlusstext
+  }
+  const footerMargin = pageFooter + closingH;
 
   autoTable(pdf, {
     startY: y,
