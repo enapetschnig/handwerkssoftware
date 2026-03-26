@@ -162,27 +162,22 @@ export async function generateInvoicePdf(
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  // Pre-calculate langtext extra height BEFORE autoTable (avoids recursion in hooks)
-  const descColW = pageWidth - ml - mr - 12 - 18 - 18 - 24 - 26 - 8; // ~74mm Beschreibung col
-  const langtextInfo: Record<number, { kurztext: string; langtext: string; extraH: number }> = {};
+  // Langtext: put BOTH in cell so autoTable handles height perfectly.
+  // In didDrawCell we paint over the langtext area and redraw in italic/gray.
+  const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
   const tableBody = items.map((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
+    let cellText = kurztext;
     if (langtext && langtext !== kurztext) {
-      // Measure EXACT langtext height using jsPDF (safe before autoTable, no hooks)
-      pdf.setFontSize(7.5);
-      const w = descColW > 20 ? descColW : 70;
-      const ltLines = pdf.splitTextToSize(langtext, w);
-      const ltDim = pdf.getTextDimensions(ltLines.join("\n"), { fontSize: 7.5 });
-      pdf.setFontSize(9); // reset
-      // extraH = small gap (1.5mm) + exact text height
-      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltDim.h };
+      langtextInfo[idx] = { kurztext, langtext };
+      cellText = `${kurztext}\n${langtext}`;
     }
     return [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      kurztext, // ONLY kurztext in cell — langtext drawn manually in didDrawCell
+      cellText, // Both in cell — autoTable handles sizing, didDrawCell handles styling
       fmtCurrency(Number(item.einzelpreis)),
       fmtCurrency(Number(item.gesamtpreis)),
     ];
@@ -260,13 +255,6 @@ export async function generateInvoicePdf(
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
-      // Reserve extra cell height for langtext (safe: uses pre-calculated values, no pdf calls)
-      if (data.section === "body" && data.column.index === 3) {
-        const info = langtextInfo[data.row.index];
-        if (info) {
-          data.cell.styles.cellPadding = { top: 3, left: 2, right: 2, bottom: info.extraH };
-        }
-      }
       if (data.section === "foot") {
         const rowLabel = data.row.raw?.[3] || "";
         if (data.column.index === 3) {
@@ -297,13 +285,19 @@ export async function generateInvoicePdf(
           try {
             const cellW = data.cell.width - 4;
             const cellX = data.cell.x + 2;
-            // Kurztext height (already drawn by autoTable)
+            // autoTable drew BOTH kurztext+langtext in same font.
+            // Find where langtext starts, paint white over it, redraw in italic/gray.
             const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
-            const lineH = 9 * 0.3528 * 1.15;
+            const lineH = 9 * 0.3528 * 1.15; // 9pt line height
             const kurztextH = kurztextLines.length * lineH;
-            const ltY = data.cell.y + 3 + kurztextH + 1.5;
+            // White rect over langtext area (from after kurztext to cell bottom)
+            const coverY = data.cell.y + 3 + kurztextH + 0.5;
+            const coverH = data.cell.y + data.cell.height - coverY;
+            pdf.setFillColor(255, 255, 255);
+            pdf.rect(data.cell.x, coverY, data.cell.width, coverH, "F");
+            // Redraw langtext in italic gray with small gap after kurztext
+            const ltY = data.cell.y + 3 + kurztextH + 2;
             const ltLines = pdf.splitTextToSize(info.langtext, cellW);
-            // Draw langtext in italic gray — small gap below kurztext, no background
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
             pdf.setTextColor(120, 120, 120);
