@@ -170,7 +170,7 @@ export async function generateInvoicePdf(
     const langtext = (item as any).langtext || "";
     if (langtext && langtext !== kurztext) {
       const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
-      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.1 + 5 };
+      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.1 + 1.5 };
     }
     return [
       String(item.position).padStart(2, "0"),
@@ -295,27 +295,22 @@ export async function generateInvoicePdf(
             const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
             const lineH = 9 * 0.3528 * 1.15;
             const kurztextH = kurztextLines.length * lineH;
-            const ltY = data.cell.y + 3 + kurztextH + 3.5;
+            const ltY = data.cell.y + 3 + kurztextH + 1.5;
             const ltLines = pdf.splitTextToSize(info.langtext, cellW);
             const ltLineH = 7.5 * 0.3528 * 1.15;
-            const ltH = ltLines.length * ltLineH + 1;
-            // Light background over FULL table width
+            const ltH = ltLines.length * ltLineH;
+            // Light background over FULL table width — directly under kurztext, tight fit
             pdf.setFillColor(245, 245, 250);
-            pdf.rect(ml, ltY - 2.5, pageWidth - ml - mr, ltH + 3, "F");
-            // Separator line above langtext
-            pdf.setDrawColor(210, 210, 215);
-            pdf.setLineWidth(0.15);
-            pdf.line(ml, ltY - 2.5, pageWidth - mr, ltY - 2.5);
-            // Draw langtext in italic gray
+            pdf.rect(ml, ltY - 1, pageWidth - ml - mr, ltH + 2, "F");
+            // Draw langtext in italic gray — no separator above, flows from kurztext
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
             pdf.setTextColor(100, 100, 100);
             pdf.text(ltLines, cellX, ltY);
-            // Separator line below langtext (row bottom)
-            const bottomY = ltY + ltH + 0.5;
+            // Row separator line at bottom of langtext background
             pdf.setDrawColor(180, 180, 180);
             pdf.setLineWidth(0.2);
-            pdf.line(ml, bottomY, pageWidth - mr, bottomY);
+            pdf.line(ml, ltY + ltH + 1, pageWidth - mr, ltY + ltH + 1);
             // Reset
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(9);
