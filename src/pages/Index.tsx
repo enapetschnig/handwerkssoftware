@@ -463,15 +463,17 @@ export default function Index() {
             <CardContent><Button className="w-full" size="sm" variant="outline">Anzeigen</Button></CardContent>
           </Card>
 
-          {/* Regiearbeiten - Für alle */}
-          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/disturbances")}>
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Zap className="h-6 w-6 text-primary" /></div>
-              <CardTitle className="text-lg sm:text-xl">Regiearbeiten</CardTitle>
-              <CardDescription className="text-sm">Service-Einsätze dokumentieren</CardDescription>
-            </CardHeader>
-            <CardContent><Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button></CardContent>
-          </Card>
+          {/* Regiearbeiten - Nur für Admin (Mitarbeiter haben bereits "Regieberichte" oben) */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/disturbances")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Zap className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Regiearbeiten</CardTitle>
+                <CardDescription className="text-sm">Service-Einsätze dokumentieren</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm" variant="outline">Regiearbeiten öffnen</Button></CardContent>
+            </Card>
+          )}
 
           {/* Meine Dokumente - Für Mitarbeiter */}
           {!isAdmin && (
