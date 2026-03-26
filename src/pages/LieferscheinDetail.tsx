@@ -114,15 +114,40 @@ export default function LieferscheinDetail() {
 
   const fetchAngebotPositionen = async (projectId: string | null) => {
     if (!projectId) { setAngebotPositionen([]); return; }
-    const { data: angebote } = await supabase.from("invoices")
-      .select("id").eq("project_id", projectId).eq("typ", "angebot")
-      .order("datum", { ascending: false }).limit(1);
-    if (angebote?.[0]) {
-      const { data: items } = await supabase.from("invoice_items")
-        .select("position, beschreibung, menge, einheit")
-        .eq("invoice_id", angebote[0].id).order("position");
-      setAngebotPositionen((items || []).map(i => ({ ...i, menge: Number(i.menge) })));
-    } else {
+    try {
+      // Get ALL angebote for this project (not just the latest)
+      const { data: angebote, error: angebotError } = await supabase.from("invoices")
+        .select("id, nummer")
+        .eq("project_id", projectId)
+        .eq("typ", "angebot")
+        .not("status", "eq", "storniert")
+        .order("datum", { ascending: false });
+
+      if (angebotError || !angebote?.length) {
+        console.warn("Keine Angebote für Projekt:", projectId, angebotError);
+        setAngebotPositionen([]);
+        return;
+      }
+
+      // Load items from the latest Angebot
+      const { data: items, error: itemsError } = await supabase.from("invoice_items")
+        .select("position, beschreibung, kurztext, menge, einheit")
+        .eq("invoice_id", angebote[0].id)
+        .order("position");
+
+      if (itemsError) {
+        console.warn("Fehler beim Laden der Angebotspositionen:", itemsError);
+        setAngebotPositionen([]);
+        return;
+      }
+
+      setAngebotPositionen((items || []).map(i => ({
+        ...i,
+        beschreibung: (i as any).kurztext || i.beschreibung,
+        menge: Number(i.menge),
+      })));
+    } catch (err) {
+      console.error("fetchAngebotPositionen Fehler:", err);
       setAngebotPositionen([]);
     }
   };
@@ -318,6 +343,13 @@ export default function LieferscheinDetail() {
               <Plus className="h-4 w-4" />
               Manuell eingeben
             </Button>
+          </div>
+        )}
+
+        {/* Hinweis wenn Projekt aber keine Angebotspositionen */}
+        {lsProjectId && angebotPositionen.length === 0 && !isAbgeschlossen && (
+          <div className="text-sm text-muted-foreground bg-yellow-50 border border-yellow-200 rounded-md p-2.5">
+            Kein Angebot für dieses Projekt gefunden. Erstelle zuerst ein Angebot mit Positionen und weise es diesem Projekt zu.
           </div>
         )}
 
