@@ -274,29 +274,33 @@ export default function LieferscheinDetail() {
           )}
         </div>
 
-        {/* Buttons */}
-        {!showForm && (
+        {/* Action Buttons */}
+        {!showForm && !voiceTyp && (
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => openForm("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700">
-              <ArrowUp className="h-4 w-4" />
-              Material entnehmen
+            <Button onClick={() => setVoiceTyp("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700">
+              <Mic className="h-4 w-4" />
+              Per Sprache entnehmen
             </Button>
-            <Button onClick={() => openForm("rueckgabe")} variant="outline" className="gap-2">
-              <ArrowDown className="h-4 w-4" />
-              Material zurückbringen
+            <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2">
+              <Mic className="h-4 w-4" />
+              Per Sprache zurückgeben
+            </Button>
+            <Button onClick={() => openForm("entnahme")} variant="outline" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Manuell eingeben
             </Button>
           </div>
         )}
 
-        {/* Angebotspositionen */}
-        {angebotPositionen.length > 0 && !showForm && (
+        {/* Angebotspositionen — always visible, with inline quantity input */}
+        {angebotPositionen.length > 0 && !showForm && !voiceTyp && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <FileText className="h-4 w-4" />
-                Angebotspositionen
+                Angebotspositionen — Material entnehmen
               </CardTitle>
-              <CardDescription>Positionen aus dem Angebot — klicke auf "Entnehmen" um Material zu erfassen</CardDescription>
+              <CardDescription>Menge eingeben und auf "Entnehmen" klicken</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -304,8 +308,9 @@ export default function LieferscheinDetail() {
                   <TableRow>
                     <TableHead className="w-[50px]">Pos</TableHead>
                     <TableHead>Material</TableHead>
-                    <TableHead className="text-right">Soll-Menge</TableHead>
-                    <TableHead className="w-[100px]"></TableHead>
+                    <TableHead className="text-right w-[80px]">Soll</TableHead>
+                    <TableHead className="w-[90px]">Menge</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -313,21 +318,42 @@ export default function LieferscheinDetail() {
                     <TableRow key={p.position}>
                       <TableCell className="text-muted-foreground text-center font-medium">{String(p.position).padStart(2, "0")}</TableCell>
                       <TableCell className="font-medium">{p.beschreibung}</TableCell>
-                      <TableCell className="text-right">{p.menge} {p.einheit}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-muted-foreground">{p.menge} {p.einheit}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          placeholder="Menge"
+                          className="h-8 text-sm w-full"
+                          id={`menge-${p.position}`}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50"
-                          onClick={() => {
-                            setFormTyp("entnahme");
-                            setFormMaterial(p.beschreibung);
-                            setFormMenge("");
-                            setFormEinheit(p.einheit || "Stk.");
-                            setFormNotizen("");
-                            setReturningEntry(null);
-                            setShowForm(true);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50 w-full"
+                          onClick={async () => {
+                            const input = document.getElementById(`menge-${p.position}`) as HTMLInputElement;
+                            const menge = input?.value?.trim();
+                            if (!menge || !currentUserId || !id) {
+                              toast({ variant: "destructive", title: "Menge eingeben" });
+                              return;
+                            }
+                            const { error } = await supabase.from("material_entries").insert({
+                              lieferschein_id: id, project_id: null, user_id: currentUserId,
+                              material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
+                              einzelpreis: 0, typ: "entnahme", notizen: null,
+                              datum: new Date().toISOString().split("T")[0],
+                            });
+                            if (error) {
+                              toast({ variant: "destructive", title: "Fehler", description: error.message });
+                            } else {
+                              toast({ title: `${menge} ${p.einheit} ${p.beschreibung} entnommen` });
+                              if (input) input.value = "";
+                              fetchData();
+                            }
                           }}
                         >
                           <ArrowUp className="h-3.5 w-3.5" />
@@ -342,31 +368,18 @@ export default function LieferscheinDetail() {
           </Card>
         )}
 
-        {/* Form */}
+        {/* Manual Form — for additional material not in Angebot */}
         {showForm && !voiceTyp && (
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  {formTyp === "entnahme" ? (
-                    <><ArrowUp className="h-5 w-5 text-red-500" /> Material entnehmen</>
-                  ) : (
-                    <><ArrowDown className="h-5 w-5 text-green-500" /> Material zurückbringen</>
-                  )}
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setVoiceTyp(formTyp as "entnahme" | "rueckgabe")}
-                  className="gap-1.5"
-                >
-                  <Mic className="h-4 w-4" />
-                  Per Sprache
-                </Button>
-              </div>
-              {returningEntry && (
-                <CardDescription>Vorausgefüllt — Menge anpassen falls nötig</CardDescription>
-              )}
+              <CardTitle className="text-lg flex items-center gap-2">
+                {formTyp === "entnahme" ? (
+                  <><ArrowUp className="h-5 w-5 text-red-500" /> Material manuell eingeben</>
+                ) : (
+                  <><ArrowDown className="h-5 w-5 text-green-500" /> Material zurückbringen</>
+                )}
+              </CardTitle>
+              {returningEntry && <CardDescription>Vorausgefüllt — Menge anpassen falls nötig</CardDescription>}
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-3">
