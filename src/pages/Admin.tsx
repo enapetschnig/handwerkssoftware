@@ -1469,34 +1469,47 @@ export default function Admin() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async () => {
                 if (!userToDelete) return;
-                
+
                 try {
+                  // Preserve user name in time_entries before deletion
+                  // (user_id will become NULL after cascade, so store name in notizen)
+                  const userName = `${userToDelete.vorname} ${userToDelete.nachname}`;
+                  await supabase.from("time_entries")
+                    .update({ notizen: supabase.rpc ? undefined : undefined })
+                    .eq("user_id", userToDelete.id);
+                  // Actually: update notizen to include user name for orphaned entries
+                  const { data: existingEntries } = await supabase.from("time_entries")
+                    .select("id, notizen").eq("user_id", userToDelete.id);
+                  if (existingEntries?.length) {
+                    for (const entry of existingEntries) {
+                      const note = entry.notizen ? `${entry.notizen} | Mitarbeiter: ${userName}` : `Mitarbeiter: ${userName}`;
+                      await supabase.from("time_entries").update({ notizen: note }).eq("id", entry.id);
+                    }
+                  }
+
                   // Delete the employee record if exists
                   const { error: empError } = await supabase
                     .from("employees")
                     .delete()
                     .eq("user_id", userToDelete.id);
-                  
-                  if (empError) {
-                    console.error("Employee delete error:", empError);
-                  }
+
+                  if (empError) console.error("Employee delete error:", empError);
 
                   // Delete user roles
                   const { error: roleError } = await supabase
                     .from("user_roles")
                     .delete()
                     .eq("user_id", userToDelete.id);
-                  
-                  if (roleError) {
-                    console.error("Role delete error:", roleError);
-                  }
 
-                  // Delete the profile
+                  if (roleError) console.error("Role delete error:", roleError);
+
+                  // Delete the profile (cascades to auth.users)
+                  // time_entries, documents, reports → user_id becomes NULL (preserved)
                   const { error: profileError } = await supabase
                     .from("profiles")
                     .delete()
                     .eq("id", userToDelete.id);
-                  
+
                   if (profileError) throw profileError;
 
                   toast({
