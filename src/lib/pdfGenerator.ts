@@ -209,23 +209,9 @@ export async function generateInvoicePdf(
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
 
-  // margin.bottom = page footer (22mm from bottom) + closing section height
-  // This ensures the closing section fits on the same page as the last positions.
-  const pageFooter = 25; // page footer zone (22mm from bottom + 3mm buffer)
-  let closingH = 15; // base: closing text + spacing
-  if (invoice.notizen) closingH += 12;
-  if (isReverseCharge) closingH += 14;
-  if (!isAngebot) {
-    closingH += 13; // Zahlungstext + Zahlungsreferenz
-    if (skontoProzent > 0 && skontoTage > 0) closingH += 24; // Skonto-Box
-    closingH += 5;  // Bankverbindung
-    closingH += 22; // QR-Code
-    closingH += 14; // Hinweistext (Silikon)
-    closingH += 10; // "Vielen Dank"
-  } else {
-    closingH += 8; // Angebot-Schlusstext
-  }
-  const footerMargin = pageFooter + closingH;
+  // Small margin.bottom — only page footer. First pages stay FULL.
+  // After autoTable, we check if closing section fits. If not → new page.
+  const footerMargin = 32;
 
   autoTable(pdf, {
     startY: y,
@@ -332,6 +318,25 @@ export async function generateInvoicePdf(
   });
 
   y = (pdf as any).lastAutoTable.finalY + 4;
+
+  // Check if closing section fits on current page. If not → new page.
+  // This keeps first pages FULL (small margin.bottom) while ensuring
+  // closing section lands on the same page as the last positions + totals.
+  let closingNeeded = 15; // base spacing
+  if (invoice.notizen) closingNeeded += 12;
+  if (isReverseCharge) closingNeeded += 14;
+  if (!isAngebot) {
+    closingNeeded += 13; // Zahlungstext + ref
+    if (skontoProzent > 0 && skontoTage > 0) closingNeeded += 24;
+    closingNeeded += 40; // Bank + QR + Hinweis + Vielen Dank
+  } else {
+    closingNeeded += 8;
+  }
+  const maxY = pageHeight - 22 - 3; // page footer line at pageHeight-22, 3mm buffer
+  if (y + closingNeeded > maxY) {
+    pdf.addPage();
+    y = 20;
+  }
 
   // ======= NOTES =======
   if (invoice.notizen) {
