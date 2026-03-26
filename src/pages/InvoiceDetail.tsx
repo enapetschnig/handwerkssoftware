@@ -1375,6 +1375,18 @@ export default function InvoiceDetail() {
             </Card>
           )}
 
+          {/* Projekt-Anzeige bei gespeicherten Dokumenten */}
+          {form.project_id && (isLocked || isKundeLocked) && (() => {
+            const proj = projects.find(p => p.id === form.project_id);
+            return proj ? (
+              <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-200 rounded-md p-2.5">
+                <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                <span className="text-muted-foreground">Projekt:</span>
+                <span className="font-medium">{proj.name}</span>
+              </div>
+            ) : null;
+          })()}
+
           {/* Kundendaten — immer locked nach Speichern (für Angebote + Rechnungen) */}
           <Card className={isKundeLocked ? "opacity-80" : ""}>
             <fieldset disabled={isKundeLocked}>

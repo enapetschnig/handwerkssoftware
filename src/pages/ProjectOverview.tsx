@@ -23,6 +23,7 @@ const ProjectOverview = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [lieferscheinCount, setLieferscheinCount] = useState(0);
   const [invoiceCount, setInvoiceCount] = useState(0);
+  const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([
     {
       type: "photos",
@@ -60,8 +61,26 @@ const ProjectOverview = () => {
       fetchFileCounts();
       fetchLieferscheinCount();
       fetchInvoiceCount();
+      fetchAngebotPositionen();
     }
   }, [projectId, isAdmin]);
+
+  const fetchAngebotPositionen = async () => {
+    if (!projectId) return;
+    const { data: angebote } = await supabase.from("invoices")
+      .select("id").eq("project_id", projectId).eq("typ", "angebot")
+      .not("status", "eq", "storniert")
+      .order("datum", { ascending: false }).limit(1);
+    if (angebote?.[0]) {
+      const { data: items } = await supabase.from("invoice_items")
+        .select("position, beschreibung, kurztext, menge, einheit")
+        .eq("invoice_id", angebote[0].id).order("position");
+      setAngebotPositionen((items || []).map(i => ({
+        position: i.position, beschreibung: (i as any).kurztext || i.beschreibung,
+        menge: Number(i.menge), einheit: i.einheit || "Stk.",
+      })));
+    }
+  };
 
   const checkAdminStatus = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -221,6 +240,30 @@ const ProjectOverview = () => {
               </CardContent>
             </Card>
           ))}
+
+          {/* Angebotspositionen — ohne Preise, für alle sichtbar */}
+          {angebotPositionen.length > 0 && (
+            <Card className="col-span-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Angebotspositionen ({angebotPositionen.length})
+                </CardTitle>
+                <CardDescription>Positionen aus dem Angebot — ohne Preise</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {angebotPositionen.map(p => (
+                  <div key={p.position} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 text-sm">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground font-mono shrink-0">{String(p.position).padStart(2, "0")}</span>
+                      <span className="truncate">{p.beschreibung}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{p.menge} {p.einheit}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Materialentnahme — direkter Einstieg */}
           <Card
