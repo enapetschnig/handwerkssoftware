@@ -359,21 +359,26 @@ export default function LieferscheinDetail() {
           <VoiceRecorder
             typ={voiceTyp}
             existingItems={
-              angebotPositionen.length > 0
-                ? angebotPositionen.map(p => ({
-                    position: p.position,
-                    material: p.beschreibung,
-                    menge: voiceTyp === "rueckgabe"
-                      ? String(summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim())?.verbraucht || 0)
-                      : String(p.menge),
-                    einheit: p.einheit,
-                  }))
-                : summary.map((s, idx) => ({
+              voiceTyp === "rueckgabe"
+                ? summary.filter(s => s.verbraucht > 0).map((s, idx) => ({
                     position: idx + 1,
                     material: s.material,
                     menge: String(s.verbraucht),
                     einheit: s.einheit,
                   }))
+                : angebotPositionen.length > 0
+                  ? angebotPositionen.map(p => ({
+                      position: p.position,
+                      material: p.beschreibung,
+                      menge: String(p.menge),
+                      einheit: p.einheit,
+                    }))
+                  : summary.map((s, idx) => ({
+                      position: idx + 1,
+                      material: s.material,
+                      menge: String(s.verbraucht),
+                      einheit: s.einheit,
+                    }))
             }
             onAccept={async (voiceItems) => {
               if (!currentUserId || !id) return;
@@ -434,8 +439,8 @@ export default function LieferscheinDetail() {
           </Card>
         )}
 
-        {/* 5. ANGEBOTSPOSITIONEN — eingeklappt als Referenz */}
-        {angebotPositionen.length > 0 && !isAbgeschlossen && (
+        {/* 5. ANGEBOTSPOSITIONEN — eingeklappt als Referenz (nicht bei Rückgabe-Sprache) */}
+        {angebotPositionen.length > 0 && !isAbgeschlossen && voiceTyp !== "rueckgabe" && (
           <Card>
             <CardHeader className="pb-0 cursor-pointer" onClick={() => setPositionenOpen(!positionenOpen)}>
               <div className="flex items-center justify-between">
