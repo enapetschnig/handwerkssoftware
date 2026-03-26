@@ -381,7 +381,8 @@ export default function LieferscheinDetail() {
                 });
               }
               toast({ title: `${voiceItems.length} Positionen erfasst` });
-              setVoiceTyp(null); setShowForm(false); fetchData();
+              setVoiceTyp(null); setShowForm(false); await fetchData();
+              window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             onCancel={() => setVoiceTyp(null)}
           />

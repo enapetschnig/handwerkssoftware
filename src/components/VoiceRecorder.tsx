@@ -222,71 +222,73 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
         </div>
       )}
 
-      {/* Results */}
+      {/* Results — mobile-optimized cards */}
       {state === "result" && items.length > 0 && (
         <div className="space-y-3">
-          {/* Transcript */}
           {transcript && (
             <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
               Erkannt: "{transcript}"
             </div>
           )}
 
-          {/* Editable items */}
+          <p className="text-xs font-medium text-muted-foreground">{items.length} {items.length === 1 ? "Position" : "Positionen"} erkannt — prüfen & übernehmen:</p>
+
           <div className="space-y-2">
             {items.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-background">
-                <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
-                <Input
-                  value={item.material}
-                  onChange={(e) => updateItem(idx, "material", e.target.value)}
-                  className="flex-1 h-8 text-sm"
-                  placeholder="Material"
-                />
-                <Input
-                  type="number"
-                  value={item.menge}
-                  onChange={(e) => updateItem(idx, "menge", Number(e.target.value))}
-                  className="w-20 h-8 text-sm text-right"
-                  min={0}
-                  step={0.1}
-                />
-                <Select value={item.einheit} onValueChange={(v) => updateItem(idx, "einheit", v)}>
-                  <SelectTrigger className="w-20 h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {einheiten.map(e => (
-                      <SelectItem key={e} value={e}>{e}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-8 w-8 p-0">
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
+              <div key={idx} className="border rounded-lg p-2.5 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground">Pos {idx + 1}</span>
+                    <Input
+                      value={item.material}
+                      onChange={(e) => updateItem(idx, "material", e.target.value)}
+                      className="h-8 text-sm mt-0.5"
+                      placeholder="Material"
+                    />
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-7 w-7 p-0 mt-3 shrink-0">
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    value={item.menge}
+                    onChange={(e) => updateItem(idx, "menge", Number(e.target.value))}
+                    className="h-8 text-sm flex-1"
+                    min={0} step={0.1}
+                    placeholder="Menge"
+                  />
+                  <Select value={item.einheit} onValueChange={(v) => updateItem(idx, "einheit", v)}>
+                    <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {einheiten.map(e => (
+                        <SelectItem key={e} value={e}>{e}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             ))}
           </div>
 
-          <Badge variant="secondary" className="text-xs">
-            {items.length} {items.length === 1 ? "Position" : "Positionen"} erkannt
-          </Badge>
-
           {/* Action Buttons */}
-          <div className="flex justify-between pt-1">
-            <Button variant="outline" size="sm" onClick={reset} className="gap-1">
+          <div className="grid grid-cols-3 gap-2">
+            <Button variant="outline" size="sm" onClick={reset} className="gap-1 h-10">
               <RotateCcw className="h-3.5 w-3.5" />
               Nochmal
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={onCancel}>Verwerfen</Button>
-              <Button
-                size="sm"
-                onClick={() => onAccept(items.filter(i => i.material.trim() && i.menge > 0))}
-                className="gap-1"
-              >
-                <Check className="h-3.5 w-3.5" />
-                Übernehmen
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={onCancel} className="h-10">
+              Verwerfen
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => onAccept(items.filter(i => i.material.trim() && i.menge > 0))}
+              className="gap-1 h-10 bg-orange-600 hover:bg-orange-700"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Übernehmen
+            </Button>
           </div>
         </div>
       )}
