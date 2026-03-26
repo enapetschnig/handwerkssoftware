@@ -226,7 +226,11 @@ export default function InvoiceDetail() {
   // Rechnungen sind immer locked nach Speichern (kein Entwurf), Angebote nur wenn nicht Entwurf
   // Rechnungen: komplett locked nach Speichern. Angebote: Positionen editierbar, Kundendaten locked
   const isLocked = !isNew && id !== "new" && !!invoiceId && form.typ === "rechnung";
-  const isKundeLocked = !isNew && id !== "new" && !!invoiceId; // Kundendaten immer locked nach erstem Speichern
+  const isKundeLocked = !isNew && id !== "new" && !!invoiceId;
+
+  // Angebot→Rechnung Vergleichs-Dialog
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [convertItems, setConvertItems] = useState<{ beschreibung: string; kurztext: string; langtext: string; einheit: string; einzelpreis: number; angebotMenge: number; verbrauchtMenge: number; rechnungMenge: number }[]>([]);
 
   useEffect(() => {
     fetchProjects();
@@ -891,32 +895,64 @@ export default function InvoiceDetail() {
   const handleConvertToInvoice = async () => {
     if (!invoiceId || form.typ !== "angebot") return;
 
-    // DON'T mark as verrechnet yet — only when the new Rechnung is saved
-    // Store current data in sessionStorage so the new invoice page can load it
+    // If project exists, load Lieferschein data for comparison
+    if (form.project_id) {
+      const { data: lsData } = await supabase.from("lieferscheine").select("id").eq("project_id", form.project_id);
+      let verbrauchMap = new Map<string, { menge: number; einheit: string }>();
+      if (lsData?.length) {
+        const lsIds = lsData.map(l => l.id);
+        const { data: entries } = await supabase.from("material_entries")
+          .select("material, menge, einheit, typ")
+          .in("lieferschein_id", lsIds);
+        if (entries) {
+          entries.forEach(e => {
+            const key = e.material.toLowerCase().trim();
+            if (!verbrauchMap.has(key)) verbrauchMap.set(key, { menge: 0, einheit: e.einheit || "Stk." });
+            const s = verbrauchMap.get(key)!;
+            const m = parseFloat(e.menge || "0") || 0;
+            if (e.typ === "entnahme") s.menge += m;
+            else if (e.typ === "rueckgabe") s.menge -= m;
+          });
+        }
+      }
+
+      // Build comparison items
+      const cItems = items.map(it => {
+        const key = (it.beschreibung || "").toLowerCase().trim();
+        const v = verbrauchMap.get(key);
+        return {
+          beschreibung: it.beschreibung, kurztext: (it as any).kurztext || it.beschreibung,
+          langtext: (it as any).langtext || "", einheit: it.einheit || "Stk.",
+          einzelpreis: it.einzelpreis, angebotMenge: it.menge,
+          verbrauchtMenge: v ? Math.round(v.menge * 100) / 100 : 0,
+          rechnungMenge: it.menge, // Default: Angebotsmenge
+        };
+      });
+      setConvertItems(cItems);
+      setConvertDialogOpen(true);
+      return;
+    }
+
+    // No project — direct conversion
+    doConvert(items.map(it => ({ ...it })));
+  };
+
+  const doConvert = (finalItems: typeof items) => {
     const convertData = {
       fromAngebotId: invoiceId,
-      kunde_name: form.kunde_name,
-      kunde_adresse: form.kunde_adresse,
-      kunde_plz: form.kunde_plz,
-      kunde_ort: form.kunde_ort,
-      kunde_land: form.kunde_land,
-      kunde_email: form.kunde_email,
-      kunde_telefon: form.kunde_telefon,
-      kunde_uid: form.kunde_uid,
-      customer_id: form.customer_id,
-      project_id: form.project_id,
-      leistungsdatum: form.leistungsdatum,
-      zahlungsbedingungen: form.zahlungsbedingungen,
-      notizen: form.notizen,
-      mwst_satz: form.mwst_satz,
-      rabatt_prozent: form.rabatt_prozent,
-      rabatt_betrag: form.rabatt_betrag,
-      skonto_prozent: form.skonto_prozent,
-      skonto_tage: form.skonto_tage,
+      kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse,
+      kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort,
+      kunde_land: form.kunde_land, kunde_email: form.kunde_email,
+      kunde_telefon: form.kunde_telefon, kunde_uid: form.kunde_uid,
+      customer_id: form.customer_id, project_id: form.project_id,
+      leistungsdatum: form.leistungsdatum, zahlungsbedingungen: form.zahlungsbedingungen,
+      notizen: form.notizen, mwst_satz: form.mwst_satz,
+      rabatt_prozent: form.rabatt_prozent, rabatt_betrag: form.rabatt_betrag,
+      skonto_prozent: form.skonto_prozent, skonto_tage: form.skonto_tage,
       kunde_anrede: (form as any).kunde_anrede || "",
       kunde_titel: (form as any).kunde_titel || "",
       reverse_charge: (form as any).reverse_charge || false,
-      items: items,
+      items: finalItems,
     };
     sessionStorage.setItem("convertToInvoice", JSON.stringify(convertData));
     navigate("/invoices/new?typ=rechnung&from_angebot=true");
@@ -2498,6 +2534,74 @@ export default function InvoiceDetail() {
           defaultOrt={form.kunde_ort}
         />
       </div>
+
+      {/* Angebot→Rechnung Vergleichs-Dialog */}
+      <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Angebot → Rechnung umwandeln</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Vergleiche Angebotsmenge mit tatsächlich verbrauchtem Material. Passe die Rechnungsmenge bei Bedarf an.</p>
+          <div className="space-y-2 mt-2">
+            {convertItems.map((ci, idx) => (
+              <div key={idx} className="border rounded-lg p-3 space-y-1.5">
+                <p className="text-sm font-medium">{ci.kurztext || ci.beschreibung}</p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Angebot:</span>
+                    <span className="ml-1 font-medium">{ci.angebotMenge} {ci.einheit}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Verbraucht:</span>
+                    <span className={`ml-1 font-medium ${ci.verbrauchtMenge > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                      {ci.verbrauchtMenge > 0 ? `${ci.verbrauchtMenge} ${ci.einheit}` : "–"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted-foreground">Rechnung:</span>
+                    <Input
+                      type="number" step="0.01" min="0"
+                      value={ci.rechnungMenge}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 0;
+                        setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: val } : c));
+                      }}
+                      className="h-7 text-xs w-20"
+                    />
+                  </div>
+                </div>
+                {ci.verbrauchtMenge > 0 && ci.verbrauchtMenge !== ci.angebotMenge && (
+                  <div className="flex gap-1.5 mt-1">
+                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2"
+                      onClick={() => setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: c.angebotMenge } : c))}>
+                      Angebotsmenge
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600"
+                      onClick={() => setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: c.verbrauchtMenge } : c))}>
+                      Verbrauchte Menge
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Button className="flex-1 gap-2" onClick={() => {
+              const finalItems = convertItems.map((ci, idx) => ({
+                ...items[idx],
+                menge: ci.rechnungMenge,
+                gesamtpreis: Math.round(ci.rechnungMenge * ci.einzelpreis * 100) / 100,
+              }));
+              setConvertDialogOpen(false);
+              doConvert(finalItems);
+            }}>
+              <ArrowRightLeft className="h-4 w-4" />
+              In Rechnung umwandeln
+            </Button>
+            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>Abbrechen</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
