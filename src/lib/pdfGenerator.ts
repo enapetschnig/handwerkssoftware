@@ -209,61 +209,27 @@ export async function generateInvoicePdf(
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
 
-  // Calculate closing section height (everything AFTER the table: notes → "Vielen Dank")
-  const pageFooterH = 25; // page footer at pageHeight-22 + buffer
-  let closingH = 15; // base spacing
+  // Closing section height (Summen + Zahlungstext + Skonto + Bank + QR + Hinweis + Vielen Dank)
+  let closingH = tableFoot.length * 7 + 15; // totals + base spacing
   if (invoice.notizen) closingH += 12;
   if (isReverseCharge) closingH += 14;
   if (!isAngebot) {
-    closingH += 13; // Zahlungstext + ref
+    closingH += 13;
     if (skontoProzent > 0 && skontoTage > 0) closingH += 24;
-    closingH += 40; // Bank + QR + Hinweis + Vielen Dank
+    closingH += 40;
   } else {
     closingH += 8;
   }
 
-  // Estimate total table body height (including langtext) to determine margin strategy
-  const descW = contentWidth - 12 - 18 - 18 - 24 - 26; // Beschreibung column width
-  let totalBodyH = 0;
-  items.forEach((item, idx) => {
-    const kt = (item as any).kurztext || item.beschreibung;
-    const lt = (item as any).langtext || "";
-    const ktLines = pdf.splitTextToSize(kt, descW > 20 ? descW : 70);
-    let rowH = ktLines.length * 3.7 + 6; // text + padding
-    if (lt && lt !== kt) {
-      const ltLines = pdf.splitTextToSize(lt, descW > 20 ? descW : 70);
-      rowH += ltLines.length * 3.1 + 2;
-    }
-    totalBodyH += rowH;
-  });
-  const tableHeaderH = 10; // table header row
-  const tableFootH = tableFoot.length * 7; // totals rows
-
-  // Calculate how much space is left on the last page with small margin (32mm)
-  const smallMargin = 32;
-  const firstPageContentH = pageHeight - y - smallMargin - tableHeaderH;
-  const nextPageContentH = pageHeight - 15 - smallMargin; // 15mm top margin on subsequent pages
-  let remainingH = totalBodyH + tableFootH;
-  remainingH -= firstPageContentH;
-  while (remainingH > nextPageContentH) remainingH -= nextPageContentH;
-  // remainingH = how much of the last page is used by table content
-  // lastPageFree = free space below table on last page
-  const lastPageFree = (remainingH > 0 ? nextPageContentH - remainingH : firstPageContentH - totalBodyH - tableFootH);
-  const closingFits = lastPageFree >= closingH + 5;
-
-  // If closing fits with small margin → use small margin (pages stay full)
-  // If not → use large margin that reserves space (a few less positions per page, but everything fits)
-  const footerMargin = closingFits ? smallMargin : (pageFooterH + closingH + 30);
-
+  // autoTable: body rows ONLY (no footer/totals). Small margin → pages fill up fully.
+  // Totals + closing drawn manually after, with page break if needed.
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
-    foot: tableFoot,
-    showFoot: "lastPage",
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: footerMargin },
+    margin: { left: ml, right: mr, bottom: 32 },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -280,14 +246,6 @@ export async function generateInvoicePdf(
       lineWidth: { bottom: 0.2 },
       lineColor: [180, 180, 180],
     },
-    footStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
-      fontSize: 9,
-      fontStyle: "normal",
-      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
-      lineWidth: 0,
-    },
     columnStyles: {
       0: { halign: "center", cellWidth: 12, textColor: [0, 0, 0] },
       1: { halign: "right", cellWidth: 18 },
@@ -295,30 +253,6 @@ export async function generateInvoicePdf(
       3: { halign: "left" },
       4: { halign: "right", cellWidth: 24 },
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
-    },
-    didParseCell: (data: any) => {
-      if (data.section === "foot") {
-        const rowLabel = data.row.raw?.[3] || "";
-        if (data.column.index === 3) {
-          data.cell.styles.halign = "right";
-          data.cell.styles.fontStyle = "normal";
-          data.cell.styles.fontSize = 9;
-        }
-        if (data.row.index === 0) {
-          data.cell.styles.lineWidth = { top: 0.8 };
-          data.cell.styles.lineColor = [0, 0, 0];
-        }
-        if (rowLabel === "Bruttobetrag") {
-          data.cell.styles.fontStyle = "bold";
-          data.cell.styles.fontSize = 10;
-          data.cell.styles.textColor = [0, 0, 0];
-          data.cell.styles.lineWidth = { top: 0.8 };
-          data.cell.styles.lineColor = [0, 0, 0];
-        }
-        if (rowLabel.startsWith("Rabatt")) {
-          data.cell.styles.textColor = [204, 0, 0];
-        }
-      }
     },
     didDrawCell: (data: any) => {
       if (data.section === "body" && data.column.index === 3) {
@@ -359,8 +293,47 @@ export async function generateInvoicePdf(
     },
   });
 
-  y = (pdf as any).lastAutoTable.finalY + 4;
-  // margin.bottom already guarantees enough space — no page break check needed
+  y = (pdf as any).lastAutoTable.finalY;
+
+  // Check: does the entire closing section (totals + notes + closing text etc.) fit?
+  // If not → new page. The previous page has positions (autoTable filled it).
+  const spaceLeft = (pageHeight - 22) - y; // 22mm = page footer
+  if (spaceLeft < closingH) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  // ======= TOTALS (manually drawn, not in autoTable) =======
+  y += 2;
+  // Separator line above totals
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.8);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 1;
+
+  tableFoot.forEach((row) => {
+    const label = row[3];
+    const value = row[5];
+    const isBrutto = label === "Bruttobetrag";
+    const isRabatt = label.startsWith("Rabatt");
+
+    if (isBrutto) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.8);
+      pdf.line(ml, y + 1, pageWidth - mr, y + 1);
+    }
+
+    pdf.setFont("helvetica", isBrutto ? "bold" : "normal");
+    pdf.setFontSize(isBrutto ? 10 : 9);
+    pdf.setTextColor(isRabatt ? 204 : 0, 0, 0);
+    // Label right-aligned in the middle area, value right-aligned at right margin
+    pdf.text(label, pageWidth - mr - 28, y + 5, { align: "right" });
+    pdf.setFont("helvetica", "bold");
+    pdf.text(value, pageWidth - mr - 2, y + 5, { align: "right" });
+    pdf.setFont("helvetica", "normal");
+    y += 7;
+  });
+  y += 2;
 
   // ======= NOTES =======
   if (invoice.notizen) {
