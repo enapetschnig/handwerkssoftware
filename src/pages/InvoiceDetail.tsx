@@ -230,7 +230,7 @@ export default function InvoiceDetail() {
 
   // Angebot→Rechnung Vergleichs-Dialog
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [convertItems, setConvertItems] = useState<{ beschreibung: string; kurztext: string; langtext: string; einheit: string; einzelpreis: number; angebotMenge: number; verbrauchtMenge: number; rechnungMenge: number }[]>([]);
+  const [convertItems, setConvertItems] = useState<{ beschreibung: string; kurztext: string; langtext: string; einheit: string; einzelpreis: number; angebotMenge: number; verbrauchtMenge: number; rechnungMenge: number; selected: boolean; isExtra: boolean }[]>([]);
 
   useEffect(() => {
     fetchProjects();
@@ -894,46 +894,6 @@ export default function InvoiceDetail() {
 
   const handleConvertToInvoice = async () => {
     if (!invoiceId || form.typ !== "angebot") return;
-
-    // If project exists, load Lieferschein data for comparison
-    if (form.project_id) {
-      const { data: lsData } = await supabase.from("lieferscheine").select("id").eq("project_id", form.project_id);
-      let verbrauchMap = new Map<string, { menge: number; einheit: string }>();
-      if (lsData?.length) {
-        const lsIds = lsData.map(l => l.id);
-        const { data: entries } = await supabase.from("material_entries")
-          .select("material, menge, einheit, typ")
-          .in("lieferschein_id", lsIds);
-        if (entries) {
-          entries.forEach(e => {
-            const key = e.material.toLowerCase().trim();
-            if (!verbrauchMap.has(key)) verbrauchMap.set(key, { menge: 0, einheit: e.einheit || "Stk." });
-            const s = verbrauchMap.get(key)!;
-            const m = parseFloat(e.menge || "0") || 0;
-            if (e.typ === "entnahme") s.menge += m;
-            else if (e.typ === "rueckgabe") s.menge -= m;
-          });
-        }
-      }
-
-      // Build comparison items
-      const cItems = items.map(it => {
-        const key = (it.beschreibung || "").toLowerCase().trim();
-        const v = verbrauchMap.get(key);
-        return {
-          beschreibung: it.beschreibung, kurztext: (it as any).kurztext || it.beschreibung,
-          langtext: (it as any).langtext || "", einheit: it.einheit || "Stk.",
-          einzelpreis: it.einzelpreis, angebotMenge: it.menge,
-          verbrauchtMenge: v ? Math.round(v.menge * 100) / 100 : 0,
-          rechnungMenge: it.menge, // Default: Angebotsmenge
-        };
-      });
-      setConvertItems(cItems);
-      setConvertDialogOpen(true);
-      return;
-    }
-
-    // No project — direct conversion
     doConvert(items.map(it => ({ ...it })));
   };
 
@@ -2535,73 +2495,6 @@ export default function InvoiceDetail() {
         />
       </div>
 
-      {/* Angebot→Rechnung Vergleichs-Dialog */}
-      <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Angebot → Rechnung umwandeln</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Vergleiche Angebotsmenge mit tatsächlich verbrauchtem Material. Passe die Rechnungsmenge bei Bedarf an.</p>
-          <div className="space-y-2 mt-2">
-            {convertItems.map((ci, idx) => (
-              <div key={idx} className="border rounded-lg p-3 space-y-1.5">
-                <p className="text-sm font-medium">{ci.kurztext || ci.beschreibung}</p>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Angebot:</span>
-                    <span className="ml-1 font-medium">{ci.angebotMenge} {ci.einheit}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Verbraucht:</span>
-                    <span className={`ml-1 font-medium ${ci.verbrauchtMenge > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
-                      {ci.verbrauchtMenge > 0 ? `${ci.verbrauchtMenge} ${ci.einheit}` : "–"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-muted-foreground">Rechnung:</span>
-                    <Input
-                      type="number" step="0.01" min="0"
-                      value={ci.rechnungMenge}
-                      onChange={(e) => {
-                        const val = Number(e.target.value) || 0;
-                        setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: val } : c));
-                      }}
-                      className="h-7 text-xs w-20"
-                    />
-                  </div>
-                </div>
-                {ci.verbrauchtMenge > 0 && ci.verbrauchtMenge !== ci.angebotMenge && (
-                  <div className="flex gap-1.5 mt-1">
-                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2"
-                      onClick={() => setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: c.angebotMenge } : c))}>
-                      Angebotsmenge
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600"
-                      onClick={() => setConvertItems(prev => prev.map((c, i) => i === idx ? { ...c, rechnungMenge: c.verbrauchtMenge } : c))}>
-                      Verbrauchte Menge
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2 mt-3">
-            <Button className="flex-1 gap-2" onClick={() => {
-              const finalItems = convertItems.map((ci, idx) => ({
-                ...items[idx],
-                menge: ci.rechnungMenge,
-                gesamtpreis: Math.round(ci.rechnungMenge * ci.einzelpreis * 100) / 100,
-              }));
-              setConvertDialogOpen(false);
-              doConvert(finalItems);
-            }}>
-              <ArrowRightLeft className="h-4 w-4" />
-              In Rechnung umwandeln
-            </Button>
-            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>Abbrechen</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -99,6 +99,7 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
   };
 
   const fetchMaterialEntries = async (pid: string): Promise<ImportItem[]> => {
+    // 1. Load Lieferschein entries
     const { data: lsData } = await supabase
       .from("lieferscheine")
       .select("id, name")
@@ -107,7 +108,6 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
     if (!lsData || lsData.length === 0) return [];
 
     const lsIds = lsData.map(l => l.id);
-    const lsNameMap = new Map(lsData.map(l => [l.id, l.name || "Lieferschein"]));
 
     const { data: entries } = await supabase
       .from("material_entries")
@@ -116,11 +116,30 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
 
     if (!entries || entries.length === 0) return [];
 
-    const map = new Map<string, { material: string; einheit: string; entnommen: number; zurueck: number; lsName: string }>();
+    // 2. Load Angebot prices for this project
+    const { data: angebote } = await supabase.from("invoices")
+      .select("id").eq("project_id", pid).eq("typ", "angebot")
+      .not("status", "eq", "storniert")
+      .order("datum", { ascending: false }).limit(1);
+    let angebotMap = new Map<string, { einzelpreis: number; menge: number; einheit: string }>();
+    if (angebote?.[0]) {
+      const { data: angebotItems } = await supabase.from("invoice_items")
+        .select("beschreibung, kurztext, menge, einheit, einzelpreis")
+        .eq("invoice_id", angebote[0].id);
+      if (angebotItems) {
+        angebotItems.forEach(ai => {
+          const key = ((ai as any).kurztext || ai.beschreibung).toLowerCase().trim();
+          angebotMap.set(key, { einzelpreis: Number(ai.einzelpreis), menge: Number(ai.menge), einheit: ai.einheit || "Stk." });
+        });
+      }
+    }
+
+    // 3. Aggregate material entries (across all Lieferscheine)
+    const map = new Map<string, { material: string; einheit: string; entnommen: number; zurueck: number }>();
     entries.forEach(e => {
-      const key = `${e.lieferschein_id}::${e.material.toLowerCase().trim()}`;
+      const key = e.material.toLowerCase().trim();
       if (!map.has(key)) {
-        map.set(key, { material: e.material, einheit: e.einheit || "Stk.", entnommen: 0, zurueck: 0, lsName: lsNameMap.get(e.lieferschein_id!) || "" });
+        map.set(key, { material: e.material, einheit: e.einheit || "Stk.", entnommen: 0, zurueck: 0 });
       }
       const s = map.get(key)!;
       const menge = parseFloat(e.menge || "0") || 0;
@@ -130,15 +149,21 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
 
     return Array.from(map.values())
       .filter(s => s.entnommen - s.zurueck > 0)
-      .map(s => ({
-        beschreibung: s.material,
-        menge: Math.round((s.entnommen - s.zurueck) * 100) / 100,
-        einheit: s.einheit,
-        einzelpreis: 0,
-        selected: true,
-        source: "material" as const,
-        detail: `${s.lsName} · ${s.entnommen - s.zurueck} ${s.einheit} verbraucht`,
-      }))
+      .map(s => {
+        const verbraucht = Math.round((s.entnommen - s.zurueck) * 100) / 100;
+        const angebot = angebotMap.get(s.material.toLowerCase().trim());
+        return {
+          beschreibung: s.material,
+          menge: verbraucht,
+          einheit: s.einheit,
+          einzelpreis: angebot?.einzelpreis || 0,
+          selected: true,
+          source: "material" as const,
+          detail: angebot
+            ? `Angebot: ${angebot.menge} ${angebot.einheit} · Verbraucht: ${verbraucht} ${s.einheit} · Preis aus Angebot`
+            : `Verbraucht: ${verbraucht} ${s.einheit} · Kein Angebotspreis`,
+        };
+      })
       .sort((a, b) => a.beschreibung.localeCompare(b.beschreibung));
   };
 
