@@ -170,7 +170,8 @@ export async function generateInvoicePdf(
     const langtext = (item as any).langtext || "";
     if (langtext && langtext !== kurztext) {
       const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
-      langtextInfo[idx] = { kurztext, langtext, extraH: ltLines.length * 3.0 + 0.5 };
+      // extraH = Abstand Kurztext→Langtext (1.5) + Langtext-Höhe + minimales Padding (1)
+      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltLines.length * 3.04 + 1 };
     }
     return [
       String(item.position).padStart(2, "0"),
@@ -258,7 +259,7 @@ export async function generateInvoicePdf(
       if (data.section === "body" && data.column.index === 3) {
         const info = langtextInfo[data.row.index];
         if (info) {
-          data.cell.styles.cellPadding = { top: 3, left: 2, right: 2, bottom: 3 + info.extraH };
+          data.cell.styles.cellPadding = { top: 3, left: 2, right: 2, bottom: info.extraH };
         }
       }
       if (data.section === "foot") {
