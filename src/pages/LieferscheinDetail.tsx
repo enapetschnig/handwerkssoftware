@@ -61,6 +61,7 @@ export default function LieferscheinDetail() {
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [lsStatus, setLsStatus] = useState<string>("offen");
+  const [positionenOpen, setPositionenOpen] = useState(true);
   const isAbgeschlossen = lsStatus === "abgeschlossen";
 
   useEffect(() => {
@@ -292,7 +293,7 @@ export default function LieferscheinDetail() {
               setLsStatus("abgeschlossen");
               toast({ title: "Lieferschein abgeschlossen" });
             }}>
-              <Lock className="h-3.5 w-3.5" /> Abschließen
+              <Lock className="h-3.5 w-3.5" /> Lieferschein abschließen
             </Button>
           )}
         </div>
@@ -346,6 +347,55 @@ export default function LieferscheinDetail() {
           </div>
         )}
 
+        {/* Voice Recorder — stays at top, visible while scrolling positions below */}
+        {voiceTyp && (
+          <VoiceRecorder
+            typ={voiceTyp}
+            existingItems={
+              angebotPositionen.length > 0
+                ? angebotPositionen.map(p => ({
+                    position: p.position,
+                    material: p.beschreibung,
+                    menge: voiceTyp === "rueckgabe"
+                      ? String(summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim())?.verbraucht || 0)
+                      : String(p.menge),
+                    einheit: p.einheit,
+                  }))
+                : summary.map((s, idx) => ({
+                    position: idx + 1,
+                    material: s.material,
+                    menge: String(s.verbraucht),
+                    einheit: s.einheit,
+                  }))
+            }
+            onAccept={async (voiceItems) => {
+              if (!currentUserId || !id) return;
+              let skipped = 0;
+              for (const item of voiceItems) {
+                if (voiceTyp === "rueckgabe") {
+                  const s = summary.find(s => s.material.toLowerCase().trim() === item.material.toLowerCase().trim());
+                  const maxReturn = s ? s.verbraucht : 0;
+                  if (item.menge > maxReturn) { skipped++; continue; }
+                }
+                await supabase.from("material_entries").insert({
+                  lieferschein_id: id, project_id: null, user_id: currentUserId,
+                  material: item.material, menge: String(item.menge), einheit: item.einheit,
+                  einzelpreis: 0, typ: voiceTyp, notizen: null,
+                  datum: new Date().toISOString().split("T")[0],
+                });
+              }
+              toast({
+                title: voiceTyp === "entnahme" ? "Material entnommen" : "Material zurückgebucht",
+                description: `${voiceItems.length} Positionen per Sprache erfasst`,
+              });
+              setVoiceTyp(null);
+              setShowForm(false);
+              fetchData();
+            }}
+            onCancel={() => setVoiceTyp(null)}
+          />
+        )}
+
         {/* Hinweis wenn Projekt aber keine Angebotspositionen */}
         {lsProjectId && angebotPositionen.length === 0 && !isAbgeschlossen && (
           <div className="text-sm text-muted-foreground bg-yellow-50 border border-yellow-200 rounded-md p-2.5">
@@ -353,17 +403,20 @@ export default function LieferscheinDetail() {
           </div>
         )}
 
-        {/* Angebotspositionen — always visible (except when closed) */}
+        {/* Angebotspositionen — collapsible, open by default */}
         {angebotPositionen.length > 0 && !isAbgeschlossen && (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <FileText className="h-4 w-4" />
-                Angebotspositionen — Material entnehmen
-              </CardTitle>
+            <CardHeader className="pb-2 cursor-pointer" onClick={() => setPositionenOpen(!positionenOpen)}>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-4 w-4" />
+                  Angebotspositionen — Material entnehmen ({angebotPositionen.length})
+                </CardTitle>
+                {positionenOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              </div>
               <CardDescription>Menge eingeben und auf "Entnehmen" klicken</CardDescription>
             </CardHeader>
-            <CardContent>
+            {positionenOpen && <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -425,7 +478,7 @@ export default function LieferscheinDetail() {
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
+            </CardContent>}
           </Card>
         )}
 
@@ -480,64 +533,6 @@ export default function LieferscheinDetail() {
           </Card>
         )}
 
-        {/* Voice Recorder */}
-        {voiceTyp && (
-          <VoiceRecorder
-            typ={voiceTyp}
-            existingItems={
-              angebotPositionen.length > 0
-                ? angebotPositionen.map(p => ({
-                    position: p.position,
-                    material: p.beschreibung,
-                    menge: voiceTyp === "rueckgabe"
-                      ? String(summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim())?.verbraucht || 0)
-                      : String(p.menge),
-                    einheit: p.einheit,
-                  }))
-                : summary.map((s, idx) => ({
-                    position: idx + 1,
-                    material: s.material,
-                    menge: String(s.verbraucht),
-                    einheit: s.einheit,
-                  }))
-            }
-            onAccept={async (voiceItems) => {
-              if (!currentUserId || !id) return;
-              let skipped = 0;
-              for (const item of voiceItems) {
-                // Validate return amount
-                if (voiceTyp === "rueckgabe") {
-                  const s = summary.find(s => s.material.toLowerCase().trim() === item.material.toLowerCase().trim());
-                  const maxReturn = s ? s.verbraucht : 0;
-                  if (item.menge > maxReturn) {
-                    skipped++;
-                    continue;
-                  }
-                }
-                await supabase.from("material_entries").insert({
-                  lieferschein_id: id,
-                  project_id: null,
-                  user_id: currentUserId,
-                  material: item.material,
-                  menge: String(item.menge),
-                  einheit: item.einheit,
-                  einzelpreis: 0,
-                  typ: voiceTyp,
-                  notizen: null,
-                  datum: new Date().toISOString().split("T")[0],
-                });
-              }
-              toast({
-                title: voiceTyp === "entnahme" ? "Material entnommen" : "Material zurückgebucht",
-                description: `${voiceItems.length} Positionen per Sprache erfasst`,
-              });
-              setVoiceTyp(null);
-              setShowForm(false);
-              fetchData();
-            }}
-            onCancel={() => setVoiceTyp(null)}
-          />
-        )}
 
         {/* Verbrauchsübersicht */}
         {summary.length > 0 && (
