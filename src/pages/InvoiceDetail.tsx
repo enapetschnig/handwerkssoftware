@@ -957,7 +957,29 @@ export default function InvoiceDetail() {
       }).eq("id", invoiceId);
       if (error) throw error;
       setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: "Storniert durch Benutzer" }));
-      toast({ title: "Storniert", description: `Stornonummer: ${stornoNummer}` });
+
+      // Stornobeleg sofort erstellen und herunterladen
+      try {
+        const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+        let logoUri: string | undefined;
+        try {
+          const resp = await fetch("/logo-tilger.png");
+          const blob = await resp.blob();
+          logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
+        } catch {}
+        const pdfBlob = generateStornoPdf(
+          { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
+          stornoNummer, stornoDatum, "Storniert durch Benutzer",
+          undefined, logoUri
+        );
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement("a"); a.href = url; a.download = `Storno_${stornoNummer}.pdf`; a.click();
+        URL.revokeObjectURL(url);
+      } catch (pdfErr) {
+        console.error("Storno-PDF Fehler:", pdfErr);
+      }
+
+      toast({ title: "Rechnung storniert", description: `Stornobeleg ${stornoNummer} wurde erstellt` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Fehler", description: err.message || "Stornierung fehlgeschlagen" });
     }
