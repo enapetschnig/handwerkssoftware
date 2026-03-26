@@ -169,11 +169,14 @@ export async function generateInvoicePdf(
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
     if (langtext && langtext !== kurztext) {
-      const ltLines = pdf.splitTextToSize(langtext, descColW > 20 ? descColW : 70);
-      // extraH = Abstand Kurztext→Langtext (1.5) + Langtext-Höhe + minimales Padding (1)
-      // Zeilenhöhe: erste Zeile zählt nicht extra (ist im Abstand enthalten), jede weitere +2.65mm
-      const ltH = 2.65 + (ltLines.length > 1 ? (ltLines.length - 1) * 2.65 : 0);
-      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltH + 0.5 };
+      // Measure EXACT langtext height using jsPDF (safe before autoTable, no hooks)
+      pdf.setFontSize(7.5);
+      const w = descColW > 20 ? descColW : 70;
+      const ltLines = pdf.splitTextToSize(langtext, w);
+      const ltDim = pdf.getTextDimensions(ltLines.join("\n"), { fontSize: 7.5 });
+      pdf.setFontSize(9); // reset
+      // extraH = small gap (1.5mm) + exact text height
+      langtextInfo[idx] = { kurztext, langtext, extraH: 1.5 + ltDim.h };
     }
     return [
       String(item.position).padStart(2, "0"),
