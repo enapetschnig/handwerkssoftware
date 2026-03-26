@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2, TrendingUp } from "lucide-react";
+import { getTotalWorkingHours } from "@/lib/workingHours";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -236,9 +237,42 @@ const MyHours = () => {
                   className="w-44"
                 />
               </div>
-              <div className="text-sm sm:text-base">
-                <span className="text-muted-foreground">Gesamt: </span>
-                <span className="font-bold text-lg text-primary">{totalHours.toFixed(2)} Std.</span>
+              <div className="text-sm sm:text-base space-y-0.5">
+                {(() => {
+                  // Calculate Soll hours for the month (only working days up to today or end of month)
+                  const [y, m] = selectedMonth.split('-').map(Number);
+                  const today = new Date();
+                  const lastDay = new Date(y, m, 0).getDate();
+                  const endDay = (y === today.getFullYear() && m === today.getMonth() + 1) ? today.getDate() : lastDay;
+                  let sollTotal = 0;
+                  // Get unique dates with entries (for absence days)
+                  const absenceDates = new Set(entries.filter(e => e.location_type === "urlaub" || e.location_type === "krankenstand" || e.location_type === "za").map(e => e.datum));
+                  for (let d = 1; d <= endDay; d++) {
+                    const date = new Date(y, m - 1, d);
+                    const day = date.getDay();
+                    if (day === 0 || day === 6) continue; // Weekend
+                    const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    if (absenceDates.has(dateStr)) { sollTotal += getTotalWorkingHours(date); continue; }
+                    sollTotal += getTotalWorkingHours(date);
+                  }
+                  const diff = totalHours - sollTotal;
+                  return (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">Ist: </span>
+                        <span className="font-bold text-lg text-primary">{totalHours.toFixed(2)} Std.</span>
+                        <span className="text-muted-foreground ml-2">Soll: </span>
+                        <span className="font-medium">{sollTotal.toFixed(2)} Std.</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Überstunden: </span>
+                        <span className={`font-bold ${diff >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)} Std.
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -254,81 +288,30 @@ const MyHours = () => {
                       <TableHead>Datum</TableHead>
                       <TableHead>Ort</TableHead>
                       <TableHead>Projekt</TableHead>
-                      <TableHead>Tätigkeit</TableHead>
-                      <TableHead colSpan={2} className="text-center">Vormittag</TableHead>
+                      <TableHead className="text-center">Von</TableHead>
+                      <TableHead className="text-center">Bis</TableHead>
                       <TableHead className="text-center">Pause</TableHead>
-                      <TableHead colSpan={2} className="text-center">Nachmittag</TableHead>
                       <TableHead className="text-right">Stunden</TableHead>
-                      <TableHead className="text-right">Aktionen</TableHead>
-                    </TableRow>
-                    <TableRow>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead></TableHead>
-                      <TableHead className="text-center">Beginn</TableHead>
-                      <TableHead className="text-center">Ende</TableHead>
-                      <TableHead className="text-center">von - bis</TableHead>
-                      <TableHead className="text-center">Beginn</TableHead>
-                      <TableHead className="text-center">Ende</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {entries.map((entry) => (
                       <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {new Date(entry.datum).toLocaleDateString("de-DE")}
+                        <TableCell className="font-medium whitespace-nowrap text-sm">
+                          {new Date(entry.datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
                         </TableCell>
+                        <TableCell className="text-sm">
+                          {entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}
+                        </TableCell>
+                        <TableCell className="text-sm">{entry.projects?.name || '-'}</TableCell>
+                        <TableCell className="text-center text-sm">{entry.start_time?.substring(0, 5) || '-'}</TableCell>
+                        <TableCell className="text-center text-sm">{entry.end_time?.substring(0, 5) || '-'}</TableCell>
+                        <TableCell className="text-center text-sm">{entry.pause_minutes ? `${entry.pause_minutes} Min` : '-'}</TableCell>
+                        <TableCell className="text-right font-semibold">{entry.stunden.toFixed(2)} h</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            {entry.location_type === 'werkstatt' ? (
-                              <>
-                                <Hammer className="w-4 h-4 text-muted-foreground" />
-                                <span>Werkstatt</span>
-                              </>
-                            ) : (
-                              <>
-                                <Building2 className="w-4 h-4 text-muted-foreground" />
-                                <span>Baustelle</span>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{entry.projects?.name || '-'}</TableCell>
-                        <TableCell>{entry.taetigkeit}</TableCell>
-                        <TableCell className="text-center">
-                          {entry.start_time?.substring(0, 5) || '-'}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {calculateMorningEnd(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {formatPauseTime(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {calculateAfternoonStart(entry)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {entry.pause_minutes && entry.pause_minutes > 0 
-                            ? entry.end_time?.substring(0, 5) || '-'
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {entry.stunden.toFixed(2)} h
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingEntry(entry);
-                              setShowEditDialog(true);
-                            }}
-                            disabled={!isCurrentMonth(entry.datum)}
-                            className="h-8"
-                          >
-                            <Pencil className="h-4 w-4" />
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingEntry(entry); setShowEditDialog(true); }} disabled={!isCurrentMonth(entry.datum)} className="h-7 w-7 p-0">
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -336,12 +319,9 @@ const MyHours = () => {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={10} className="text-right font-semibold">
-                        Gesamtstunden:
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-lg">
-                        {totalHours.toFixed(2)} h
-                      </TableCell>
+                      <TableCell colSpan={6} className="text-right font-semibold">Gesamt:</TableCell>
+                      <TableCell className="text-right font-bold">{totalHours.toFixed(2)} h</TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                   </TableFooter>
                 </Table>

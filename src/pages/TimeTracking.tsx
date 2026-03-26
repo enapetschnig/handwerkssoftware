@@ -627,9 +627,6 @@ const TimeTracking = () => {
     for (const block of timeBlocks) {
       const pauseMinutes = calculateBlockPauseMinutes(block);
       const blockHours = calculateBlockHours(block);
-      // Calculate pause_start/end (Mittagszeit 12:00)
-      const pauseStartCalc = pauseMinutes > 0 ? "12:00" : null;
-      const pauseEndCalc = pauseMinutes > 0 ? `${12 + Math.floor(pauseMinutes / 60)}:${String(pauseMinutes % 60).padStart(2, "0")}` : null;
 
       // Determine DB location_type (regie is stored as baustelle)
       const dbLocationType = block.locationType === "regie" ? "baustelle" : block.locationType;
@@ -650,8 +647,8 @@ const TimeTracking = () => {
         start_time: block.startTime,
         end_time: block.endTime,
         pause_minutes: pauseMinutes,
-        pause_start: pauseStartCalc,
-        pause_end: pauseEndCalc,
+        pause_start: null,
+        pause_end: null,
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
@@ -667,8 +664,8 @@ const TimeTracking = () => {
         start_time: block.startTime,
         end_time: block.endTime,
         pause_minutes: pauseMinutes,
-        pause_start: pauseStartCalc,
-        pause_end: pauseEndCalc,
+        pause_start: null,
+        pause_end: null,
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
@@ -965,27 +962,35 @@ const TimeTracking = () => {
                           </div>
                         )}
 
-                        {/* Start/End/Pause time inputs */}
+                        {/* Start/End time — 30-Min-Schritte */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <Label>Beginn</Label>
-                            <Input
-                              type="time"
-                              step={900}
-                              value={block.startTime}
-                              onChange={(e) => updateBlock(block.id, { startTime: e.target.value })}
-                              required
-                            />
+                            <Select value={block.startTime} onValueChange={(v) => updateBlock(block.id, { startTime: v })}>
+                              <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 29 }, (_, i) => {
+                                  const h = Math.floor(i / 2) + 6;
+                                  const m = (i % 2) * 30;
+                                  const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                                  return <SelectItem key={t} value={t}>{t}</SelectItem>;
+                                })}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="space-y-1.5">
                             <Label>Ende</Label>
-                            <Input
-                              type="time"
-                              step={900}
-                              value={block.endTime}
-                              onChange={(e) => updateBlock(block.id, { endTime: e.target.value })}
-                              required
-                            />
+                            <Select value={block.endTime} onValueChange={(v) => updateBlock(block.id, { endTime: v })}>
+                              <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 29 }, (_, i) => {
+                                  const h = Math.floor(i / 2) + 6;
+                                  const m = (i % 2) * 30;
+                                  const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                                  return <SelectItem key={t} value={t}>{t}</SelectItem>;
+                                })}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         <div className="space-y-1.5">
