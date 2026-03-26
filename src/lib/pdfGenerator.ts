@@ -69,8 +69,12 @@ export async function generateInvoicePdf(
   pdf.text("8831 Niederwölz", pageWidth - mr, y + 12, { align: "right" });
   pdf.text("Tel: +43 664 44 35 346", pageWidth - mr, y + 17, { align: "right" });
   pdf.text("info@ft-tilger.at", pageWidth - mr, y + 22, { align: "right" });
+  if (firmenUid) {
+    pdf.setFontSize(8);
+    pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 27, { align: "right" });
+  }
 
-  y += 24;
+  y += 29;
   // Separator
   pdf.setDrawColor(200, 200, 200);
   pdf.setLineWidth(0.3);
@@ -126,13 +130,11 @@ export async function generateInvoicePdf(
     [`${typLabel} Nr.`, invoice.nummer || "–"],
     ["Belegdatum", datumFormatted],
   ];
-  if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
   if (invoice.kunde_uid) metaRows.push(["Ihre UID", invoice.kunde_uid]);
   if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
+  if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
   if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", fmtDate(invoice.gueltig_bis!)]);
-  if (!isAngebot && invoice.zahlungsbedingungen) metaRows.push(["Zahlung", invoice.zahlungsbedingungen.replace(/ netto$/i, "")]);
-  if (firmenUid) metaRows.push(["Unsere UID", firmenUid]);
 
   metaRows.forEach(([label, value]) => {
     pdf.setTextColor(0, 0, 0);
@@ -207,7 +209,7 @@ export async function generateInvoicePdf(
   // Calculate closing section height to reserve space via margin.bottom
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
-  let closingHeight = 20; // Closing-Text + base spacing
+  let closingHeight = 35; // Closing-Text + base spacing + Puffer für Positionen
   if (invoice.notizen) closingHeight += 16;
   if (isReverseCharge) closingHeight += 14;
   if (!isAngebot && skontoProzent > 0 && skontoTage > 0) closingHeight += 26;
@@ -300,14 +302,14 @@ export async function generateInvoicePdf(
             const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
             const lineH = 9 * 0.3528 * 1.15; // 9pt → mm with line spacing
             const kurztextH = kurztextLines.length * lineH;
-            const ltY = data.cell.y + padT + kurztextH + 1.5;
+            const ltY = data.cell.y + padT + kurztextH + 4;
             const ltLines = pdf.splitTextToSize(info.langtext, cellW);
             const ltLineH = 7.5 * 0.3528 * 1.15;
             const ltH = ltLines.length * ltLineH + 1;
-            // Light background behind langtext
-            pdf.setFillColor(245, 245, 248);
-            pdf.rect(data.cell.x + 0.5, ltY - 2, data.cell.width - 1, ltH + 1.5, "F");
-            // Draw langtext in italic gray
+            // Light background over FULL table width (all columns)
+            pdf.setFillColor(243, 243, 247);
+            pdf.rect(ml, ltY - 2, pageWidth - ml - mr, ltH + 2, "F");
+            // Draw langtext in italic gray (only in Beschreibung column)
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
             pdf.setTextColor(100, 100, 100);
