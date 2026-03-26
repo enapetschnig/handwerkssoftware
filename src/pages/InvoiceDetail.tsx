@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer, Star } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -2046,11 +2046,23 @@ export default function InvoiceDetail() {
                 const favoriten = filtered.filter(t => t.ist_favorit);
                 const restliche = filtered.filter(t => !t.ist_favorit);
 
+                const toggleFavorit = async (e: React.MouseEvent, templateId: string) => {
+                  e.stopPropagation();
+                  const tmpl = templates.find(t => t.id === templateId);
+                  if (!tmpl) return;
+                  const newVal = !tmpl.ist_favorit;
+                  await supabase.from("invoice_templates").update({ ist_favorit: newVal } as any).eq("id", templateId);
+                  setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, ist_favorit: newVal } : t));
+                };
+
                 const renderItem = (t: TemplateItem) => {
                   const isSelected = selectedTemplateIds.includes(t.id);
                   const netto = Number((t as any).netto_preis) || t.einzelpreis;
                   return (
                     <div key={t.id} className={`flex items-center gap-2 p-2 rounded hover:bg-accent text-sm ${isSelected ? "bg-primary/10" : ""}`}>
+                      <button onClick={(e) => toggleFavorit(e, t.id)} className="shrink-0 p-0.5 hover:scale-110 transition-transform" title={t.ist_favorit ? "Favorit entfernen" : "Als Favorit markieren"}>
+                        <Star className={`w-3.5 h-3.5 ${t.ist_favorit ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/40 hover:text-yellow-400"}`} />
+                      </button>
                       <input type="checkbox" checked={isSelected} onChange={() => {
                         setSelectedTemplateIds(prev => isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]);
                         if (!isSelected) setTemplateMengen(prev => ({ ...prev, [t.id]: 1 }));

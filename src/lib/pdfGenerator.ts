@@ -160,22 +160,21 @@ export async function generateInvoicePdf(
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  const langtextMap: Record<number, string> = {};
-  const langtextExtraHeight: Record<number, number> = {};
+  // Track which rows have langtext for visual styling in didDrawCell
+  const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
   const tableBody = items.map((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
+    let beschreibung = kurztext;
     if (langtext && langtext !== kurztext) {
-      langtextMap[idx] = langtext;
-      // Pre-calculate extra height needed (approximate column width ~80mm)
-      const ltLines = pdf.splitTextToSize(langtext, 80);
-      langtextExtraHeight[idx] = ltLines.length * 3.2 + 3;
+      langtextInfo[idx] = { kurztext, langtext };
+      beschreibung = `${kurztext}\n${langtext}`;
     }
     return [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      kurztext,
+      beschreibung,
       fmtCurrency(Number(item.einzelpreis)),
       fmtCurrency(Number(item.gesamtpreis)),
     ];
@@ -258,13 +257,6 @@ export async function generateInvoicePdf(
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
-      // Increase cell height for rows with langtext
-      if (data.section === "body" && data.column.index === 3) {
-        const extra = langtextExtraHeight[data.row.index];
-        if (extra) {
-          data.cell.styles.cellPadding = { ...data.cell.styles.cellPadding, bottom: data.cell.styles.cellPadding.bottom + extra };
-        }
-      }
       if (data.section === "foot") {
         const rowLabel = data.row.raw?.[3] || "";
 
@@ -298,20 +290,29 @@ export async function generateInvoicePdf(
     },
     didDrawCell: (data: any) => {
       if (data.section === "body" && data.column.index === 3) {
-        const lt = langtextMap[data.row.index];
-        if (lt) {
+        const info = langtextInfo[data.row.index];
+        if (info) {
           try {
-            const cellX = data.cell.x + 4;
-            const cellWidth = data.cell.width - 6;
-            const ltLines = pdf.splitTextToSize(lt, cellWidth > 10 ? cellWidth : 80);
-            // Position langtext below kurztext content
-            const textLines = Array.isArray(data.cell.text) ? data.cell.text : [String(data.cell.text)];
-            const kurztextLineCount = textLines.filter((l: string) => l.trim()).length || 1;
-            const ltY = data.cell.y + data.cell.styles.cellPadding.top + (kurztextLineCount * 3.5) + 2;
+            const padL = 2, padT = 3, padR = 2;
+            const cellW = data.cell.width - padL - padR;
+            const cellX = data.cell.x + padL;
+            // Count kurztext lines to find where langtext starts
+            const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
+            const lineH = 9 * 0.3528 * 1.15; // 9pt → mm with line spacing
+            const kurztextH = kurztextLines.length * lineH;
+            const ltY = data.cell.y + padT + kurztextH + 1.5;
+            const ltLines = pdf.splitTextToSize(info.langtext, cellW);
+            const ltLineH = 7.5 * 0.3528 * 1.15;
+            const ltH = ltLines.length * ltLineH + 1;
+            // Light background behind langtext
+            pdf.setFillColor(245, 245, 248);
+            pdf.rect(data.cell.x + 0.5, ltY - 2, data.cell.width - 1, ltH + 1.5, "F");
+            // Draw langtext in italic gray
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
-            pdf.setTextColor(120, 120, 120);
+            pdf.setTextColor(100, 100, 100);
             pdf.text(ltLines, cellX, ltY);
+            // Reset
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(9);
             pdf.setTextColor(0, 0, 0);
