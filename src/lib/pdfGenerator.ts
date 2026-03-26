@@ -209,9 +209,25 @@ export async function generateInvoicePdf(
   const skontoProzent = (invoice as any).skonto_prozent || 0;
   const skontoTage = (invoice as any).skonto_tage || 0;
 
-  // Small margin.bottom — only page footer. First pages stay FULL.
-  // After autoTable, we check if closing section fits. If not → new page.
-  const footerMargin = 32;
+  // margin.bottom reserves space for the closing section (Zahlungstext, Skonto, Bank, QR,
+  // Hinweis, Vielen Dank) so it ALWAYS lands on the same page as the last positions + totals.
+  // autoTable with showFoot:"lastPage" keeps totals with positions. margin.bottom ensures
+  // the closing section fits below. On early pages this reserves some unused space at the
+  // bottom, but keeps ~20+ positions per page which is fine.
+  const pageFooterH = 25; // page footer at pageHeight-22 + buffer
+  let closingH = 15; // base spacing for closing text
+  if (invoice.notizen) closingH += 12;
+  if (isReverseCharge) closingH += 14;
+  if (!isAngebot) {
+    closingH += 13; // Zahlungstext + Zahlungsreferenz
+    if (skontoProzent > 0 && skontoTage > 0) closingH += 24;
+    closingH += 40; // Bank + QR + Hinweis + Vielen Dank
+  } else {
+    closingH += 8; // Angebot closing text
+  }
+  // Add ~30mm extra so autoTable pushes a few positions to the last page
+  // (prevents the closing section from standing alone without positions)
+  const footerMargin = pageFooterH + closingH + 30;
 
   autoTable(pdf, {
     startY: y,
@@ -318,25 +334,7 @@ export async function generateInvoicePdf(
   });
 
   y = (pdf as any).lastAutoTable.finalY + 4;
-
-  // Check if closing section fits on current page. If not → new page.
-  // This keeps first pages FULL (small margin.bottom) while ensuring
-  // closing section lands on the same page as the last positions + totals.
-  let closingNeeded = 15; // base spacing
-  if (invoice.notizen) closingNeeded += 12;
-  if (isReverseCharge) closingNeeded += 14;
-  if (!isAngebot) {
-    closingNeeded += 13; // Zahlungstext + ref
-    if (skontoProzent > 0 && skontoTage > 0) closingNeeded += 24;
-    closingNeeded += 40; // Bank + QR + Hinweis + Vielen Dank
-  } else {
-    closingNeeded += 8;
-  }
-  const maxY = pageHeight - 22 - 3; // page footer line at pageHeight-22, 3mm buffer
-  if (y + closingNeeded > maxY) {
-    pdf.addPage();
-    y = 20;
-  }
+  // margin.bottom already guarantees enough space — no page break check needed
 
   // ======= NOTES =======
   if (invoice.notizen) {
@@ -379,9 +377,6 @@ export async function generateInvoicePdf(
     pdf.text(`Bei E-Banking bitte als Zahlungsreferenz Rechnungsnummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, ml, y, { maxWidth: contentWidth });
     y += 8;
   }
-  // Page break check for remaining content
-  if (y > pageHeight - 70) { pdf.addPage(); y = 20; }
-
   // ======= SKONTO INFO (only for Rechnung with Skonto) =======
   if (!isAngebot && skontoProzent > 0 && skontoTage > 0) {
     const brutto = Number(invoice.brutto_summe);
@@ -427,7 +422,6 @@ export async function generateInvoicePdf(
 
   // ======= BANK INFO (only for Rechnung) =======
   if (!isAngebot) {
-    if (y + 20 > pageHeight - 30) { pdf.addPage(); y = 15; }
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(0, 0, 0);
@@ -447,7 +441,6 @@ export async function generateInvoicePdf(
     y += 20;
 
     // Hinweistext (Silikon/Acryl)
-    if (y + 30 > pageHeight - 30) { pdf.addPage(); y = 20; }
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
     pdf.setTextColor(100, 100, 100);
