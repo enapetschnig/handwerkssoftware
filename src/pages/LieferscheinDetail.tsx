@@ -524,61 +524,51 @@ export default function LieferscheinDetail() {
         )}
 
 
-        {/* Verbrauchsübersicht */}
+        {/* Zusammenfassung — was wurde entnommen */}
         {summary.length > 0 && (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Package className="h-4 w-4" />
-                Materialübersicht
+                Zusammenfassung ({summary.length} Materialien)
               </CardTitle>
+              <CardDescription>Übersicht aller Entnahmen und Rückgaben</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">Pos</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead className="text-right">Entnommen</TableHead>
-                    <TableHead className="text-right">Zurück</TableHead>
-                    <TableHead className="text-right font-bold">Verbraucht</TableHead>
-                    <TableHead className="text-right w-[100px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {summary.map((s, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="text-muted-foreground text-center font-medium">{idx + 1}</TableCell>
-                      <TableCell className="font-medium">{s.material}</TableCell>
-                      <TableCell className="text-right text-red-600">{s.entnommen} {s.einheit}</TableCell>
-                      <TableCell className="text-right text-green-600">{s.zurueck} {s.einheit}</TableCell>
-                      <TableCell className="text-right font-bold">{s.verbraucht} {s.einheit}</TableCell>
-                      <TableCell className="text-right">
-                        {s.verbraucht > 0 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
-                            onClick={() => {
-                              setFormTyp("rueckgabe");
-                              setFormMaterial(s.material);
-                              setFormMenge("");
-                              setFormEinheit(s.einheit);
-                              setFormNotizen("");
-                              setReturningEntry(null);
-                              setShowForm(true);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Zurück</span>
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-2 pt-0">
+              {summary.map((s, idx) => (
+                <div key={idx} className="border rounded-lg p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-sm leading-tight flex-1">{s.material}</p>
+                    <span className="text-sm font-bold shrink-0">{s.verbraucht} {s.einheit}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <div className="flex gap-3 text-xs">
+                      <span className="text-orange-600">↑ {s.entnommen} entnommen</span>
+                      {s.zurueck > 0 && <span className="text-green-600">↓ {s.zurueck} zurück</span>}
+                    </div>
+                    {s.verbraucht > 0 && !isAbgeschlossen && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-green-700 border-green-300 hover:bg-green-50 h-7 text-xs"
+                        onClick={() => {
+                          setFormTyp("rueckgabe");
+                          setFormMaterial(s.material);
+                          setFormMenge("");
+                          setFormEinheit(s.einheit);
+                          setFormNotizen("");
+                          setReturningEntry(null);
+                          setShowForm(true);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Zurückgeben
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

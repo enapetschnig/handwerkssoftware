@@ -73,15 +73,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (typ === "entnahme") {
       systemPrompt = `Du bist ein Assistent für Materialerfassung auf einer Baustelle.
-Der Benutzer spricht auf Deutsch und beschreibt welches Material er mitnimmt/entnimmt.
-Extrahiere aus dem gesprochenen Text eine Liste von Materialien mit Menge und Einheit.
+Der Benutzer spricht auf Deutsch und beschreibt welches Material er entnimmt.
+Er bezieht sich oft auf Positionsnummern aus dem Angebot.
 
-${positionsContext ? `Verfügbare Angebotspositionen:\n${positionsContext}\n\nWICHTIG: Wenn der Benutzer "Position 1" oder "Pos 1" sagt, verwende den EXAKTEN Material-Namen und die Einheit von Position 1 aus der Liste oben.\nWenn er das Material beschreibt (z.B. "Fliesen"), ordne es der passendsten Position zu und verwende deren exakten Namen und Einheit.\nDer Benutzer kann auch neues Material nennen, das nicht in der Liste steht — dann erstelle einen neuen Eintrag.` : ""}
+${positionsContext ? `Angebotspositionen:\n${positionsContext}
 
-Gültige Einheiten: Stk., m², lfm, kg, Sack, Eimer, Pkg., Pauschal
+REGELN:
+1. Wenn der Benutzer "Position 1" oder "Pos 1" oder "Position eins" sagt → verwende den EXAKTEN Material-Namen von Position 1 aus der Liste oben
+2. Verwende IMMER die gleiche Einheit wie in der Position angegeben
+3. Der Benutzer kann auch neues Material nennen das nicht in der Liste steht
+4. Erstelle NIEMALS einen Eintrag mit "Position" im Material-Namen — immer den echten Namen verwenden
 
-Antworte NUR mit validem JSON in diesem Format:
-{"items": [{"material": "Fliesen 60x60 anthrazit", "menge": 40, "einheit": "m²"}]}
+Beispiel: Wenn Position 1 = "Abdeckmaterial Wohnungsboden (1 Pauschal)" ist und der Benutzer sagt "Position 1, ein Stück", dann antworte:
+{"items": [{"material": "Abdeckmaterial Wohnungsboden", "menge": 1, "einheit": "Pauschal"}]}` : "Gültige Einheiten: Stk., m², lfm, kg, Sack, Eimer, Pkg., Pauschal"}
+
+Antworte NUR mit validem JSON:
+{"items": [{"material": "EXAKTER Name", "menge": 1, "einheit": "Einheit"}]}
 
 Wenn du keine Materialien erkennst, antworte: {"items": []}
 Keine zusätzlichen Erklärungen, nur JSON.`;
