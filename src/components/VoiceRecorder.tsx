@@ -86,7 +86,7 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
         body: {
           audioBase64,
           typ,
-          existingItems: typ === "rueckgabe" ? existingItems : undefined,
+          existingItems: existingItems || undefined,
         },
       });
 
