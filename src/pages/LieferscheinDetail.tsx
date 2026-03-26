@@ -245,15 +245,53 @@ export default function LieferscheinDetail() {
     return <div className="min-h-screen flex items-center justify-center"><p>Lädt...</p></div>;
   }
 
+  // Build unified material list: Angebotspositionen + extra entnommene Materialien
+  const materialList = (() => {
+    const list: { pos: number; material: string; soll: number; einheit: string; entnommen: number; zurueck: number; verbraucht: number; isAngebot: boolean }[] = [];
+
+    // 1. Angebotspositionen with their entnahme status
+    angebotPositionen.forEach(p => {
+      const s = summary.find(s => s.material.toLowerCase().trim() === p.beschreibung.toLowerCase().trim());
+      list.push({
+        pos: p.position,
+        material: p.beschreibung,
+        soll: p.menge,
+        einheit: p.einheit,
+        entnommen: s?.entnommen || 0,
+        zurueck: s?.zurueck || 0,
+        verbraucht: s?.verbraucht || 0,
+        isAngebot: true,
+      });
+    });
+
+    // 2. Extra materials (entnommen but not in Angebot)
+    summary.forEach(s => {
+      const inAngebot = angebotPositionen.some(p => p.beschreibung.toLowerCase().trim() === s.material.toLowerCase().trim());
+      if (!inAngebot) {
+        list.push({
+          pos: list.length + 1,
+          material: s.material,
+          soll: 0,
+          einheit: s.einheit,
+          entnommen: s.entnommen,
+          zurueck: s.zurueck,
+          verbraucht: s.verbraucht,
+          isAngebot: false,
+        });
+      }
+    });
+
+    return list;
+  })();
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title={lsName} backPath="/material" />
 
-      <main className="container mx-auto px-4 py-6 max-w-4xl space-y-4">
-        {/* Info + Projekt-Zuordnung */}
-        <div className="flex items-center gap-3 flex-wrap text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Projekt:</span>
+      <main className="container mx-auto px-4 py-4 max-w-lg space-y-3">
+        {/* 1. Header: Projekt + Datum + Status */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Select
               value={lsProjectId || "none"}
               onValueChange={async (v) => {
@@ -266,8 +304,8 @@ export default function LieferscheinDetail() {
                 toast({ title: newPid ? `Projekt: ${proj?.name}` : "Projekt entfernt" });
               }}
             >
-              <SelectTrigger className="w-[200px] h-8 text-sm">
-                <SelectValue placeholder="Kein Projekt" />
+              <SelectTrigger className="flex-1 h-9 text-sm">
+                <SelectValue placeholder="Projekt wählen" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Kein Projekt</SelectItem>
@@ -276,78 +314,38 @@ export default function LieferscheinDetail() {
                 ))}
               </SelectContent>
             </Select>
+            {lsDatum && <span className="text-xs text-muted-foreground">{new Date(lsDatum).toLocaleDateString("de-AT")}</span>}
           </div>
-          {lsDatum && <span className="text-muted-foreground">{new Date(lsDatum).toLocaleDateString("de-AT")}</span>}
-          {/* Abschließen / Wieder öffnen */}
-          {isAbgeschlossen ? (
-            <Button variant="outline" size="sm" className="gap-1.5 text-green-700 border-green-300" onClick={async () => {
-              await supabase.from("lieferscheine").update({ status: "offen" } as any).eq("id", id);
-              setLsStatus("offen");
-              toast({ title: "Lieferschein wieder geöffnet" });
-            }}>
-              <LockOpen className="h-3.5 w-3.5" /> Wieder öffnen
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
-              await supabase.from("lieferscheine").update({ status: "abgeschlossen" } as any).eq("id", id);
-              setLsStatus("abgeschlossen");
-              toast({ title: "Lieferschein abgeschlossen" });
-            }}>
-              <Lock className="h-3.5 w-3.5" /> Lieferschein abschließen
-            </Button>
+          {isAbgeschlossen && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-gray-50 border rounded-md p-2">
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span>Abgeschlossen — keine Buchungen mehr möglich</span>
+              <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs gap-1 text-green-700" onClick={async () => {
+                await supabase.from("lieferscheine").update({ status: "offen" } as any).eq("id", id);
+                setLsStatus("offen");
+                toast({ title: "Wieder geöffnet" });
+              }}>
+                <LockOpen className="h-3 w-3" /> Öffnen
+              </Button>
+            </div>
           )}
         </div>
 
-        {/* Abgeschlossen-Hinweis */}
-        {isAbgeschlossen && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 border rounded-md p-2.5">
-            <Lock className="h-4 w-4 shrink-0" />
-            <span>Dieser Lieferschein ist abgeschlossen. Es können keine Buchungen mehr vorgenommen werden.</span>
-          </div>
-        )}
-
-        {/* Hilfe */}
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => setShowHelp(!showHelp)} className="gap-1.5 text-muted-foreground">
-            <HelpCircle className="h-4 w-4" />
-            Wie funktioniert's?
-            {showHelp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </Button>
-          {showHelp && (
-            <Card className="mt-2 border-blue-200 bg-blue-50/50">
-              <CardContent className="pt-4 pb-3 text-sm space-y-1.5">
-                <p className="font-medium">So funktioniert die Materialentnahme:</p>
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                  <li><strong>Projekt auswählen</strong> — Angebotspositionen werden automatisch geladen</li>
-                  <li><strong>Material entnehmen</strong> — Per Klick auf eine Angebotsposition oder manuell eingeben</li>
-                  <li><strong>Per Sprache</strong> — Einfach sagen: "Position 1, 25 Quadratmeter" oder neues Material nennen</li>
-                  <li><strong>Rückgabe</strong> — Nicht verbrauchtes Material zurückbuchen</li>
-                  <li><strong>Übersicht</strong> — Zeigt immer den aktuellen Stand (Entnommen / Zurück / Verbraucht)</li>
-                </ol>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        {!showForm && !voiceTyp && !isAbgeschlossen && (
-          <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => setVoiceTyp("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700">
-              <Mic className="h-4 w-4" />
-              Per Sprache entnehmen
+        {/* 2. Action Buttons — prominent */}
+        {!isAbgeschlossen && !voiceTyp && !showForm && (
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={() => setVoiceTyp("entnahme")} className="gap-2 bg-orange-600 hover:bg-orange-700 h-12 text-sm">
+              <Mic className="h-5 w-5" />
+              Entnehmen
             </Button>
-            <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2">
-              <Mic className="h-4 w-4" />
-              Per Sprache zurückgeben
-            </Button>
-            <Button onClick={() => openForm("entnahme")} variant="outline" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Manuell eingeben
+            <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2 h-12 text-sm">
+              <Mic className="h-5 w-5" />
+              Zurückgeben
             </Button>
           </div>
         )}
 
-        {/* Voice Recorder — stays at top, visible while scrolling positions below */}
+        {/* 3. Voice Recorder */}
         {voiceTyp && (
           <VoiceRecorder
             typ={voiceTyp}
@@ -370,12 +368,10 @@ export default function LieferscheinDetail() {
             }
             onAccept={async (voiceItems) => {
               if (!currentUserId || !id) return;
-              let skipped = 0;
               for (const item of voiceItems) {
                 if (voiceTyp === "rueckgabe") {
                   const s = summary.find(s => s.material.toLowerCase().trim() === item.material.toLowerCase().trim());
-                  const maxReturn = s ? s.verbraucht : 0;
-                  if (item.menge > maxReturn) { skipped++; continue; }
+                  if (item.menge > (s?.verbraucht || 0)) continue;
                 }
                 await supabase.from("material_entries").insert({
                   lieferschein_id: id, project_id: null, user_id: currentUserId,
@@ -384,137 +380,133 @@ export default function LieferscheinDetail() {
                   datum: new Date().toISOString().split("T")[0],
                 });
               }
-              toast({
-                title: voiceTyp === "entnahme" ? "Material entnommen" : "Material zurückgebucht",
-                description: `${voiceItems.length} Positionen per Sprache erfasst`,
-              });
-              setVoiceTyp(null);
-              setShowForm(false);
-              fetchData();
+              toast({ title: `${voiceItems.length} Positionen erfasst` });
+              setVoiceTyp(null); setShowForm(false); fetchData();
             }}
             onCancel={() => setVoiceTyp(null)}
           />
         )}
 
-        {/* Hinweis wenn Projekt aber keine Angebotspositionen */}
-        {lsProjectId && angebotPositionen.length === 0 && !isAbgeschlossen && (
-          <div className="text-sm text-muted-foreground bg-yellow-50 border border-yellow-200 rounded-md p-2.5">
-            Kein Angebot für dieses Projekt gefunden. Erstelle zuerst ein Angebot mit Positionen und weise es diesem Projekt zu.
-          </div>
-        )}
-
-        {/* Angebotspositionen — collapsible, open by default */}
-        {angebotPositionen.length > 0 && !isAbgeschlossen && (
+        {/* 4. Materialliste — EINE einzige Liste */}
+        {(materialList.length > 0 || !isAbgeschlossen) && (
           <Card>
-            <CardHeader className="pb-2 cursor-pointer" onClick={() => setPositionenOpen(!positionenOpen)}>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileText className="h-4 w-4" />
-                  Angebotspositionen — Material entnehmen ({angebotPositionen.length})
-                </CardTitle>
-                {positionenOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-              </div>
-              <CardDescription>Menge eingeben und auf "Entnehmen" klicken</CardDescription>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Materialliste</CardTitle>
+              {materialList.some(m => m.entnommen > 0) && (
+                <CardDescription>{materialList.filter(m => m.entnommen > 0).length} von {materialList.length} entnommen</CardDescription>
+              )}
             </CardHeader>
-            {positionenOpen && <CardContent className="space-y-2 pt-0">
-              {angebotPositionen.map((p) => (
-                <div key={p.position} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-muted-foreground font-medium">Pos {String(p.position).padStart(2, "0")}</span>
-                      <p className="font-medium text-sm leading-tight">{p.beschreibung}</p>
+            <CardContent className="space-y-1.5 pt-0">
+              {materialList.map((m) => {
+                const done = m.isAngebot && m.verbraucht >= m.soll && m.soll > 0;
+                return (
+                  <div key={`${m.isAngebot ? "a" : "e"}-${m.pos}`} className={`border rounded-lg p-2.5 ${done ? "bg-green-50/50 border-green-200" : ""}`}>
+                    {/* Row 1: Position + Material + Status */}
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-muted-foreground font-mono mt-0.5 shrink-0 w-5">{String(m.pos).padStart(2, "0")}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium leading-tight ${done ? "text-green-700" : ""}`}>{m.material}</p>
+                        <div className="flex gap-2 mt-0.5 text-xs text-muted-foreground">
+                          {m.isAngebot && <span>Soll: {m.soll} {m.einheit}</span>}
+                          {m.entnommen > 0 && <span className="text-orange-600">↑ {m.entnommen}</span>}
+                          {m.zurueck > 0 && <span className="text-green-600">↓ {m.zurueck}</span>}
+                          {m.verbraucht > 0 && <span className="font-medium text-foreground">= {m.verbraucht} {m.einheit}</span>}
+                        </div>
+                      </div>
+                      {done && <span className="text-green-600 text-sm shrink-0">✓</span>}
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{p.menge} {p.einheit}</span>
+                    {/* Row 2: Input + Button (only if not closed) */}
+                    {!isAbgeschlossen && (
+                      <div className="flex gap-2 items-center mt-2">
+                        <Input
+                          type="number" step="0.1" min="0"
+                          placeholder="Menge"
+                          className="h-8 text-sm flex-1"
+                          id={`ml-${m.isAngebot ? "a" : "e"}-${m.pos}`}
+                        />
+                        <span className="text-xs text-muted-foreground shrink-0 w-10">{m.einheit}</span>
+                        <Button
+                          size="sm"
+                          className="gap-1 h-8 shrink-0 bg-orange-600 hover:bg-orange-700 text-xs"
+                          onClick={async () => {
+                            const input = document.getElementById(`ml-${m.isAngebot ? "a" : "e"}-${m.pos}`) as HTMLInputElement;
+                            const menge = input?.value?.trim();
+                            if (!menge || !currentUserId || !id) { toast({ variant: "destructive", title: "Menge eingeben" }); return; }
+                            const { error } = await supabase.from("material_entries").insert({
+                              lieferschein_id: id, project_id: null, user_id: currentUserId,
+                              material: m.material, menge, einheit: m.einheit || "Stk.",
+                              einzelpreis: 0, typ: "entnahme", notizen: null,
+                              datum: new Date().toISOString().split("T")[0],
+                            });
+                            if (error) { toast({ variant: "destructive", title: "Fehler" }); }
+                            else { toast({ title: `${menge} ${m.einheit} entnommen` }); if (input) input.value = ""; fetchData(); }
+                          }}
+                        >
+                          <ArrowUp className="h-3 w-3" /> Entnehmen
+                        </Button>
+                        {m.verbraucht > 0 && (
+                          <Button
+                            variant="outline" size="sm"
+                            className="gap-1 h-8 shrink-0 text-green-700 border-green-300 text-xs"
+                            onClick={() => {
+                              setFormTyp("rueckgabe"); setFormMaterial(m.material); setFormMenge("");
+                              setFormEinheit(m.einheit); setFormNotizen(""); setReturningEntry(null);
+                              setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="Menge"
-                      className="h-9 text-sm flex-1"
-                      id={`menge-${p.position}`}
-                    />
-                    <span className="text-xs text-muted-foreground shrink-0 w-10">{p.einheit}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1 text-orange-700 border-orange-300 hover:bg-orange-50 h-9 shrink-0"
-                      onClick={async () => {
-                        const input = document.getElementById(`menge-${p.position}`) as HTMLInputElement;
-                        const menge = input?.value?.trim();
-                        if (!menge || !currentUserId || !id) {
-                          toast({ variant: "destructive", title: "Menge eingeben" });
-                          return;
-                        }
-                        const { error } = await supabase.from("material_entries").insert({
-                          lieferschein_id: id, project_id: null, user_id: currentUserId,
-                          material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
-                          einzelpreis: 0, typ: "entnahme", notizen: null,
-                          datum: new Date().toISOString().split("T")[0],
-                        });
-                        if (error) {
-                          toast({ variant: "destructive", title: "Fehler", description: error.message });
-                        } else {
-                          toast({ title: `${menge} ${p.einheit} ${p.beschreibung} entnommen` });
-                          if (input) input.value = "";
-                          fetchData();
-                        }
-                      }}
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      Entnehmen
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>}
+                );
+              })}
+
+              {/* + Material hinzufügen */}
+              {!isAbgeschlossen && (
+                <Button
+                  variant="ghost" size="sm"
+                  className="w-full gap-1.5 text-muted-foreground mt-1"
+                  onClick={() => openForm("entnahme")}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Weiteres Material hinzufügen
+                </Button>
+              )}
+            </CardContent>
           </Card>
         )}
 
-        {/* Manual Form — for additional material not in Angebot */}
+        {/* Hinweis wenn Projekt aber keine Angebotspositionen */}
+        {lsProjectId && angebotPositionen.length === 0 && summary.length === 0 && !isAbgeschlossen && (
+          <div className="text-xs text-muted-foreground bg-yellow-50 border border-yellow-200 rounded-md p-2">
+            Kein Angebot gefunden. Erstelle ein Angebot und weise es diesem Projekt zu.
+          </div>
+        )}
+
+        {/* Manual Form — slides in when needed */}
         {showForm && !voiceTyp && (
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                {formTyp === "entnahme" ? (
-                  <><ArrowUp className="h-5 w-5 text-red-500" /> Material manuell eingeben</>
-                ) : (
-                  <><ArrowDown className="h-5 w-5 text-green-500" /> Material zurückbringen</>
-                )}
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                {formTyp === "entnahme" ? <><ArrowUp className="h-4 w-4 text-orange-500" /> Material eingeben</> : <><ArrowDown className="h-4 w-4 text-green-500" /> Zurückgeben</>}
               </CardTitle>
-              {returningEntry && <CardDescription>Vorausgefüllt — Menge anpassen falls nötig</CardDescription>}
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium">Material *</label>
-                    <Input value={formMaterial} onChange={(e) => setFormMaterial(e.target.value)} placeholder="z.B. Fliese 30x60 anthrazit" required />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Menge</label>
-                    <Input value={formMenge} onChange={(e) => setFormMenge(e.target.value)} placeholder="z.B. 25" type="number" step="0.1" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Einheit</label>
-                    <Select value={formEinheit} onValueChange={setFormEinheit}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {einheiten.map(e => (
-                          <SelectItem key={e} value={e}>{e}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium">Notizen</label>
-                    <Input value={formNotizen} onChange={(e) => setFormNotizen(e.target.value)} placeholder="Optionale Bemerkung" />
-                  </div>
+              <form onSubmit={handleSubmit} className="space-y-2">
+                <Input value={formMaterial} onChange={(e) => setFormMaterial(e.target.value)} placeholder="Material *" required />
+                <div className="flex gap-2">
+                  <Input value={formMenge} onChange={(e) => setFormMenge(e.target.value)} placeholder="Menge" type="number" step="0.1" className="flex-1" />
+                  <Select value={formEinheit} onValueChange={setFormEinheit}>
+                    <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {einheiten.map(e => (<SelectItem key={e} value={e}>{e}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={submitting || !formMaterial.trim()} className={formTyp === "entnahme" ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}>
-                    {submitting ? "Speichert..." : formTyp === "entnahme" ? "Entnehmen" : "Zurückbuchen"}
+                  <Button type="submit" disabled={submitting || !formMaterial.trim()} className={`flex-1 ${formTyp === "entnahme" ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}`}>
+                    {submitting ? "..." : formTyp === "entnahme" ? "Entnehmen" : "Zurückbuchen"}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => { setShowForm(false); setReturningEntry(null); }}>Abbrechen</Button>
                 </div>
@@ -523,112 +515,46 @@ export default function LieferscheinDetail() {
           </Card>
         )}
 
+        {/* Abschließen-Button am Ende */}
+        {!isAbgeschlossen && entries.length > 0 && (
+          <Button variant="outline" className="w-full gap-2" onClick={async () => {
+            await supabase.from("lieferscheine").update({ status: "abgeschlossen" } as any).eq("id", id);
+            setLsStatus("abgeschlossen");
+            toast({ title: "Lieferschein abgeschlossen" });
+          }}>
+            <Lock className="h-4 w-4" /> Lieferschein abschließen
+          </Button>
+        )}
 
-        {/* Zusammenfassung — was wurde entnommen */}
-        {summary.length > 0 && (
+        {/* Buchungen — eingeklappt */}
+        {entries.length > 0 && (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Package className="h-4 w-4" />
-                Zusammenfassung ({summary.length} Materialien)
-              </CardTitle>
-              <CardDescription>Übersicht aller Entnahmen und Rückgaben</CardDescription>
+            <CardHeader className="pb-0 cursor-pointer" onClick={() => setShowHelp(!showHelp)}>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-muted-foreground">Buchungen ({entries.length})</CardTitle>
+                {showHelp ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-2 pt-0">
-              {summary.map((s, idx) => (
-                <div key={idx} className="border rounded-lg p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-sm leading-tight flex-1">{s.material}</p>
-                    <span className="text-sm font-bold shrink-0">{s.verbraucht} {s.einheit}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <div className="flex gap-3 text-xs">
-                      <span className="text-orange-600">↑ {s.entnommen} entnommen</span>
-                      {s.zurueck > 0 && <span className="text-green-600">↓ {s.zurueck} zurück</span>}
+            {showHelp && <CardContent className="pt-2">
+              <div className="space-y-1.5">
+                {entries.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-2 text-xs py-1.5 border-b last:border-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {entry.typ === "entnahme" ? <ArrowUp className="h-3 w-3 text-orange-500 shrink-0" /> : <ArrowDown className="h-3 w-3 text-green-500 shrink-0" />}
+                      <span className="truncate">{entry.material}</span>
+                      <span className="text-muted-foreground shrink-0">{entry.menge} {entry.einheit}</span>
                     </div>
-                    {s.verbraucht > 0 && !isAbgeschlossen && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 text-green-700 border-green-300 hover:bg-green-50 h-7 text-xs"
-                        onClick={() => {
-                          setFormTyp("rueckgabe");
-                          setFormMaterial(s.material);
-                          setFormMenge("");
-                          setFormEinheit(s.einheit);
-                          setFormNotizen("");
-                          setReturningEntry(null);
-                          setShowForm(true);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                        Zurückgeben
+                    {(isAdmin || entry.user_id === currentUserId) && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleDelete(entry.id)}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
                     )}
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Einzelne Buchungen — kompakter */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Buchungen ({entries.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {entries.length === 0 ? (
-              <div className="text-center py-6">
-                <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Noch keine Einträge</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {entries.map((entry) => (
-                  <div key={entry.id} className="p-3 rounded-lg border bg-card flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {entry.typ === "entnahme" ? (
-                        <ArrowUp className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                      ) : (
-                        <ArrowDown className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm truncate">{entry.material}</p>
-                          <Badge variant="secondary" className={`text-xs shrink-0 ${entry.typ === "entnahme" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
-                            {entry.typ === "entnahme" ? "Entnommen" : "Zurückgebracht"}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {entry.menge && `${entry.menge} ${entry.einheit || ""}`}
-                          {entry.profiles ? ` · ${entry.profiles.vorname} ${entry.profiles.nachname}` : ""}
-                          {" · "}
-                          {entry.datum ? new Date(entry.datum).toLocaleDateString("de-AT") : new Date(entry.created_at).toLocaleDateString("de-AT")}
-                        </p>
-                        {entry.notizen && <p className="text-xs text-muted-foreground italic mt-0.5">{entry.notizen}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {entry.typ === "entnahme" && (
-                        <Button variant="outline" size="sm" onClick={() => openReturnForm(entry)} className="gap-1 text-green-700 border-green-300 hover:bg-green-50">
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Zurückgeben</span>
-                        </Button>
-                      )}
-                      {(isAdmin || entry.user_id === currentUserId) && (
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(entry.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>}
+          </Card>
+        )}
       </main>
     </div>
   );
