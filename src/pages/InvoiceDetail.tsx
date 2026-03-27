@@ -277,6 +277,7 @@ export default function InvoiceDetail() {
             kunde_anrede: data.kunde_anrede || "",
             kunde_titel: data.kunde_titel || "",
             reverse_charge: data.reverse_charge || false,
+            kundennummer: data.kundennummer || "",
           }));
           if (data.items?.length > 0) {
             setItems(data.items.map((it: any, idx: number) => ({
@@ -925,6 +926,7 @@ export default function InvoiceDetail() {
       kunde_anrede: (form as any).kunde_anrede || "",
       kunde_titel: (form as any).kunde_titel || "",
       reverse_charge: (form as any).reverse_charge || false,
+      kundennummer: (form as any).kundennummer || "",
       items: finalItems,
     };
     sessionStorage.setItem("convertToInvoice", JSON.stringify(convertData));
