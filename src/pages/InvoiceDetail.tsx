@@ -443,9 +443,11 @@ export default function InvoiceDetail() {
   const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
     setItems(prev => {
       const updated = [...prev];
+      // Prevent negative menge/einzelpreis
+      if ((field === "menge" || field === "einzelpreis") && Number(value) < 0) value = 0;
       (updated[index] as any)[field] = value;
       if (field === "menge" || field === "einzelpreis") {
-        updated[index].gesamtpreis = Number(updated[index].menge) * Number(updated[index].einzelpreis);
+        updated[index].gesamtpreis = Math.round(Number(updated[index].menge) * Number(updated[index].einzelpreis) * 100) / 100;
       }
       return updated;
     });
@@ -477,6 +479,12 @@ export default function InvoiceDetail() {
     const validItems = items.filter(item => item.beschreibung.trim());
     if (validItems.length === 0) {
       toast({ variant: "destructive", title: "Fehler", description: "Mindestens eine Position mit Beschreibung ist erforderlich" });
+      return false;
+    }
+
+    // Reverse Charge: UID-Nummer des Kunden ist Pflicht (§ 19 UStG)
+    if ((form as any).reverse_charge && !form.kunde_uid?.trim()) {
+      toast({ variant: "destructive", title: "Fehler", description: "Bei Reverse Charge ist die UID-Nummer des Kunden Pflicht" });
       return false;
     }
 
@@ -618,7 +626,9 @@ export default function InvoiceDetail() {
 
       await supabase.from("invoice_items").delete().eq("invoice_id", savedId!);
 
-      const itemsToInsert = items.map((item, idx) => ({
+      // Filter empty items before saving
+      const validItems = items.filter(item => item.beschreibung.trim());
+      const itemsToInsert = validItems.map((item, idx) => ({
         invoice_id: savedId!,
         position: idx + 1,
         beschreibung: item.beschreibung,
@@ -723,7 +733,8 @@ export default function InvoiceDetail() {
 
     // Update bezahlt_betrag on invoice
     const newTotal = Math.round((form.bezahlt_betrag + betrag) * 100) / 100;
-    const newStatus = newTotal >= Math.round(bruttoSumme * 100) / 100 ? "bezahlt" : "teilbezahlt";
+    // Preserve storno status — don't override with payment status
+    const newStatus = form.status === "storniert" ? "storniert" : (newTotal >= Math.round(bruttoSumme * 100) / 100 ? "bezahlt" : "teilbezahlt");
     await supabase.from("invoices").update({ bezahlt_betrag: newTotal, status: newStatus }).eq("id", invoiceId);
     updateField("bezahlt_betrag", newTotal);
     updateField("status", newStatus);
