@@ -1000,6 +1000,10 @@ export default function InvoiceDetail() {
 
   const handleMahnstufeUp = async () => {
     if (!invoiceId) return;
+    if (form.mahnstufe >= 3) {
+      toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 (Letzte Mahnung) ist das Maximum" });
+      return;
+    }
     const newStufe = form.mahnstufe + 1;
     try {
       const { error } = await supabase.from("invoices").update({ mahnstufe: newStufe }).eq("id", invoiceId);
@@ -1773,8 +1777,9 @@ export default function InvoiceDetail() {
                     type="number"
                     value={form.rabatt_prozent}
                     onChange={(e) => {
-                      updateField("rabatt_prozent", Number(e.target.value));
-                      if (Number(e.target.value) > 0) updateField("rabatt_betrag", 0);
+                      const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                      updateField("rabatt_prozent", val);
+                      if (val > 0) updateField("rabatt_betrag", 0);
                     }}
                     min={0}
                     max={100}

@@ -149,10 +149,27 @@ export default function Invoices() {
 
   const handleStatusChange = async (invoiceId: string, newStatus: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const inv = invoices.find(i => i.id === invoiceId);
+    if (!inv) return;
+
+    // Prevent invalid backward status transitions
+    const invalidTransitions: Record<string, string[]> = {
+      "bezahlt": [], // bezahlt is final — no changes allowed
+      "storniert": [], // storniert is final
+      "verrechnet": [], // verrechnet is final
+      "teilbezahlt": ["offen", "entwurf"], // can't go back to offen
+    };
+    if (invalidTransitions[inv.status]?.length === 0 && newStatus !== inv.status) {
+      toast({ variant: "destructive", title: "Nicht möglich", description: `Status "${statusLabels[inv.status]}" kann nicht geändert werden` });
+      return;
+    }
+    if (invalidTransitions[inv.status]?.includes(newStatus)) {
+      toast({ variant: "destructive", title: "Nicht möglich", description: `Status kann nicht von "${statusLabels[inv.status]}" auf "${statusLabels[newStatus]}" zurückgesetzt werden` });
+      return;
+    }
 
     // For teilbezahlt/bezahlt: open payment dialog first
     if (newStatus === "teilbezahlt" || newStatus === "bezahlt") {
-      const inv = invoices.find(i => i.id === invoiceId);
       setPaymentInvoiceId(invoiceId);
       setPaymentStatus(newStatus);
       setPaymentBetrag(newStatus === "bezahlt" && inv ? String((inv.brutto_summe - (inv.bezahlt_betrag || 0)).toFixed(2)) : "");
@@ -724,6 +741,7 @@ export default function Invoices() {
                                       } catch {}
                                       const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
                                       const stufe = Number(inv.mahnstufe || 0) + 1;
+                                      if (stufe > 3) { toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 ist das Maximum" }); return; }
                                       const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
                                       const pdfBlob = generateMahnungPdf(
                                         {
