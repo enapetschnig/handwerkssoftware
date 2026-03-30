@@ -111,7 +111,7 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
 
     const { data: entries } = await supabase
       .from("material_entries")
-      .select("material, menge, einheit, typ, lieferschein_id")
+      .select("material, menge, einheit, typ, lieferschein_id, einzelpreis")
       .in("lieferschein_id", lsIds);
 
     if (!entries || entries.length === 0) return [];
@@ -139,12 +139,15 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
     entries.forEach(e => {
       const key = e.material.toLowerCase().trim();
       if (!map.has(key)) {
-        map.set(key, { material: e.material, einheit: e.einheit || "Stk.", entnommen: 0, zurueck: 0 });
+        map.set(key, { material: e.material, einheit: e.einheit || "Stk.", entnommen: 0, zurueck: 0, storedPreis: 0 });
       }
       const s = map.get(key)!;
       const menge = parseFloat(e.menge || "0") || 0;
       if (e.typ === "entnahme") s.entnommen += menge;
       else if (e.typ === "rueckgabe") s.zurueck += menge;
+      // Track best stored price (from catalog or Angebot)
+      const ep = Number((e as any).einzelpreis) || 0;
+      if (ep > 0 && s.storedPreis === 0) s.storedPreis = ep;
     });
 
     return Array.from(map.values())
@@ -156,7 +159,7 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
           beschreibung: s.material,
           menge: verbraucht,
           einheit: s.einheit,
-          einzelpreis: angebot?.einzelpreis || 0,
+          einzelpreis: angebot?.einzelpreis || s.storedPreis || 0,
           selected: true,
           source: "material" as const,
           detail: angebot

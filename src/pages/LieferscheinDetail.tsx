@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, HelpCircle, ChevronDown, ChevronUp, Lock, LockOpen } from "lucide-react";
+import { Trash2, Package, ArrowDown, ArrowUp, RotateCcw, Plus, Mic, FileText, HelpCircle, ChevronDown, ChevronUp, Lock, LockOpen, Search } from "lucide-react";
+import { MaterialCatalogDialog } from "@/components/MaterialCatalogDialog";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,12 +60,13 @@ export default function LieferscheinDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [returningEntry, setReturningEntry] = useState<MaterialEntry | null>(null);
   const [voiceTyp, setVoiceTyp] = useState<"entnahme" | "rueckgabe" | null>(null);
-  const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
+  const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string; einzelpreis: number}[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [lsStatus, setLsStatus] = useState<string>("offen");
   const [positionenOpen, setPositionenOpen] = useState(true);
   const [returnDialog, setReturnDialog] = useState<{ material: string; einheit: string; max: number } | null>(null);
   const [returnMenge, setReturnMenge] = useState("");
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const isAbgeschlossen = lsStatus === "abgeschlossen";
 
   useEffect(() => {
@@ -135,7 +137,7 @@ export default function LieferscheinDetail() {
 
       // Load items from the latest Angebot
       const { data: items, error: itemsError } = await supabase.from("invoice_items")
-        .select("position, beschreibung, kurztext, menge, einheit")
+        .select("position, beschreibung, kurztext, menge, einheit, einzelpreis")
         .eq("invoice_id", angebote[0].id)
         .order("position");
 
@@ -149,6 +151,7 @@ export default function LieferscheinDetail() {
         ...i,
         beschreibung: (i as any).kurztext || i.beschreibung,
         menge: Number(i.menge),
+        einzelpreis: Number(i.einzelpreis) || 0,
       })));
     } catch (err) {
       console.error("fetchAngebotPositionen Fehler:", err);
@@ -341,14 +344,18 @@ export default function LieferscheinDetail() {
               <Mic className="h-6 w-6" />
               Material per Sprache entnehmen
             </Button>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button onClick={() => setVoiceTyp("rueckgabe")} variant="outline" className="gap-2 h-10 text-sm">
                 <Mic className="h-4 w-4" />
-                Per Sprache zurückgeben
+                Zurückgeben
+              </Button>
+              <Button onClick={() => setCatalogOpen(true)} variant="outline" className="gap-2 h-10 text-sm">
+                <Search className="h-4 w-4" />
+                Katalog
               </Button>
               <Button onClick={() => openForm("entnahme")} variant="outline" className="gap-2 h-10 text-sm">
                 <Plus className="h-4 w-4" />
-                Manuell eingeben
+                Manuell
               </Button>
             </div>
           </div>
@@ -387,10 +394,13 @@ export default function LieferscheinDetail() {
                   const s = summary.find(s => s.material.toLowerCase().trim() === item.material.toLowerCase().trim());
                   if (item.menge > (s?.verbraucht || 0)) continue;
                 }
+                // Look up price from Angebotspositionen or catalog
+                const angPos = angebotPositionen.find(a => a.beschreibung.toLowerCase().trim() === item.material.toLowerCase().trim());
+                const preis = angPos?.einzelpreis || 0;
                 await supabase.from("material_entries").insert({
                   lieferschein_id: id, project_id: null, user_id: currentUserId,
                   material: item.material, menge: String(item.menge), einheit: item.einheit,
-                  einzelpreis: 0, typ: voiceTyp, notizen: null,
+                  einzelpreis: preis, typ: voiceTyp, notizen: null,
                   datum: new Date().toISOString().split("T")[0],
                 });
               }
@@ -478,7 +488,7 @@ export default function LieferscheinDetail() {
                             const { error } = await supabase.from("material_entries").insert({
                               lieferschein_id: id, project_id: null, user_id: currentUserId,
                               material: p.beschreibung, menge, einheit: p.einheit || "Stk.",
-                              einzelpreis: 0, typ: "entnahme", notizen: null,
+                              einzelpreis: p.einzelpreis || 0, typ: "entnahme", notizen: null,
                               datum: new Date().toISOString().split("T")[0],
                             });
                             if (!error) { toast({ title: `${menge} ${p.einheit} entnommen` }); if (input) input.value = ""; fetchData(); }
@@ -633,6 +643,24 @@ export default function LieferscheinDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Materialkatalog-Dialog */}
+      <MaterialCatalogDialog
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        onSelect={async (item) => {
+          if (!currentUserId || !id) return;
+          await supabase.from("material_entries").insert({
+            lieferschein_id: id, project_id: null, user_id: currentUserId,
+            material: item.material, menge: String(item.menge), einheit: item.einheit,
+            einzelpreis: item.einzelpreis, typ: "entnahme", notizen: null,
+            datum: new Date().toISOString().split("T")[0],
+          });
+          toast({ title: `${item.menge} ${item.einheit} ${item.material} entnommen` });
+          setCatalogOpen(false);
+          fetchData();
+        }}
+      />
     </div>
   );
 }
