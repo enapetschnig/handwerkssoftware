@@ -79,7 +79,8 @@ test.describe("Rechnungen & Angebote", () => {
     await page.waitForTimeout(300);
     await page.getByRole("button", { name: "Angebote" }).click();
     await page.waitForTimeout(300);
-    await page.getByRole("button", { name: "Alle" }).click();
+    // Toggle back to Rechnungen (no "Alle" button — filters are toggles)
+    await page.getByRole("button", { name: "Rechnungen" }).click();
   });
 
   test("create new Rechnung", async ({ page }) => {
@@ -98,7 +99,7 @@ test.describe("Rechnungen & Angebote", () => {
   test("new Rechnung has correct fields", async ({ page }) => {
     await page.getByRole("button", { name: "Neue Rechnung" }).click();
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=Zahlbar bis")).toBeVisible();
+    await expect(page.locator("text=Fällig am")).toBeVisible();
     await expect(page.locator("text=Leistungsdatum")).toBeVisible();
   });
 
