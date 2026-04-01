@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Package, ShoppingCart, X, Plus, Minus, Check } from "lucide-react";
+import { Search, Package, ShoppingCart, Plus, Minus, X } from "lucide-react";
 
 interface CatalogItem {
   id: string;
@@ -32,7 +32,6 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
   const [loading, setLoading] = useState(false);
   const [activeKategorie, setActiveKategorie] = useState<string | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedEntry>>(new Map());
-  const [showCart, setShowCart] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,7 +40,6 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
       setSearch("");
       setActiveKategorie(null);
       setSelected(new Map());
-      setShowCart(false);
     }
   }, [open]);
 
@@ -71,10 +69,8 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
     return (i.kurzbezeichnung || "").toLowerCase().includes(s) || i.name.toLowerCase().includes(s) || (i.produktgruppe || "").toLowerCase().includes(s);
   });
 
-  // All categories for filter
   const kategorien = Array.from(new Set(items.map(i => i.produktgruppe || "Allgemein"))).sort();
 
-  // Group filtered items
   const grouped = new Map<string, CatalogItem[]>();
   filtered.forEach(i => {
     const g = i.produktgruppe || "Allgemein";
@@ -82,31 +78,14 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
     grouped.get(g)!.push(i);
   });
 
-  const toggleItem = (item: CatalogItem) => {
+  const setMenge = (item: CatalogItem, menge: number) => {
     setSelected(prev => {
       const next = new Map(prev);
-      if (next.has(item.id)) {
+      if (menge <= 0) {
         next.delete(item.id);
       } else {
-        next.set(item.id, { item, menge: 1 });
+        next.set(item.id, { item, menge });
       }
-      return next;
-    });
-  };
-
-  const updateMenge = (id: string, menge: number) => {
-    if (menge <= 0) {
-      setSelected(prev => {
-        const next = new Map(prev);
-        next.delete(id);
-        return next;
-      });
-      return;
-    }
-    setSelected(prev => {
-      const next = new Map(prev);
-      const entry = next.get(id);
-      if (entry) next.set(id, { ...entry, menge });
       return next;
     });
   };
@@ -177,91 +156,75 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
             </div>
           )}
 
-          {/* Cart toggle when items selected */}
-          {selectedCount > 0 && (
-            <button
-              className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-orange-50 border border-orange-200 text-sm hover:bg-orange-100 transition-colors"
-              onClick={() => setShowCart(!showCart)}
-            >
-              <span className="flex items-center gap-2 font-medium text-orange-800">
-                <ShoppingCart className="h-4 w-4" />
-                {selectedCount} Material{selectedCount !== 1 ? "ien" : ""} ausgewählt
-              </span>
-              <span className="text-orange-600 text-xs">{showCart ? "Liste anzeigen" : "Auswahl bearbeiten"}</span>
-            </button>
-          )}
+          {/* Material list — mit inline Mengen-Steuerung */}
+          <div className="overflow-y-auto flex-1 space-y-3 min-h-0">
+            {loading ? (
+              <p className="text-center text-muted-foreground py-8">Lädt...</p>
+            ) : filtered.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Nichts gefunden</p>
+            ) : (
+              Array.from(grouped.entries()).map(([gruppe, gruppeItems]) => (
+                <div key={gruppe}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 py-1">
+                    {gruppe} <span className="font-normal">({gruppeItems.length})</span>
+                  </p>
+                  <div className="space-y-0.5">
+                    {gruppeItems.map(item => {
+                      const entry = selected.get(item.id);
+                      const menge = entry?.menge ?? 0;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                            menge > 0 ? "bg-orange-50 border border-orange-200" : "hover:bg-accent"
+                          }`}
+                        >
+                          {/* Name */}
+                          <span className="flex-1 truncate">{displayName(item)}</span>
 
-          {/* Cart view */}
-          {showCart && selectedCount > 0 && (
-            <div className="border rounded-lg divide-y overflow-y-auto max-h-[40vh]">
-              {Array.from(selected.values()).map(entry => (
-                <div key={entry.item.id} className="flex items-center gap-2 px-3 py-2">
-                  <span className="flex-1 text-sm truncate">{displayName(entry.item)}</span>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateMenge(entry.item.id, entry.menge - 1)}>
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={entry.menge}
-                      onChange={(e) => updateMenge(entry.item.id, Number(e.target.value) || 0)}
-                      className="w-16 h-7 text-center text-sm"
-                    />
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateMenge(entry.item.id, entry.menge + 1)}>
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground w-10">{entry.item.einheit}</span>
+                          {/* Mengen-Steuerung: immer sichtbar */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {menge > 0 && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => setMenge(item, menge - 1)}
+                                >
+                                  {menge === 1 ? <X className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                                </Button>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.1"
+                                  value={menge}
+                                  onChange={(e) => setMenge(item, Number(e.target.value) || 0)}
+                                  className="w-14 h-7 text-center text-sm px-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </>
+                            )}
+                            <Button
+                              variant={menge > 0 ? "outline" : "ghost"}
+                              size="icon"
+                              className={`h-7 w-7 ${menge === 0 ? "text-muted-foreground" : ""}`}
+                              onClick={() => setMenge(item, menge + 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+
+                          {/* Einheit */}
+                          <span className="text-xs text-muted-foreground w-10 shrink-0">{item.einheit}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => toggleItem(entry.item)}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Material list */}
-          {!showCart && (
-            <div className="overflow-y-auto flex-1 space-y-3 min-h-0">
-              {loading ? (
-                <p className="text-center text-muted-foreground py-8">Lädt...</p>
-              ) : filtered.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Nichts gefunden</p>
-              ) : (
-                Array.from(grouped.entries()).map(([gruppe, gruppeItems]) => (
-                  <div key={gruppe}>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 py-1">
-                      {gruppe} <span className="font-normal">({gruppeItems.length})</span>
-                    </p>
-                    <div className="space-y-0.5">
-                      {gruppeItems.map(item => {
-                        const isSelected = selected.has(item.id);
-                        return (
-                          <button
-                            key={item.id}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between gap-2 transition-colors ${
-                              isSelected
-                                ? "bg-orange-50 border border-orange-200"
-                                : "hover:bg-accent"
-                            }`}
-                            onClick={() => toggleItem(item)}
-                          >
-                            <span className="flex items-center gap-2 truncate">
-                              {isSelected && <Check className="h-3.5 w-3.5 text-orange-600 shrink-0" />}
-                              <span className="truncate">{displayName(item)}</span>
-                            </span>
-                            <span className="text-xs text-muted-foreground shrink-0">{item.einheit}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+              ))
+            )}
+          </div>
 
           {/* Submit button */}
           {selectedCount > 0 && (
