@@ -647,7 +647,7 @@ export default function LieferscheinDetail() {
       {/* Materialkatalog-Dialog */}
       <MaterialCatalogDialog
         open={catalogOpen}
-        onClose={() => setCatalogOpen(false)}
+        onClose={() => { setCatalogOpen(false); fetchData(); }}
         onSelect={async (item) => {
           if (!currentUserId || !id) return;
           await supabase.from("material_entries").insert({
@@ -657,8 +657,6 @@ export default function LieferscheinDetail() {
             datum: new Date().toISOString().split("T")[0],
           });
           toast({ title: `${item.menge} ${item.einheit} ${item.material} entnommen` });
-          setCatalogOpen(false);
-          fetchData();
         }}
       />
     </div>

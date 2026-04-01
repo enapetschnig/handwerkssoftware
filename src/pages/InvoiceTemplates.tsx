@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Trash2, Save, Package, Search, Filter, Upload, Star } from "lucide-react";
+import { Plus, Trash2, Save, Package, Search, Filter, Upload, Star, TrendingUp, Percent, Euro } from "lucide-react";
 import { MaterialFileImport } from "@/components/MaterialFileImport";
 import { Textarea } from "@/components/ui/textarea";
 import { useEinheiten } from "@/hooks/useEinheiten";
@@ -56,6 +56,8 @@ export default function InvoiceTemplates() {
     ist_lagerartikel: false, lieferant: "", produktgruppe: "",
   });
   const [importOpen, setImportOpen] = useState(false);
+  const [priceAdjustMode, setPriceAdjustMode] = useState<"prozent" | "euro">("prozent");
+  const [priceAdjustValue, setPriceAdjustValue] = useState("");
   const { toast } = useToast();
   const einheiten = useEinheiten();
 
@@ -132,6 +134,7 @@ export default function InvoiceTemplates() {
       brutto_preis: t.brutto_preis, ust_satz: t.ust_satz, ist_lagerartikel: t.ist_lagerartikel,
       lieferant: t.lieferant || "", produktgruppe: t.produktgruppe || t.kategorie,
     });
+    setPriceAdjustValue("");
     setDialogOpen(true);
   };
 
@@ -401,6 +404,91 @@ export default function InvoiceTemplates() {
                   }} min={0} step={0.01} />
                 </div>
               </div>
+              {/* Preisanpassung — nur bei bestehendem Material */}
+              {editId && (
+                <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4" />
+                    Preisanpassung
+                  </p>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex border rounded-md overflow-hidden h-9">
+                      <button
+                        type="button"
+                        className={`px-3 text-sm flex items-center gap-1 transition-colors ${priceAdjustMode === "prozent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                        onClick={() => setPriceAdjustMode("prozent")}
+                      >
+                        <Percent className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-3 text-sm flex items-center gap-1 transition-colors ${priceAdjustMode === "euro" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                        onClick={() => setPriceAdjustMode("euro")}
+                      >
+                        <Euro className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        type="number"
+                        step={priceAdjustMode === "prozent" ? "0.1" : "0.01"}
+                        placeholder={priceAdjustMode === "prozent" ? "z.B. 5 für +5%" : "z.B. 2.50 für +€2,50"}
+                        value={priceAdjustValue}
+                        onChange={(e) => setPriceAdjustValue(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 shrink-0"
+                      disabled={!priceAdjustValue || Number(priceAdjustValue) === 0}
+                      onClick={() => {
+                        const val = Number(priceAdjustValue);
+                        if (!val) return;
+                        setForm(f => {
+                          let newNetto: number;
+                          if (priceAdjustMode === "prozent") {
+                            newNetto = Math.round(f.netto_preis * (1 + val / 100) * 100) / 100;
+                          } else {
+                            newNetto = Math.round((f.netto_preis + val) * 100) / 100;
+                          }
+                          if (newNetto < 0) newNetto = 0;
+                          return {
+                            ...f,
+                            netto_preis: newNetto,
+                            brutto_preis: Math.round(newNetto * (1 + f.ust_satz / 100) * 100) / 100,
+                          };
+                        });
+                        const val2 = Number(priceAdjustValue);
+                        const label = priceAdjustMode === "prozent" ? `${val2 > 0 ? "+" : ""}${val2}%` : `${val2 > 0 ? "+" : ""}€${Math.abs(val2).toFixed(2)}`;
+                        toast({ title: `Preis angepasst: ${label}` });
+                        setPriceAdjustValue("");
+                      }}
+                    >
+                      Anwenden
+                    </Button>
+                  </div>
+                  {priceAdjustValue && Number(priceAdjustValue) !== 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {(() => {
+                        const val = Number(priceAdjustValue);
+                        let newNetto: number;
+                        if (priceAdjustMode === "prozent") {
+                          newNetto = Math.round(form.netto_preis * (1 + val / 100) * 100) / 100;
+                        } else {
+                          newNetto = Math.round((form.netto_preis + val) * 100) / 100;
+                        }
+                        if (newNetto < 0) newNetto = 0;
+                        const diff = newNetto - form.netto_preis;
+                        return `€ ${form.netto_preis.toFixed(2)} → € ${newNetto.toFixed(2)} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`;
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Checkbox id="lagerartikel" checked={form.ist_lagerartikel} onCheckedChange={(c) => setForm(f => ({ ...f, ist_lagerartikel: !!c }))} />

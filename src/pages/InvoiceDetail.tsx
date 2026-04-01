@@ -223,10 +223,9 @@ export default function InvoiceDetail() {
   });
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
-  // Rechnungen sind immer locked nach Speichern (kein Entwurf), Angebote nur wenn nicht Entwurf
-  // Rechnungen: komplett locked nach Speichern. Angebote: Positionen editierbar, Kundendaten locked
+  // Rechnungen: komplett locked nach Speichern. Angebote: Positionen + Kundendaten editierbar
   const isLocked = !isNew && id !== "new" && !!invoiceId && form.typ === "rechnung";
-  const isKundeLocked = !isNew && id !== "new" && !!invoiceId;
+  const isKundeLocked = !isNew && id !== "new" && !!invoiceId && form.typ === "rechnung";
 
   // Angebot→Rechnung Vergleichs-Dialog
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
@@ -1442,7 +1441,7 @@ export default function InvoiceDetail() {
             ) : null;
           })()}
 
-          {/* Kundendaten — immer locked nach Speichern (für Angebote + Rechnungen) */}
+          {/* Kundendaten — locked nach Speichern nur bei Rechnungen, bei Angeboten editierbar */}
           <Card className={isKundeLocked ? "opacity-80" : ""}>
             <fieldset disabled={isKundeLocked}>
             <CardHeader>
