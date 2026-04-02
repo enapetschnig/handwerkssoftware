@@ -35,6 +35,11 @@ interface CreateProjectDialogProps {
   defaultAdresse?: string;
   defaultPlz?: string;
   defaultOrt?: string;
+  defaultEmail?: string;
+  defaultTelefon?: string;
+  defaultUidNummer?: string;
+  defaultAnrede?: string;
+  defaultTitel?: string;
 }
 
 export function CreateProjectDialog({
@@ -47,6 +52,11 @@ export function CreateProjectDialog({
   defaultAdresse = "",
   defaultPlz = "",
   defaultOrt = "",
+  defaultEmail = "",
+  defaultTelefon = "",
+  defaultUidNummer = "",
+  defaultAnrede = "",
+  defaultTitel = "",
 }: CreateProjectDialogProps) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -76,6 +86,15 @@ export function CreateProjectDialog({
       setAdresse(defaultAdresse);
       setPlz(defaultPlz);
       setOrt(defaultOrt);
+      setEmail(defaultEmail);
+      setTelefon(defaultTelefon);
+      setUidNummer(defaultUidNummer);
+      setAnrede(defaultAnrede);
+      setTitel(defaultTitel);
+      setBeschreibung("");
+      setLand("Österreich");
+      // If customer is pre-selected, show as existing customer tab
+      setCustomerTab(defaultCustomerId ? "existing" : defaultCustomerName ? "existing" : "existing");
       supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon").order("name")
         .then(({ data }) => { if (data) setCustomers(data); });
     }

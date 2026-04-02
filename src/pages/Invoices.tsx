@@ -84,7 +84,7 @@ export default function Invoices() {
   const [bankBic, setBankBic] = useState("STSPAT2GXXX");
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createProjectForInvoiceId, setCreateProjectForInvoiceId] = useState<string | null>(null);
-  const [createProjectDefaults, setCreateProjectDefaults] = useState({ name: "", customerName: "", adresse: "", plz: "", ort: "" });
+  const [createProjectDefaults, setCreateProjectDefaults] = useState({ name: "", customerName: "", customerId: null as string | null, adresse: "", plz: "", ort: "", email: "", telefon: "", uidNummer: "", anrede: "", titel: "" });
 
   // Payment dialog for status change to teilbezahlt/bezahlt
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -201,7 +201,7 @@ export default function Invoices() {
       if (inv && !inv.project_id) {
         const { data: fullInv } = await supabase
           .from("invoices")
-          .select("kunde_name, kunde_adresse, kunde_plz, kunde_ort, customer_id")
+          .select("kunde_name, kunde_adresse, kunde_plz, kunde_ort, customer_id, kunde_email, kunde_telefon, kunde_uid, kunde_anrede, kunde_titel")
           .eq("id", invoiceId)
           .single();
 
@@ -210,9 +210,15 @@ export default function Invoices() {
           setCreateProjectDefaults({
             name: `${fullInv.kunde_name} - ${inv.nummer}`,
             customerName: fullInv.kunde_name || "",
+            customerId: fullInv.customer_id || null,
             adresse: fullInv.kunde_adresse || "",
             plz: fullInv.kunde_plz || "",
             ort: fullInv.kunde_ort || "",
+            email: (fullInv as any).kunde_email || "",
+            telefon: (fullInv as any).kunde_telefon || "",
+            uidNummer: (fullInv as any).kunde_uid || "",
+            anrede: (fullInv as any).kunde_anrede || "",
+            titel: (fullInv as any).kunde_titel || "",
           });
           setCreateProjectDialogOpen(true);
         }
@@ -848,10 +854,16 @@ export default function Invoices() {
             setCreateProjectForInvoiceId(null);
           }}
           defaultName={createProjectDefaults.name}
+          defaultCustomerId={createProjectDefaults.customerId}
           defaultCustomerName={createProjectDefaults.customerName}
           defaultAdresse={createProjectDefaults.adresse}
           defaultPlz={createProjectDefaults.plz}
           defaultOrt={createProjectDefaults.ort}
+          defaultEmail={createProjectDefaults.email}
+          defaultTelefon={createProjectDefaults.telefon}
+          defaultUidNummer={createProjectDefaults.uidNummer}
+          defaultAnrede={createProjectDefaults.anrede}
+          defaultTitel={createProjectDefaults.titel}
         />
 
         {/* Payment Dialog for Teilbezahlt/Bezahlt */}
