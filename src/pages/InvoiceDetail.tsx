@@ -1915,8 +1915,10 @@ export default function InvoiceDetail() {
                       const acResults = acQuery ? templates.filter(t => {
                         const kb = ((t as any).kurzbezeichnung || t.name || "").toLowerCase();
                         const pn = ((t as any).produktnummer || "").toLowerCase();
-                        return kb.includes(acQuery) || pn.includes(acQuery);
-                      }).slice(0, 6) : [];
+                        const lb = ((t as any).langbezeichnung || t.beschreibung || "").toLowerCase();
+                        const pg = ((t as any).produktgruppe || "").toLowerCase();
+                        return kb.includes(acQuery) || pn.includes(acQuery) || lb.includes(acQuery) || pg.includes(acQuery);
+                      }).slice(0, 20) : [];
 
                       return (
                       <TableRow key={idx}>
@@ -1936,7 +1938,7 @@ export default function InvoiceDetail() {
                             />
                             {/* Autocomplete dropdown */}
                             {acResults.length > 0 && (
-                              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-md shadow-lg max-h-72 overflow-y-auto">
                                 {acResults.map(t => (
                                   <button
                                     key={t.id}
