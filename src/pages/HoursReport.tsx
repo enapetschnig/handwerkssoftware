@@ -8,7 +8,10 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, Pencil, Trash2, Save } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { format, isSameDay, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
@@ -67,6 +70,9 @@ export default function HoursReport() {
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", pause_minutes: 0, stunden: 0, taetigkeit: "", location_type: "", project_id: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -148,6 +154,62 @@ export default function HoursReport() {
       setTimeEntries(data || []);
     }
     setLoading(false);
+  };
+
+  const openEdit = (entry: TimeEntry) => {
+    setEditEntry(entry);
+    setEditForm({
+      start_time: entry.start_time?.substring(0, 5) || "",
+      end_time: entry.end_time?.substring(0, 5) || "",
+      pause_minutes: entry.pause_minutes || 0,
+      stunden: entry.stunden,
+      taetigkeit: entry.taetigkeit || "",
+      location_type: entry.location_type || "baustelle",
+      project_id: entry.project_id || "",
+    });
+  };
+
+  const recalcHours = (start: string, end: string, pause: number) => {
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const totalMin = (eh * 60 + em) - (sh * 60 + sm) - pause;
+    return Math.max(0, Math.round(totalMin / 60 * 100) / 100);
+  };
+
+  const handleEditSave = async () => {
+    if (!editEntry) return;
+    setEditSaving(true);
+    const stunden = recalcHours(editForm.start_time, editForm.end_time, editForm.pause_minutes);
+    const { error } = await supabase.from("time_entries").update({
+      start_time: editForm.start_time || null,
+      end_time: editForm.end_time || null,
+      pause_minutes: editForm.pause_minutes,
+      stunden,
+      taetigkeit: editForm.taetigkeit,
+      location_type: editForm.location_type,
+      project_id: editForm.project_id || null,
+    }).eq("id", editEntry.id);
+    setEditSaving(false);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Eintrag aktualisiert" });
+      setEditEntry(null);
+      fetchTimeEntries();
+    }
+  };
+
+  const handleEditDelete = async () => {
+    if (!editEntry || !confirm("Eintrag wirklich löschen?")) return;
+    const { error } = await supabase.from("time_entries").delete().eq("id", editEntry.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Eintrag gelöscht" });
+      setEditEntry(null);
+      fetchTimeEntries();
+    }
   };
 
   const generateMonthDays = () => {
@@ -646,6 +708,7 @@ export default function HoursReport() {
                           <TableHead>Ort</TableHead>
                           <TableHead>Projekt</TableHead>
                           <TableHead>Tätigkeit</TableHead>
+                          {isAdmin && <TableHead className="w-10"></TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -682,7 +745,7 @@ export default function HoursReport() {
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={8}></TableCell>
+                                  <TableCell colSpan={isAdmin ? 9 : 8}></TableCell>
                                 </TableRow>
                               );
                             }
@@ -747,6 +810,13 @@ export default function HoursReport() {
                                   <TableCell className="max-w-[150px] truncate">
                                     {entry.taetigkeit}
                                   </TableCell>
+                                  {isAdmin && (
+                                    <TableCell>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TableCell>
+                                  )}
                                 </TableRow>
                               );
                             });
@@ -764,7 +834,7 @@ export default function HoursReport() {
                           <TableCell className="text-right font-bold text-orange-600">
                             {totalOvertime.toFixed(2)} h
                           </TableCell>
-                          <TableCell colSpan={3}></TableCell>
+                          <TableCell colSpan={isAdmin ? 4 : 3}></TableCell>
                         </TableRow>
                       </TableFooter>
                     </Table>
@@ -779,6 +849,81 @@ export default function HoursReport() {
           <ProjectHoursReport />
         </TabsContent>
       </Tabs>
+
+      {/* Admin Edit Dialog */}
+      <Dialog open={!!editEntry} onOpenChange={(o) => !o && setEditEntry(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Zeiteintrag bearbeiten</DialogTitle>
+          </DialogHeader>
+          {editEntry && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {format(parseISO(editEntry.datum), "EEEE, d. MMMM yyyy", { locale: de })}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Von</Label>
+                  <Input type="time" value={editForm.start_time} onChange={(e) => setEditForm(f => ({ ...f, start_time: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Bis</Label>
+                  <Input type="time" value={editForm.end_time} onChange={(e) => setEditForm(f => ({ ...f, end_time: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Pause (Min.)</Label>
+                  <Input type="number" min={0} value={editForm.pause_minutes} onChange={(e) => setEditForm(f => ({ ...f, pause_minutes: Number(e.target.value) || 0 }))} />
+                </div>
+                <div>
+                  <Label>Stunden (berechnet)</Label>
+                  <p className="text-lg font-bold mt-1">{recalcHours(editForm.start_time, editForm.end_time, editForm.pause_minutes).toFixed(2)} h</p>
+                </div>
+              </div>
+              <div>
+                <Label>Ort</Label>
+                <Select value={editForm.location_type} onValueChange={(v) => setEditForm(f => ({ ...f, location_type: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="baustelle">Baustelle</SelectItem>
+                    <SelectItem value="werkstatt">Firma</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Projekt</Label>
+                <Select value={editForm.project_id || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, project_id: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Kein Projekt</SelectItem>
+                    {Object.values(projects).map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tätigkeit</Label>
+                <Input value={editForm.taetigkeit} onChange={(e) => setEditForm(f => ({ ...f, taetigkeit: e.target.value }))} />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex justify-between">
+            <Button variant="destructive" size="sm" className="gap-1" onClick={handleEditDelete}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Löschen
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditEntry(null)}>Abbrechen</Button>
+              <Button onClick={handleEditSave} disabled={editSaving} className="gap-1">
+                <Save className="h-3.5 w-3.5" />
+                {editSaving ? "Speichert..." : "Speichern"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
