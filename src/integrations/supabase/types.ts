@@ -501,6 +501,7 @@ export type Database = {
           langtext: string | null
           menge: number
           position: number
+          produktnummer: string | null
         }
         Insert: {
           beschreibung: string
@@ -514,6 +515,7 @@ export type Database = {
           langtext?: string | null
           menge?: number
           position?: number
+          produktnummer?: string | null
         }
         Update: {
           beschreibung?: string
@@ -527,6 +529,7 @@ export type Database = {
           langtext?: string | null
           menge?: number
           position?: number
+          produktnummer?: string | null
         }
         Relationships: [
           {
@@ -670,6 +673,7 @@ export type Database = {
           netto_summe: number
           notizen: string | null
           nummer: string
+          betreff: string | null
           project_id: string | null
           rabatt_betrag: number | null
           rabatt_prozent: number | null
@@ -715,6 +719,7 @@ export type Database = {
           netto_summe?: number
           notizen?: string | null
           nummer: string
+          betreff?: string | null
           project_id?: string | null
           rabatt_betrag?: number | null
           rabatt_prozent?: number | null
@@ -760,6 +765,7 @@ export type Database = {
           netto_summe?: number
           notizen?: string | null
           nummer?: string
+          betreff?: string | null
           project_id?: string | null
           rabatt_betrag?: number | null
           rabatt_prozent?: number | null

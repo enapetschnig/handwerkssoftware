@@ -74,7 +74,7 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   endTime,
   pauseStart,
   pauseEnd,
-  pauseDuration: 30, // 30 Minuten vorausgewählt
+  pauseDuration: 0, // Keine Pause vorausgewählt
   selectedEmployees: [],
   manualHours: "",
   disturbanceId: "",
@@ -1045,18 +1045,6 @@ const TimeTracking = () => {
                           <Sun className="w-3 h-3 mr-1" />
                           Regelarbeitszeit einfüllen
                         </Button>
-
-                        {/* Multi-employee selection */}
-                        <div className="border-t pt-3">
-                          <MultiEmployeeSelect
-                            selectedEmployees={block.selectedEmployees}
-                            onSelectionChange={(employees) => updateBlockEmployees(block.id, employees)}
-                            date={selectedDate}
-                            startTime={block.startTime}
-                            endTime={block.endTime}
-                            label="Weitere Mitarbeiter (optional)"
-                          />
-                        </div>
 
                         {/* Block hours */}
                         <div className="bg-muted/50 rounded px-3 py-2 flex items-center justify-between text-sm">

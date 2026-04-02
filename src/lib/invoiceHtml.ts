@@ -73,6 +73,7 @@ export interface InvoiceHtmlData {
   kunde_anrede?: string;
   kunde_titel?: string;
   reverse_charge?: boolean;
+  betreff?: string | null;
 }
 
 export interface InvoiceHtmlItem {
@@ -316,6 +317,7 @@ ${mahnBanner}
 
 <!-- Document Title -->
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
+${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:pre-line;">${invoice.betreff.replace(/</g, "&lt;")}</div>` : ""}
 
 <table class="items">
   <thead>

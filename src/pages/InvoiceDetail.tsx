@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer, Star } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -53,6 +53,7 @@ interface InvoiceItem {
   einheit: string;
   einzelpreis: number;
   rabatt_prozent?: number;
+  produktnummer?: string;
   gesamtpreis: number;
 }
 
@@ -75,6 +76,7 @@ interface InvoiceData {
   leistungsdatum: string;
   zahlungsbedingungen: string;
   notizen: string;
+  betreff: string;
   mwst_satz: number;
   project_id: string | null;
   bezahlt_betrag: number;
@@ -159,6 +161,7 @@ export default function InvoiceDetail() {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("alle");
+  const [autocompleteIdx, setAutocompleteIdx] = useState<number | null>(null);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [templateMengen, setTemplateMengen] = useState<Record<string, number>>({});
   const [addedFromDialog, setAddedFromDialog] = useState<{ name: string; menge: number; einheit: string }[]>([]);
@@ -208,6 +211,7 @@ export default function InvoiceDetail() {
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
     zahlungsbedingungen: "14 Tage",
     notizen: "",
+    betreff: "",
     mwst_satz: 20,
     project_id: null,
     bezahlt_betrag: 0,
@@ -269,6 +273,7 @@ export default function InvoiceDetail() {
             leistungsdatum: data.leistungsdatum || "",
             zahlungsbedingungen: data.zahlungsbedingungen || "",
             notizen: data.notizen || "",
+            betreff: data.betreff || "",
             mwst_satz: data.mwst_satz || 20,
             rabatt_prozent: data.rabatt_prozent || 0,
             rabatt_betrag: data.rabatt_betrag || 0,
@@ -353,6 +358,7 @@ export default function InvoiceDetail() {
       leistungsdatum: data.leistungsdatum || "",
       zahlungsbedingungen: data.zahlungsbedingungen || "",
       notizen: data.notizen || "",
+      betreff: (data as any).betreff || "",
       mwst_satz: Number(data.mwst_satz),
       project_id: data.project_id,
       bezahlt_betrag: Number(data.bezahlt_betrag) || 0,
@@ -389,6 +395,7 @@ export default function InvoiceDetail() {
         einheit: it.einheit || "Stk.",
         einzelpreis: Number(it.einzelpreis),
         rabatt_prozent: Number((it as any).rabatt_prozent) || 0,
+        produktnummer: (it as any).produktnummer || "",
         gesamtpreis: Number(it.gesamtpreis),
       })));
     }
@@ -433,6 +440,7 @@ export default function InvoiceDetail() {
       einheit: t.einheit,
       einzelpreis: netto,
       rabatt_prozent: 0,
+      produktnummer: (t as any).produktnummer || "",
       gesamtpreis: netto,
     };
     setItems(prev => mergeItems(prev, [newItem]));
@@ -442,6 +450,16 @@ export default function InvoiceDetail() {
 
   const removeItem = (index: number) => {
     setItems(prev => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, position: i + 1 })));
+  };
+
+  const moveItem = (index: number, direction: "up" | "down") => {
+    setItems(prev => {
+      const arr = [...prev];
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= arr.length) return prev;
+      [arr[index], arr[targetIndex]] = [arr[targetIndex], arr[index]];
+      return arr.map((item, i) => ({ ...item, position: i + 1 }));
+    });
   };
 
   const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -580,6 +598,7 @@ export default function InvoiceDetail() {
         leistungsdatum: form.leistungsdatum || null,
         zahlungsbedingungen: form.zahlungsbedingungen || null,
         notizen: form.notizen || null,
+        betreff: form.betreff || null,
         netto_summe: nettoSumme,
         mwst_satz: form.mwst_satz,
         mwst_betrag: mwstBetrag,
@@ -646,6 +665,7 @@ export default function InvoiceDetail() {
         einheit: item.einheit,
         einzelpreis: item.einzelpreis,
         gesamtpreis: item.gesamtpreis,
+        produktnummer: item.produktnummer || null,
       }));
 
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert);
@@ -1816,6 +1836,24 @@ export default function InvoiceDetail() {
             </fieldset>
           </Card>
 
+          {/* Betreff */}
+          <Card className={isLocked ? "opacity-80" : ""}>
+            <fieldset disabled={isLocked}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Betreff</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={form.betreff}
+                onChange={(e) => updateField("betreff", e.target.value)}
+                placeholder="z.B. Badezimmer-Sanierung EG — Angebot gemäß Besprechung vom..."
+                rows={2}
+                className="resize-none"
+              />
+            </CardContent>
+            </fieldset>
+          </Card>
+
           {/* Positionen */}
           <Card className={isLocked ? "opacity-80" : ""}>
             <CardHeader>
@@ -1861,32 +1899,79 @@ export default function InvoiceDetail() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">Pos.</TableHead>
+                      <TableHead className="w-10">Pos.</TableHead>
                       <TableHead>Beschreibung</TableHead>
                       <TableHead className="w-28">Menge</TableHead>
                       <TableHead className="w-24">Einheit</TableHead>
                       <TableHead className="w-32">Preis (netto) €</TableHead>
                       <TableHead className="w-20">Rabatt %</TableHead>
                       <TableHead className="w-28 text-right">Gesamt (netto) €</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-24"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((item, idx) => (
+                    {items.map((item, idx) => {
+                      const acQuery = (autocompleteIdx === idx && item.beschreibung.length >= 2) ? item.beschreibung.toLowerCase() : "";
+                      const acResults = acQuery ? templates.filter(t => {
+                        const kb = ((t as any).kurzbezeichnung || t.name || "").toLowerCase();
+                        const pn = ((t as any).produktnummer || "").toLowerCase();
+                        return kb.includes(acQuery) || pn.includes(acQuery);
+                      }).slice(0, 6) : [];
+
+                      return (
                       <TableRow key={idx}>
-                        <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                         <TableCell>
-                          <Input
-                            value={item.beschreibung}
-                            onChange={(e) => { updateItem(idx, "beschreibung", e.target.value); updateItem(idx, "kurztext", e.target.value); }}
-                            placeholder="Kurzbezeichnung"
-                          />
+                          <div className="relative">
+                            <Input
+                              value={item.beschreibung}
+                              onChange={(e) => {
+                                updateItem(idx, "beschreibung", e.target.value);
+                                updateItem(idx, "kurztext", e.target.value);
+                                setAutocompleteIdx(idx);
+                              }}
+                              onFocus={() => setAutocompleteIdx(idx)}
+                              onBlur={() => setTimeout(() => setAutocompleteIdx(null), 200)}
+                              placeholder="Kurzbezeichnung"
+                            />
+                            {/* Autocomplete dropdown */}
+                            {acResults.length > 0 && (
+                              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                {acResults.map(t => (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex justify-between gap-2"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      const netto = Number((t as any).netto_preis) || t.einzelpreis;
+                                      updateItem(idx, "beschreibung", (t as any).kurzbezeichnung || t.name);
+                                      updateItem(idx, "kurztext", (t as any).kurzbezeichnung || t.name);
+                                      updateItem(idx, "langtext", (t as any).langbezeichnung || t.beschreibung || "");
+                                      updateItem(idx, "einheit", t.einheit);
+                                      updateItem(idx, "einzelpreis", netto);
+                                      updateItem(idx, "produktnummer", (t as any).produktnummer || "");
+                                      setAutocompleteIdx(null);
+                                    }}
+                                  >
+                                    <span className="truncate">{(t as any).kurzbezeichnung || t.name}</span>
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      {(t as any).produktnummer && <span className="mr-2">{(t as any).produktnummer}</span>}
+                                      € {(Number((t as any).netto_preis) || t.einzelpreis).toFixed(2)}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {item.produktnummer && (
+                            <span className="text-[10px] text-muted-foreground mt-0.5 block">Prod.-Nr: {item.produktnummer}</span>
+                          )}
                           {(item.langtext || !isLocked) && (
                             <textarea
                               value={item.langtext || ""}
                               onChange={(e) => {
                                 updateItem(idx, "langtext", e.target.value);
-                                // Auto-resize
                                 e.target.style.height = "auto";
                                 e.target.style.height = e.target.scrollHeight + "px";
                               }}
@@ -1921,14 +2006,27 @@ export default function InvoiceDetail() {
                           € {item.gesamtpreis.toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          {items.length > 1 && (
-                            <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-0.5">
+                            {!isLocked && (
+                              <>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={idx === 0} onClick={() => moveItem(idx, "up")}>
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={idx === items.length - 1} onClick={() => moveItem(idx, "down")}>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            {items.length > 1 && !isLocked && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                     {!isLocked && (
                       <TableRow>
                         <TableCell colSpan={8} className="py-1">
@@ -2266,6 +2364,7 @@ export default function InvoiceDetail() {
             gueltig_bis: form.gueltig_bis,
             zahlungsbedingungen: form.zahlungsbedingungen,
             notizen: form.notizen,
+            betreff: form.betreff,
             netto_summe: nettoSumme,
             mwst_satz: form.mwst_satz,
             mwst_betrag: mwstBetrag,

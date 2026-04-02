@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp, Pencil, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,8 @@ const ProjectOverview = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [projectName, setProjectName] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [lieferscheinCount, setLieferscheinCount] = useState(0);
   const [invoiceCount, setInvoiceCount] = useState(0);
@@ -214,7 +217,34 @@ const ProjectOverview = () => {
 
       <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-4xl">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">{projectName}</h1>
+          <div className="flex items-center gap-2 mb-2">
+            {editingName ? (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editNameValue.trim()) return;
+                await supabase.from("projects").update({ name: editNameValue.trim() }).eq("id", projectId);
+                setProjectName(editNameValue.trim());
+                setEditingName(false);
+                toast({ title: "Projektname geändert" });
+              }} className="flex items-center gap-2 flex-1">
+                <Input
+                  value={editNameValue}
+                  onChange={(e) => setEditNameValue(e.target.value)}
+                  className="text-2xl font-bold h-auto py-1"
+                  autoFocus
+                />
+                <Button type="submit" size="icon" variant="ghost" className="shrink-0"><Check className="h-5 w-5 text-green-600" /></Button>
+                <Button type="button" size="icon" variant="ghost" className="shrink-0" onClick={() => setEditingName(false)}>✕</Button>
+              </form>
+            ) : (
+              <>
+                <h1 className="text-2xl sm:text-3xl font-bold">{projectName}</h1>
+                <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => { setEditNameValue(projectName); setEditingName(true); }}>
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </>
+            )}
+          </div>
           <p className="text-muted-foreground">Dokumentation und Dateien</p>
         </div>
 
