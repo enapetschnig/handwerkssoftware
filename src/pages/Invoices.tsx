@@ -809,7 +809,7 @@ export default function Invoices() {
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Nächste Rechnung: RE-{new Date().getFullYear()}-{String(Number(rechnungStartNr) || 1).padStart(4, "0")}
+                  Nächste Rechnung: {String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(rechnungStartNr) || 1).padStart(3, "0")}
                 </p>
               </div>
               <div>
@@ -822,7 +822,7 @@ export default function Invoices() {
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Nächstes Angebot: AN-{new Date().getFullYear()}-{String(Number(angebotStartNr) || 1).padStart(4, "0")}
+                  Nächstes Angebot: {String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(angebotStartNr) || 1).padStart(3, "0")}
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
