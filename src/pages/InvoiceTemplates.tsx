@@ -67,7 +67,8 @@ export default function InvoiceTemplates() {
     const { data, error } = await supabase
       .from("invoice_templates")
       .select("*")
-      .order("kategorie, name");
+      .order("kategorie, name")
+      .limit(5000);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Materialien konnten nicht geladen werden" });
     } else {

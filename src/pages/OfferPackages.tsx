@@ -66,7 +66,7 @@ export default function OfferPackages() {
   const fetchAll = async () => {
     const [{ data: pkgs }, { data: tmpls }] = await Promise.all([
       supabase.from("offer_packages").select("*").order("name"),
-      supabase.from("invoice_templates").select("*").order("kategorie, name"),
+      supabase.from("invoice_templates").select("*").order("kategorie, name").limit(5000),
     ]);
 
     if (tmpls) setTemplates(tmpls.map((t: any) => ({ ...t, einzelpreis: Number(t.einzelpreis) })));

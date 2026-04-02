@@ -45,7 +45,8 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
     const { data } = await supabase.from("invoice_templates")
       .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie")
       .order("kategorie")
-      .order("name");
+      .order("name")
+      .limit(5000);
     if (data) {
       setItems(data.map(d => ({
         id: d.id,

@@ -315,7 +315,7 @@ export default function InvoiceDetail() {
   };
 
   const fetchTemplates = async () => {
-    const { data } = await supabase.from("invoice_templates").select("*").order("kategorie, name");
+    const { data } = await supabase.from("invoice_templates").select("*").order("kategorie, name").limit(5000);
     if (data) setTemplates(data.map(t => ({ ...t, einzelpreis: Number(t.einzelpreis), ist_favorit: (t as any).ist_favorit || false })));
   };
 
