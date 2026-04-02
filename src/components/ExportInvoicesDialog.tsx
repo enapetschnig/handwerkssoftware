@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2 } from "lucide-react";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 // JSZip loaded dynamically in handleExport
 
 interface ExportInvoicesDialogProps {
@@ -79,15 +80,20 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
         });
       } catch {}
 
-      // Load firmen UID
+      // Load firmen UID + layout settings
       let firmenUid = "";
+      let layout: InvoiceLayoutSettings = DEFAULT_LAYOUT;
       try {
         const { data: settings } = await supabase
           .from("app_settings")
           .select("key, value")
-          .eq("key", "firmen_uid")
-          .single();
-        if (settings) firmenUid = settings.value;
+          .in("key", ["firmen_uid", "invoice_layout"]);
+        if (settings) {
+          settings.forEach((s: any) => {
+            if (s.key === "firmen_uid") firmenUid = s.value;
+            if (s.key === "invoice_layout") layout = parseLayoutSettings(s.value);
+          });
+        }
       } catch {}
 
       const { generateInvoicePdf } = await import("@/lib/pdfGenerator");
@@ -124,7 +130,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
             pdfBlob = generateStornoPdf(
               { nummer: inv.nummer, kunde_name: inv.kunde_name, brutto_summe: Number(inv.brutto_summe), datum: inv.datum },
               inv.storno_nummer, inv.storno_datum || inv.datum, inv.storno_grund || "",
-              bankData, logoUri
+              bankData, logoUri, layout
             );
             fileName = `Storno_${inv.storno_nummer}.pdf`;
           } else {
@@ -152,7 +158,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
                 menge: Number(it.menge), einheit: it.einheit || "Stk.",
                 einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
               })),
-              bankData, logoUri, qrUri, firmenUid
+              bankData, logoUri, qrUri, firmenUid, layout
             );
             fileName = `${inv.nummer}.pdf`;
           }

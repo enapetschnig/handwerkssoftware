@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 
 interface Invoice {
   id: string;
@@ -85,6 +86,7 @@ export default function Invoices() {
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createProjectForInvoiceId, setCreateProjectForInvoiceId] = useState<string | null>(null);
   const [createProjectDefaults, setCreateProjectDefaults] = useState({ name: "", customerName: "", customerId: null as string | null, adresse: "", plz: "", ort: "", email: "", telefon: "", uidNummer: "", anrede: "", titel: "" });
+  const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
 
   // Payment dialog for status change to teilbezahlt/bezahlt
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -106,7 +108,7 @@ export default function Invoices() {
     const { data } = await supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_kontoinhaber", "bank_iban", "bank_bic"]);
+      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_kontoinhaber", "bank_iban", "bank_bic", "invoice_layout"]);
     if (data) {
       data.forEach(s => {
         if (s.key === "rechnung_start_nummer") setRechnungStartNr(s.value);
@@ -114,6 +116,7 @@ export default function Invoices() {
         if (s.key === "bank_kontoinhaber") setBankKontoinhaber(s.value);
         if (s.key === "bank_iban") setBankIban(s.value);
         if (s.key === "bank_bic") setBankBic(s.value);
+        if (s.key === "invoice_layout") setInvoiceLayout(parseLayoutSettings(s.value));
       });
     }
   };
@@ -293,7 +296,7 @@ export default function Invoices() {
           menge: Number(it.menge), einheit: it.einheit || "Stk.",
           einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
         })),
-        bank, logoUri, qrUri, firmenUid
+        bank, logoUri, qrUri, firmenUid, invoiceLayout
       );
 
       // Direct download
@@ -373,7 +376,7 @@ export default function Invoices() {
           menge: Number(it.menge), einheit: it.einheit || "Stk.",
           einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
         })),
-        bank, logoUri, qrUri, firmenUid
+        bank, logoUri, qrUri, firmenUid, invoiceLayout
       );
 
       // Open PDF in new tab for printing
@@ -756,7 +759,7 @@ export default function Invoices() {
                                           kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
                                           brutto_summe: Number(inv.brutto_summe), bezahlt_betrag: Number(inv.bezahlt_betrag || 0),
                                         },
-                                        stufe, 0, bank, logoUri
+                                        stufe, 0, bank, logoUri, invoiceLayout
                                       );
                                       // Update mahnstufe
                                       await supabase.from("invoices").update({ mahnstufe: stufe }).eq("id", inv.id);

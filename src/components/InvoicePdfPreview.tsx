@@ -12,6 +12,7 @@ import {
   type BankData,
 } from "@/lib/invoiceHtml";
 import { generateInvoicePdf } from "@/lib/pdfGenerator";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 
 // Logo as base64 for jsPDF (loaded once)
 let cachedLogoDataUri: string | null = null;
@@ -94,15 +95,17 @@ export function InvoicePdfPreview({
       // Load bank data + firmen UID
       let bankData: BankData = { ...DEFAULT_BANK };
       let loadedFirmenUid = "";
+      let layout: InvoiceLayoutSettings = DEFAULT_LAYOUT;
       try {
         const { data: bankSettings } = await supabase
-          .from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
+          .from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid", "invoice_layout"]);
         if (bankSettings) {
           bankSettings.forEach((row: any) => {
             if (row.key === "bank_kontoinhaber") bankData.kontoinhaber = row.value;
             if (row.key === "bank_iban") bankData.iban = row.value;
             if (row.key === "bank_bic") bankData.bic = row.value;
             if (row.key === "firmen_uid") loadedFirmenUid = row.value;
+            if (row.key === "invoice_layout") layout = parseLayoutSettings(row.value);
           });
         }
       } catch {}
@@ -132,7 +135,8 @@ export function InvoicePdfPreview({
         bankData,
         logoUri,
         qrDataUri,
-        loadedFirmenUid
+        loadedFirmenUid,
+        layout
       );
 
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);

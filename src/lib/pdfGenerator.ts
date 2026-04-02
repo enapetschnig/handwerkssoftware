@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceLayoutTypes";
 
 const DEFAULT_BANK: BankData = {
   kontoinhaber: "MONTI.PRO",
@@ -36,8 +37,11 @@ export async function generateInvoicePdf(
   bank: BankData = DEFAULT_BANK,
   logoDataUri?: string,
   qrCodeDataUri?: string,
-  firmenUid?: string
+  firmenUid?: string,
+  layout?: InvoiceLayoutSettings
 ): Promise<Blob> {
+  const L = layout || DEFAULT_LAYOUT;
+  const [acR, acG, acB] = hexToRgb(L.accent_color);
   const isAngebot = invoice.typ === "angebot";
   const typLabel = isAngebot ? "Angebot" : "Rechnung";
   const pdf = new jsPDF("p", "mm", "a4");
@@ -53,7 +57,10 @@ export async function generateInvoicePdf(
   // Logo
   if (logoDataUri) {
     try {
-      pdf.addImage(logoDataUri, "JPEG", ml, y, 45, 18);
+      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
+        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
+        : ml;
+      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
     } catch {}
   }
 
@@ -61,14 +68,19 @@ export async function generateInvoicePdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Adresse", pageWidth - mr, y + 7, { align: "right" });
-  pdf.text("PLZ Ort", pageWidth - mr, y + 12, { align: "right" });
-  pdf.text("Tel: Telefon", pageWidth - mr, y + 17, { align: "right" });
-  pdf.text("info@monti.pro", pageWidth - mr, y + 22, { align: "right" });
+  const companyInfoLines: string[] = [
+    L.company.address_line1,
+    L.company.address_line2,
+    L.company.phone ? "Tel: " + L.company.phone : "",
+    L.company.email,
+  ].filter(Boolean);
+  companyInfoLines.forEach((line, i) => {
+    pdf.text(line, pageWidth - mr, y + 7 + i * 5, { align: "right" });
+  });
   if (firmenUid) {
     pdf.setFontSize(8);
     pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 27, { align: "right" });
@@ -84,7 +96,7 @@ export async function generateInvoicePdf(
   // Sender line
   pdf.setFontSize(7);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO \u00B7 Adresse \u00B7 PLZ Ort", ml, y);
+  pdf.text(L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 "), ml, y);
   pdf.setDrawColor(180, 180, 180);
   pdf.line(ml, y + 1.5, ml + 72, y + 1.5);
   y += 6;
@@ -154,7 +166,7 @@ export async function generateInvoicePdf(
   pdf.setTextColor(0, 0, 0);
   pdf.text(`${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}`, ml, y);
   y += 2;
-  pdf.setDrawColor(224, 138, 32);
+  pdf.setDrawColor(acR, acG, acB);
   pdf.setLineWidth(0.8);
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
@@ -238,6 +250,10 @@ export async function generateInvoicePdf(
     closingH += 8;
   }
 
+  // Dynamic footer height
+  const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
+  const footerH = 8 + footerLines.length * 4;
+
   // autoTable: body rows ONLY (no footer/totals). Small margin → pages fill up fully.
   // Totals + closing drawn manually after, with page break if needed.
   autoTable(pdf, {
@@ -246,7 +262,7 @@ export async function generateInvoicePdf(
     body: tableBody,
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: 32 },
+    margin: { left: ml, right: mr, bottom: footerH + 10 },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -314,7 +330,7 @@ export async function generateInvoicePdf(
 
   // Check: does the entire closing section (totals + notes + closing text etc.) fit?
   // If not → new page with the last position repeated so it's not empty.
-  const spaceLeft = (pageHeight - 22) - y; // 22mm = page footer
+  const spaceLeft = (pageHeight - footerH - 4) - y;
   if (spaceLeft < closingH) {
     pdf.addPage();
     y = 20;
@@ -327,7 +343,7 @@ export async function generateInvoicePdf(
         body: lastRow,
         theme: "plain",
         rowPageBreak: "avoid",
-        margin: { left: ml, right: mr, bottom: 32 },
+        margin: { left: ml, right: mr, bottom: footerH + 10 },
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, lineWidth: { bottom: 0.5 }, lineColor: [0, 0, 0] },
         bodyStyles: { fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, textColor: [0, 0, 0], lineWidth: { bottom: 0.2 }, lineColor: [180, 180, 180] },
         columnStyles: { 0: { halign: "center", cellWidth: 12 }, 1: { halign: "right", cellWidth: 18 }, 2: { halign: "center", cellWidth: 18 }, 3: { halign: "left" }, 4: { halign: "right", cellWidth: 24 }, 5: { halign: "right", cellWidth: 26, fontStyle: "bold" } },
@@ -424,10 +440,10 @@ export async function generateInvoicePdf(
   pdf.setTextColor(0, 0, 0);
   const zahlungsTage = invoice.zahlungsbedingungen?.match(/(\d+)/)?.[1] || "14";
   if (isAngebot) {
-    pdf.text("Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.", ml, y, { maxWidth: contentWidth });
+    pdf.text(L.closing_text_angebot, ml, y, { maxWidth: contentWidth });
     y += 8;
   } else {
-    pdf.text(`Wir bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`, ml, y, { maxWidth: contentWidth });
+    pdf.text(L.closing_text_invoice.replace("{{tage}}", zahlungsTage), ml, y, { maxWidth: contentWidth });
     y += 5;
     pdf.setFontSize(7.5);
     pdf.setTextColor(0, 0, 0);
@@ -510,7 +526,7 @@ export async function generateInvoicePdf(
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
     pdf.setTextColor(0, 0, 0);
-    pdf.text("Vielen Dank für Ihren Auftrag!", pageWidth / 2, y, { align: "center" });
+    pdf.text(L.danke_text, pageWidth / 2, y, { align: "center" });
     y += 8;
   }
 
@@ -518,21 +534,34 @@ export async function generateInvoicePdf(
   const totalPages = pdf.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     pdf.setPage(i);
-    const fy = pageHeight - 22; // Higher up to avoid printer clipping
+    const fy = pageHeight - footerH - 4;
 
-    pdf.setDrawColor(224, 138, 32);
+    pdf.setDrawColor(acR, acG, acB);
     pdf.setLineWidth(0.3);
     pdf.line(ml, fy, pageWidth - mr, fy);
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
     pdf.setTextColor(0, 0, 0);
-    pdf.text(
-      "MONTI.PRO \u00B7 Ihr Montagetischler \u00B7 Adresse \u00B7 PLZ Ort \u00B7 Telefon \u00B7 info@monti.pro",
-      pageWidth / 2, fy + 4, { align: "center" }
-    );
-    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, fy + 8, { align: "center" });
-    pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, fy + 8, { align: "right" });
+    let footerY = fy + 4;
+    const footerLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
+    pdf.text(footerLine1, pageWidth / 2, footerY, { align: "center" });
+    footerY += 4;
+    if (L.footer.show_bank_in_footer) {
+      pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, footerY, { align: "center" });
+      footerY += 4;
+    }
+    if (L.footer.line2) {
+      pdf.text(L.footer.line2, pageWidth / 2, footerY, { align: "center" });
+      footerY += 4;
+    }
+    if (L.footer.line3) {
+      pdf.text(L.footer.line3, pageWidth / 2, footerY, { align: "center" });
+      footerY += 4;
+    }
+    if (L.footer.show_page_numbers) {
+      pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, fy + 4, { align: "right" });
+    }
   }
 
   return pdf.output("blob");
@@ -545,8 +574,11 @@ export function generateStornoPdf(
   stornoDatum: string,
   stornoGrund: string,
   bank: BankData = DEFAULT_BANK,
-  logoDataUri?: string
+  logoDataUri?: string,
+  layout?: InvoiceLayoutSettings
 ): Blob {
+  const L = layout || DEFAULT_LAYOUT;
+  const [acR, acG, acB] = hexToRgb(L.accent_color);
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -557,29 +589,36 @@ export function generateStornoPdf(
 
   // Logo
   if (logoDataUri) {
-    try { pdf.addImage(logoDataUri, "JPEG", ml, y, 45, 18); } catch {}
+    try {
+      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
+        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
+        : ml;
+      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
+    } catch {}
   }
 
   // Company info
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(7.5);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Adresse · PLZ Ort", pageWidth - mr, y + 6, { align: "right" });
-  pdf.text("Telefon · info@monti.pro", pageWidth - mr, y + 10, { align: "right" });
+  const stornoInfoParts = [L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 ");
+  const stornoContactParts = [L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
+  if (stornoInfoParts) pdf.text(stornoInfoParts, pageWidth - mr, y + 6, { align: "right" });
+  if (stornoContactParts) pdf.text(stornoContactParts, pageWidth - mr, y + 10, { align: "right" });
 
   y += 30;
 
   // Red "STORNO" header
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
-  pdf.setTextColor(224, 138, 32);
+  pdf.setTextColor(acR, acG, acB);
   pdf.text("STORNO", ml, y);
   y += 4;
-  pdf.setDrawColor(224, 138, 32);
+  pdf.setDrawColor(acR, acG, acB);
   pdf.setLineWidth(1);
   pdf.line(ml, y, pageWidth - mr, y);
   y += 10;
@@ -631,15 +670,30 @@ export function generateStornoPdf(
   pdf.text("Der Rechnungsbetrag wird nicht mehr zur Zahlung fällig.", ml, y);
 
   // Footer
-  const fy = pageHeight - 22;
-  pdf.setDrawColor(224, 138, 32);
+  const stornoFooterLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
+  const stornoFooterH = 8 + stornoFooterLines.length * 4;
+  const fy = pageHeight - stornoFooterH - 4;
+  pdf.setDrawColor(acR, acG, acB);
   pdf.setLineWidth(0.3);
   pdf.line(ml, fy, pageWidth - mr, fy);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · Telefon · info@monti.pro", pageWidth / 2, fy + 4, { align: "center" });
-  pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
+  let stornoFy = fy + 4;
+  const stornoFooterLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
+  pdf.text(stornoFooterLine1, pageWidth / 2, stornoFy, { align: "center" });
+  stornoFy += 3.5;
+  if (L.footer.show_bank_in_footer) {
+    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, stornoFy, { align: "center" });
+    stornoFy += 3.5;
+  }
+  if (L.footer.line2) {
+    pdf.text(L.footer.line2, pageWidth / 2, stornoFy, { align: "center" });
+    stornoFy += 3.5;
+  }
+  if (L.footer.line3) {
+    pdf.text(L.footer.line3, pageWidth / 2, stornoFy, { align: "center" });
+  }
 
   return pdf.output("blob");
 }
@@ -650,8 +704,11 @@ export function generateMahnungPdf(
   mahnstufe: number,
   mahngebuehr: number = 0,
   bank: BankData = DEFAULT_BANK,
-  logoDataUri?: string
+  logoDataUri?: string,
+  layout?: InvoiceLayoutSettings
 ): Blob {
+  const L = layout || DEFAULT_LAYOUT;
+  const [acR, acG, acB] = hexToRgb(L.accent_color);
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -661,23 +718,30 @@ export function generateMahnungPdf(
   let y = 15;
 
   if (logoDataUri) {
-    try { pdf.addImage(logoDataUri, "JPEG", ml, y, 45, 18); } catch {}
+    try {
+      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
+        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
+        : ml;
+      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
+    } catch {}
   }
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(7.5);
-  pdf.text("Adresse · PLZ Ort", pageWidth - mr, y + 6, { align: "right" });
-  pdf.text("Telefon · info@monti.pro", pageWidth - mr, y + 10, { align: "right" });
+  const mahnInfoParts = [L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 ");
+  const mahnContactParts = [L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
+  if (mahnInfoParts) pdf.text(mahnInfoParts, pageWidth - mr, y + 6, { align: "right" });
+  if (mahnContactParts) pdf.text(mahnContactParts, pageWidth - mr, y + 10, { align: "right" });
 
   y += 25;
 
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO · Adresse · PLZ Ort", ml, y);
+  pdf.text(L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 "), ml, y);
   pdf.setDrawColor(200, 200, 200);
   pdf.setLineWidth(0.2);
   pdf.line(ml, y + 1, ml + 85, y + 1);
@@ -766,17 +830,32 @@ export function generateMahnungPdf(
   pdf.setFontSize(10);
   pdf.text("Mit freundlichen Grüßen", ml, y); y += 5;
   pdf.setFont("helvetica", "bold");
-  pdf.text("MONTI.PRO", ml, y);
+  pdf.text(L.company.name, ml, y);
 
-  const fy = pageHeight - 22;
-  pdf.setDrawColor(224, 138, 32);
+  const mahnFooterLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
+  const mahnFooterH = 8 + mahnFooterLines.length * 4;
+  const fy = pageHeight - mahnFooterH - 4;
+  pdf.setDrawColor(acR, acG, acB);
   pdf.setLineWidth(0.3);
   pdf.line(ml, fy, pageWidth - mr, fy);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · Telefon · info@monti.pro", pageWidth / 2, fy + 4, { align: "center" });
-  pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
+  let mahnFy = fy + 4;
+  const mahnFooterLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
+  pdf.text(mahnFooterLine1, pageWidth / 2, mahnFy, { align: "center" });
+  mahnFy += 3.5;
+  if (L.footer.show_bank_in_footer) {
+    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, mahnFy, { align: "center" });
+    mahnFy += 3.5;
+  }
+  if (L.footer.line2) {
+    pdf.text(L.footer.line2, pageWidth / 2, mahnFy, { align: "center" });
+    mahnFy += 3.5;
+  }
+  if (L.footer.line3) {
+    pdf.text(L.footer.line3, pageWidth / 2, mahnFy, { align: "center" });
+  }
 
   return pdf.output("blob");
 }

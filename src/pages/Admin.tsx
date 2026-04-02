@@ -22,6 +22,7 @@ import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
 import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
+import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 
 type Profile = {
   id: string;
@@ -1076,6 +1077,9 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ===== RECHNUNGS-LAYOUT ===== */}
+        <InvoiceLayoutEditor />
 
         {/* ===== WHATSAPP EINSTELLUNGEN ===== */}
         <WhatsAppAdminSettings />

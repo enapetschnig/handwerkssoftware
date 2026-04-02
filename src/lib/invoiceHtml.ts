@@ -2,6 +2,7 @@
 // Used both client-side (preview) and matches edge function output
 
 import QRCode from "qrcode";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT } from "./invoiceLayoutTypes";
 
 // Generate EPC QR-Code (GiroCode) for SEPA bank transfer
 export async function generateEpcQrCode(
@@ -99,12 +100,14 @@ export function buildInvoiceHtml(
   invoice: InvoiceHtmlData,
   items: InvoiceHtmlItem[],
   qrCodeDataUri?: string,
-  bank?: BankData
+  bank?: BankData,
+  layout?: InvoiceLayoutSettings
 ): string {
+  const L = layout || DEFAULT_LAYOUT;
   const b = bank || DEFAULT_BANK;
   const isAngebot = invoice.typ === "angebot";
   const typLabel = isAngebot ? "Angebot" : "Rechnung";
-  const accent = "#E08A20";
+  const accent = L.accent_color;
 
   const datumFormatted = new Date(invoice.datum).toLocaleDateString("de-AT");
   const faelligFormatted = invoice.faellig_am
@@ -185,10 +188,19 @@ export function buildInvoiceHtml(
       `<div><span class="meta-label">Zahlung</span><span class="meta-value">${invoice.zahlungsbedingungen}</span></div>`
     );
 
+  // Derive a light tinted background from the accent color (10% opacity)
+  const accentLightBg = (() => {
+    const c = accent.replace("#", "");
+    const r = parseInt(c.slice(0, 2), 16) || 224;
+    const g = parseInt(c.slice(2, 4), 16) || 138;
+    const b_ = parseInt(c.slice(4, 6), 16) || 32;
+    return `rgba(${r},${g},${b_},0.08)`;
+  })();
+
   const mahnBanner =
     mahnstufe > 0
       ? `
-    <div style="background:#fef6ee;border:2px solid #E08A20;border-radius:6px;padding:12px 20px;margin-bottom:20px;text-align:center;font-weight:800;color:#E08A20;font-size:12pt;letter-spacing:1px;">
+    <div style="background:${accentLightBg};border:2px solid ${accent};border-radius:6px;padding:12px 20px;margin-bottom:20px;text-align:center;font-weight:800;color:${accent};font-size:12pt;letter-spacing:1px;">
       ⚠ ${mahnstufe}. MAHNUNG
     </div>`
       : "";
@@ -282,18 +294,18 @@ ${mahnBanner}
     ${LOGO_IMG}
   </div>
   <div class="header-info">
-    <strong>MONTI.PRO</strong><br>
-    Adresse<br>
-    PLZ Ort<br>
-    Tel: Telefon<br>
-    E-Mail: info@monti.pro
+    <strong>${L.company.name}</strong><br>
+    ${L.company.address_line1 ? L.company.address_line1 + "<br>" : ""}
+    ${L.company.address_line2 ? L.company.address_line2 + "<br>" : ""}
+    ${L.company.phone ? "Tel: " + L.company.phone + "<br>" : ""}
+    ${L.company.email ? "E-Mail: " + L.company.email : ""}
   </div>
 </div>
 
 <!-- Address row — recipient left, meta right -->
 <div class="address-row">
   <div class="recipient">
-    <div class="sender-line">MONTI.PRO · Adresse · PLZ Ort</div>
+    <div class="sender-line">${L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" · ")}</div>
     <div class="recipient-name">${invoice.kunde_name || "–"}</div>
     <div class="recipient-addr">
       ${invoice.kunde_adresse ? `${invoice.kunde_adresse}<br>` : ""}
@@ -372,9 +384,11 @@ ${
 <!-- Footer -->
 <div class="footer">
   <div class="footer-line">
-    MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · Tel: Telefon · info@monti.pro
+    ${L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" · ")}
   </div>
-  ${isAngebot ? `<div class="footer-line">IBAN: ${b.iban} · BIC: ${b.bic}</div>` : ""}
+  ${L.footer.line2 ? `<div class="footer-line">${L.footer.line2}</div>` : ""}
+  ${L.footer.line3 ? `<div class="footer-line">${L.footer.line3}</div>` : ""}
+  ${L.footer.show_bank_in_footer ? `<div class="footer-line">IBAN: ${b.iban} · BIC: ${b.bic}</div>` : ""}
 </div>
 
 </div><!-- /page-wrap -->

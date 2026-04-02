@@ -24,6 +24,7 @@ import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format, addMonths, parseISO } from "date-fns";
+import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
@@ -181,6 +182,7 @@ export default function InvoiceDetail() {
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [stornoDialogOpen, setStornoDialogOpen] = useState(false);
   const [stornoGrund, setStornoGrund] = useState("");
+  const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
   // Payment tracking
@@ -240,6 +242,10 @@ export default function InvoiceDetail() {
     fetchProjects();
     fetchTemplates();
     fetchCustomers();
+    // Load invoice layout settings
+    supabase.from("app_settings").select("value").eq("key", "invoice_layout").single().then(({ data }) => {
+      if (data) setInvoiceLayout(parseLayoutSettings(data.value));
+    });
     if (!isNew && id) {
       loadInvoice(id);
       loadStoredPdfs(id);
@@ -1011,7 +1017,7 @@ export default function InvoiceDetail() {
         const pdfBlob = generateStornoPdf(
           { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
           stornoNummer, stornoDatum, "Storniert durch Benutzer",
-          undefined, logoUri
+          undefined, logoUri, invoiceLayout
         );
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement("a"); a.href = url; a.download = `Storno_${stornoNummer}.pdf`; a.click();
@@ -1095,7 +1101,7 @@ export default function InvoiceDetail() {
                       const pdfBlob = generateStornoPdf(
                         { nummer: freshInv.nummer, kunde_name: freshInv.kunde_name, brutto_summe: Number(freshInv.brutto_summe), datum: freshInv.datum },
                         freshInv.storno_nummer, freshInv.storno_datum || freshInv.datum, freshInv.storno_grund || "",
-                        undefined, logoUri
+                        undefined, logoUri, invoiceLayout
                       );
                       const url = URL.createObjectURL(pdfBlob);
                       const a = document.createElement("a"); a.href = url; a.download = `Storno_${freshInv.storno_nummer}.pdf`; a.click();
@@ -1166,7 +1172,7 @@ export default function InvoiceDetail() {
                           const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
                           const pdfBlob = generateMahnungPdf(
                             { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
-                            mahnstufe, 0, bank, logoUri
+                            mahnstufe, 0, bank, logoUri, invoiceLayout
                           );
                           const url = URL.createObjectURL(pdfBlob);
                           const a = document.createElement("a"); a.href = url;
@@ -1375,7 +1381,7 @@ export default function InvoiceDetail() {
                             const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
                             const pdfBlob = generateMahnungPdf(
                               { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
-                              m.mahnstufe, 0, bank, logoUri
+                              m.mahnstufe, 0, bank, logoUri, invoiceLayout
                             );
                             const url = URL.createObjectURL(pdfBlob);
                             const a = document.createElement("a"); a.href = url; a.download = `${label}_${form.nummer}.pdf`; a.click();
@@ -2138,7 +2144,7 @@ export default function InvoiceDetail() {
                   const blob = generateStornoPdf(
                     { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
                     inv.storno_nummer, inv.storno_datum || form.datum, inv.storno_grund || "",
-                    undefined, logoUri
+                    undefined, logoUri, invoiceLayout
                   );
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `Storno_${inv.storno_nummer}.pdf`; a.click(); URL.revokeObjectURL(url);
@@ -2660,7 +2666,7 @@ export default function InvoiceDetail() {
                   const stornoBlob = generateStornoPdf(
                     { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
                     stornoNummer, stornoDatum, stornoGrund.trim(),
-                    undefined, logoUri
+                    undefined, logoUri, invoiceLayout
                   );
                   const url = URL.createObjectURL(stornoBlob);
                   const a = document.createElement("a");
