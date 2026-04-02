@@ -159,6 +159,17 @@ export async function generateInvoicePdf(
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
 
+  // Betreff (subject line) — mehrzeilig möglich
+  if (invoice.betreff) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    const maxWidth = pageWidth - ml - mr;
+    const lines = pdf.splitTextToSize(invoice.betreff, maxWidth);
+    pdf.text(lines, ml, y);
+    y += lines.length * 4.5 + 4;
+  }
+
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
   const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
