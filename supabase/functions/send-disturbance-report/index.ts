@@ -107,7 +107,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
 
   // Helper: Section title with red left border
   const sectionTitle = (title: string) => {
-    doc.setFillColor(204, 0, 0);
+    doc.setFillColor(224, 138, 32);
     doc.rect(margin, yPos - 4, 2, 6, "F");
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -137,11 +137,11 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(26, 26, 26);
-    doc.text("FLIESENTECHNIK TILGER", margin, 18);
+    doc.text("MONTI.PRO", margin, 18);
   }
 
   // Red line under header
-  doc.setFillColor(204, 0, 0);
+  doc.setFillColor(224, 138, 32);
   doc.rect(margin, 33, contentWidth, 0.8, "F");
 
   // "Regiebericht" title on right
@@ -338,13 +338,13 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   const footerY = pageHeight - 12;
 
   // Thin red line
-  doc.setFillColor(204, 0, 0);
+  doc.setFillColor(224, 138, 32);
   doc.rect(margin, footerY - 3, contentWidth, 0.5, "F");
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(130, 130, 130);
-  doc.text("Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174 · 8831 Niederwölz · info@ft-tilger.at", margin, footerY + 1);
+  doc.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · info@monti.pro", margin, footerY + 1);
   doc.text(`Erstellt: ${new Date().toLocaleDateString("de-AT")}`, pageWidth - margin, footerY + 1, { align: "right" });
 
   // Return as base64
@@ -365,16 +365,16 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         .header { font-size: 12px; font-weight: 900; color: #1A1A1A; letter-spacing: 2px; margin-bottom: 2px; }
         .header-large { font-size: 28px; font-weight: 900; color: #1A1A1A; letter-spacing: 1px; margin-bottom: 4px; }
         .header-sub { font-size: 11px; color: #64748b; margin-bottom: 10px; }
-        .red-bar { height: 3px; background: #CC0000; margin-bottom: 16px; border-radius: 2px; }
+        .red-bar { height: 3px; background: #E08A20; margin-bottom: 16px; border-radius: 2px; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #CC0000; }
+        .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #E08A20; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header">FLIESENTECHNIK</div>
-        <div class="header-large">TILGER</div>
-        <div class="header-sub">Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174, 8831 Niederwölz</div>
+        <div class="header">MONTI</div>
+        <div class="header-large">PRO</div>
+        <div class="header-sub">MONTI.PRO · Ihr Montagetischler · Adresse, PLZ Ort</div>
         <div class="red-bar"></div>
         <h2>Regiebericht</h2>
 
@@ -392,8 +392,8 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         <p>Der vollständige Bericht mit allen Details und der Kundenunterschrift befindet sich im angehängten PDF-Dokument.</p>
 
         <p>Mit freundlichen Grüßen,<br>
-        Gottfried Tilger<br>
-        <span style="color:#64748b;font-size:12px;">Fliesentechnik & Natursteinteppich<br>Bahnhofstr. 174, 8831 Niederwölz<br>info@ft-tilger.at</span></p>
+        MONTI.PRO<br>
+        <span style="color:#64748b;font-size:12px;">Ihr Montagetischler<br>Adresse, PLZ Ort<br>info@monti.pro</span></p>
       </div>
     </body>
     </html>
@@ -446,7 +446,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq("key", "disturbance_report_email")
       .maybeSingle();
 
-    const officeEmail = setting?.value || "info@ft-tilger.at";
+    const officeEmail = setting?.value || "info@monti.pro";
     console.log("Using office email:", officeEmail);
 
     // Prepare recipients - office email for all reports
@@ -464,9 +464,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     console.log("Sending email with PDF attachment to:", recipients);
 
-    // Use Resend test domain if ft-tilger.at is not verified yet
-    // Once domain is verified in Resend dashboard, change back to noreply@ft-tilger.at
-    const fromAddress = Deno.env.get("RESEND_FROM_EMAIL") || "Fliesentechnik Tilger <onboarding@resend.dev>";
+    // Use Resend test domain if monti.pro is not verified yet
+    // Once domain is verified in Resend dashboard, change back to noreply@monti.pro
+    const fromAddress = Deno.env.get("RESEND_FROM_EMAIL") || "MONTI.PRO <onboarding@resend.dev>";
 
     console.log("Sending from:", fromAddress);
 

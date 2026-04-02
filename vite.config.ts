@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Fliesentechnik Tilger',
-        short_name: 'FT Tilger',
+        name: 'MONTI.PRO - Ihr Montagetischler',
+        short_name: 'MONTI.PRO',
         description: 'Baustellendokumentation und Zeiterfassung',
-        theme_color: '#CC0000',
+        theme_color: '#E08A20',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',

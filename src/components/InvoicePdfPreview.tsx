@@ -19,7 +19,7 @@ let cachedLogoDataUri: string | null = null;
 async function getLogoDataUri(): Promise<string | undefined> {
   if (cachedLogoDataUri) return cachedLogoDataUri;
   try {
-    const response = await fetch("/logo-tilger.png");
+    const response = await fetch("/Logo_transparentWhite__msi___png.webp");
     const blob = await response.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();

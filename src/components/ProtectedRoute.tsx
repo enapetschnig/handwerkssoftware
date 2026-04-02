@@ -59,7 +59,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <img src="/logo-tilger.png" alt="Fliesentechnik Tilger" className="h-16 mx-auto mb-4" />
+            <img src="/Logo_transparentWhite__msi___png.webp" alt="MONTI.PRO" className="h-16 mx-auto mb-4" />
             <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
               <Clock className="h-8 w-8 text-amber-600" />
             </div>

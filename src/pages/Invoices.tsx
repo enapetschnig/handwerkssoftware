@@ -79,9 +79,9 @@ export default function Invoices() {
   const [rechnungStartNr, setRechnungStartNr] = useState("1");
   const [angebotStartNr, setAngebotStartNr] = useState("1");
   const [savingSettings, setSavingSettings] = useState(false);
-  const [bankKontoinhaber, setBankKontoinhaber] = useState("Gottfried Tilger");
-  const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
-  const [bankBic, setBankBic] = useState("STSPAT2GXXX");
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("MONTI.PRO");
+  const [bankIban, setBankIban] = useState("");
+  const [bankBic, setBankBic] = useState("");
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createProjectForInvoiceId, setCreateProjectForInvoiceId] = useState<string | null>(null);
   const [createProjectDefaults, setCreateProjectDefaults] = useState({ name: "", customerName: "", customerId: null as string | null, adresse: "", plz: "", ort: "", email: "", telefon: "", uidNummer: "", anrede: "", titel: "" });
@@ -240,7 +240,7 @@ export default function Invoices() {
       ]);
       if (!inv) throw new Error("Rechnung nicht gefunden");
 
-      const bank = { kontoinhaber: "Gottfried Tilger", iban: bankIban, bic: bankBic };
+      const bank = { kontoinhaber: "MONTI.PRO", iban: bankIban, bic: bankBic };
       let firmenUid = "";
       if (bankSettings) {
         bankSettings.forEach((s: any) => {
@@ -254,7 +254,7 @@ export default function Invoices() {
       // Load logo
       let logoUri: string | undefined;
       try {
-        const resp = await fetch("/logo-tilger.png");
+        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
         const blob = await resp.blob();
         logoUri = await new Promise<string>((resolve) => {
           const r = new FileReader();
@@ -335,7 +335,7 @@ export default function Invoices() {
 
       let logoUri: string | undefined;
       try {
-        const resp = await fetch("/logo-tilger.png");
+        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
         const blob = await resp.blob();
         logoUri = await new Promise<string>((resolve) => {
           const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(blob);
@@ -737,7 +737,7 @@ export default function Invoices() {
                                     try {
                                       let logoUri: string | undefined;
                                       try {
-                                        const resp = await fetch("/logo-tilger.png");
+                                        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
                                         const blob = await resp.blob();
                                         logoUri = await new Promise<string>((resolve) => {
                                           const r = new FileReader();

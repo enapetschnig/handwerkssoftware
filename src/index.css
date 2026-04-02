@@ -9,105 +9,106 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Clean, modern base colors */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 12%;
+    --background: 30 20% 98%;
+    --foreground: 25 10% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 12%;
+    --card-foreground: 25 10% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 12%;
+    --popover-foreground: 25 10% 12%;
 
-    /* Fliesentilger Rot als Hauptfarbe */
-    --primary: 0 100% 40%;
+    /* MONTI.PRO Orange als Hauptfarbe */
+    --primary: 25 90% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Neutral gray as secondary */
-    --secondary: 0 0% 92%;
-    --secondary-foreground: 0 0% 20%;
+    /* Neutral warm gray as secondary */
+    --secondary: 25 8% 92%;
+    --secondary-foreground: 25 10% 20%;
 
-    --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 25 6% 94%;
+    --muted-foreground: 25 5% 45%;
 
-    /* Red accent matching Fliesentilger brand */
-    --accent: 0 85% 45%;
+    /* Orange accent matching MONTI.PRO brand */
+    --accent: 20 85% 45%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 88%;
-    --input: 0 0% 92%;
-    --ring: 0 100% 40%;
+    --border: 25 8% 88%;
+    --input: 25 8% 92%;
+    --ring: 25 90% 50%;
 
     --radius: 0.75rem;
 
-    /* Custom design tokens - Fliesentilger */
-    --tilger-red: 0 100% 40%;
-    --tilger-dark: 0 0% 10%;
-    --tilger-light: 0 80% 55%;
-    --neutral-gray: 0 0% 50%;
+    /* Custom design tokens - MONTI.PRO */
+    --monti-orange: 25 90% 50%;
+    --monti-dark: 20 15% 10%;
+    --monti-light: 30 85% 60%;
+    --monti-red: 10 80% 45%;
+    --neutral-gray: 25 5% 50%;
 
     /* Shadows */
-    --shadow-soft: 0 2px 8px hsl(0 0% 15% / 0.08);
-    --shadow-medium: 0 4px 16px hsl(0 0% 15% / 0.12);
+    --shadow-soft: 0 2px 8px hsl(25 10% 15% / 0.08);
+    --shadow-medium: 0 4px 16px hsl(25 10% 15% / 0.12);
 
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 25 10% 98%;
 
     --sidebar-foreground: 240 5.3% 26.1%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary: 25 15% 10%;
 
     --sidebar-primary-foreground: 0 0% 98%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent: 25 8% 95%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-accent-foreground: 25 15% 10%;
 
-    --sidebar-border: 220 13% 91%;
+    --sidebar-border: 25 10% 91%;
 
-    --sidebar-ring: 0 100% 40%;
+    --sidebar-ring: 25 90% 50%;
   }
 
   .dark {
-    --background: 0 0% 10%;
-    --foreground: 0 0% 95%;
+    --background: 25 10% 10%;
+    --foreground: 25 5% 95%;
 
-    --card: 0 0% 14%;
-    --card-foreground: 0 0% 95%;
+    --card: 25 8% 14%;
+    --card-foreground: 25 5% 95%;
 
-    --popover: 0 0% 14%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 25 8% 14%;
+    --popover-foreground: 25 5% 95%;
 
-    --primary: 0 85% 50%;
+    --primary: 25 85% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 22%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 25 5% 22%;
+    --secondary-foreground: 25 5% 95%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 25 5% 18%;
+    --muted-foreground: 25 5% 60%;
 
-    --accent: 0 85% 50%;
+    --accent: 25 85% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 0 85% 50%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 25 5% 22%;
+    --input: 25 5% 22%;
+    --ring: 25 85% 55%;
+    --sidebar-background: 25 10% 10%;
+    --sidebar-foreground: 25 5% 95%;
+    --sidebar-primary: 25 76% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 0 85% 50%;
+    --sidebar-accent: 25 5% 16%;
+    --sidebar-accent-foreground: 25 5% 95%;
+    --sidebar-border: 25 5% 16%;
+    --sidebar-ring: 25 85% 55%;
   }
 }
 

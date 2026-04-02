@@ -69,11 +69,11 @@ Deno.serve(async (req) => {
     }
 
     // Generate registration link
-    const appUrl = Deno.env.get('APP_URL') || 'https://fliesentilger.app';
+    const appUrl = Deno.env.get('APP_URL') || 'https://monti.pro';
     const registrationLink = `${appUrl}/auth`;
 
     // Compose SMS message
-    const smsText = `Willkommen bei Fliesentechnik Tilger! Bitte registriere dich in unserer Mitarbeiter-App:\n${registrationLink}`;
+    const smsText = `Willkommen bei MONTI.PRO! Bitte registriere dich in unserer Mitarbeiter-App:\n${registrationLink}`;
 
     console.log('Sending SMS via Twilio...');
 

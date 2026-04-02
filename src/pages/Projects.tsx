@@ -371,8 +371,8 @@ const Projects = () => {
                 <Home className="h-5 w-5" />
               </Button>
               <img
-                src="/logo-tilger.png"
-                alt="Fliesentechnik Tilger"
+                src="/Logo_transparentWhite__msi___png.webp"
+                alt="MONTI.PRO"
                 className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
                 onClick={() => navigate("/")}
               />

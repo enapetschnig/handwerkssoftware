@@ -30,8 +30,8 @@ import InvoiceDetail from "./pages/InvoiceDetail";
 import InvoiceTemplates from "./pages/InvoiceTemplates";
 import Customers from "./pages/Customers";
 import OfferPackages from "./pages/OfferPackages";
-import MaterialWithdraw from "./pages/MaterialWithdraw";
-import LieferscheinDetail from "./pages/LieferscheinDetail";
+import ScheduleBoard from "./pages/ScheduleBoard";
+import Calendar from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
 // Wrapper that forces re-mount when id or query params change
@@ -91,10 +91,9 @@ function AppContent() {
         <Route path="/invoices/new" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
         <Route path="/materials" element={<ProtectedRoute><InvoiceTemplates /></ProtectedRoute>} />
-        <Route path="/material-withdraw" element={<ProtectedRoute><MaterialWithdraw /></ProtectedRoute>} />
-        <Route path="/material" element={<ProtectedRoute><MaterialWithdraw /></ProtectedRoute>} />
-        <Route path="/material/:id" element={<ProtectedRoute><LieferscheinDetail /></ProtectedRoute>} />
         <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+        <Route path="/schedule" element={<ProtectedRoute><ScheduleBoard /></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 

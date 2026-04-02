@@ -22,7 +22,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     console.log(`Processing material file, type: ${fileType}, content length: ${fileContent.length}`);
 
-    const systemPrompt = `Du bist ein Assistent für Materialverwaltung in einem Handwerksbetrieb (Fliesentechnik).
+    const systemPrompt = `Du bist ein Assistent für Materialverwaltung in einem Handwerksbetrieb (Montagetischlerei).
 Der Benutzer hat eine Datei (${fileType}) mit Materialien hochgeladen.
 Extrahiere aus dem Inhalt eine Liste von Materialien mit folgenden Feldern:
 - name: Materialname (z.B. "Fliesen 30x60 anthrazit")

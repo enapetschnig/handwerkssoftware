@@ -293,9 +293,9 @@ export default function HoursReport() {
 
     const worksheetData: any[][] = [
       // Firmendaten Header
-      ["Fliesentechnik Tilger", "", "", "", "", "", "", "", "", "", "", ""],
-      ["Bahnhofstr. 174, 8831 Niederwölz", "", "", "", "", "", "", "", "", "", "", ""],
-      ["E-Mail: info@ft-tilger.at", "", "", "", "", "", "", "", "", "", "", ""],
+      ["MONTI.PRO - Ihr Montagetischler", "", "", "", "", "", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["Dienstnehmer:", "", employeeName, "", "", "", "", "", "Monat:", `${monthNamesShort[month - 1]}-${year.toString().slice(-2)}`, "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],

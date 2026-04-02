@@ -1004,7 +1004,7 @@ export default function InvoiceDetail() {
         const { generateStornoPdf } = await import("@/lib/pdfGenerator");
         let logoUri: string | undefined;
         try {
-          const resp = await fetch("/logo-tilger.png");
+          const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
           const blob = await resp.blob();
           logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
         } catch {}
@@ -1088,7 +1088,7 @@ export default function InvoiceDetail() {
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                       let logoUri: string | undefined;
                       try {
-                        const resp = await fetch("/logo-tilger.png");
+                        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
                         const blob = await resp.blob();
                         logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                       } catch {}
@@ -1152,12 +1152,12 @@ export default function InvoiceDetail() {
                           // Generate Mahnung PDF
                           let logoUri: string | undefined;
                           try {
-                            const resp = await fetch("/logo-tilger.png");
+                            const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
                             const blob = await resp.blob();
                             logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                           } catch {}
                           const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                          const bank = { kontoinhaber: "Gottfried Tilger", iban: "AT61 2081 5000 0423 1474", bic: "STSPAT2GXXX" };
+                          const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
                           bankSettings?.forEach((s: any) => {
                             if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
                             if (s.key === "bank_iban") bank.iban = s.value;
@@ -1361,12 +1361,12 @@ export default function InvoiceDetail() {
                           try {
                             let logoUri: string | undefined;
                             try {
-                              const resp = await fetch("/logo-tilger.png");
+                              const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
                               const blob = await resp.blob();
                               logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                             } catch {}
                             const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                            const bank = { kontoinhaber: "Gottfried Tilger", iban: "AT61 2081 5000 0423 1474", bic: "STSPAT2GXXX" };
+                            const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
                             bankSettings?.forEach((s: any) => {
                               if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
                               if (s.key === "bank_iban") bank.iban = s.value;
@@ -2130,7 +2130,7 @@ export default function InvoiceDetail() {
               <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/logo-tilger.png");
+                  const logoResp = await fetch("/Logo_transparentWhite__msi___png.webp");
                   const logoBlob = await logoResp.blob();
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
                   const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
@@ -2653,7 +2653,7 @@ export default function InvoiceDetail() {
                 // Generate and download Storno-PDF
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/logo-tilger.png");
+                  const logoResp = await fetch("/Logo_transparentWhite__msi___png.webp");
                   const logoBlob = await logoResp.blob();
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
 

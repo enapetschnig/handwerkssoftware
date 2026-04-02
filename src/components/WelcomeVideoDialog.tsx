@@ -27,7 +27,7 @@ export function WelcomeVideoDialog({
           <DialogTitle>
             {isReplay 
               ? "App zum Startbildschirm hinzufügen" 
-              : "Willkommen bei der Fliesentilger App"}
+              : "Willkommen bei MONTI.PRO"}
           </DialogTitle>
           <DialogDescription>
             In diesem Video zeigen wir Ihnen, wie Sie die App auf Ihrem 

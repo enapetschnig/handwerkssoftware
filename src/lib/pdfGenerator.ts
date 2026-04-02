@@ -3,9 +3,9 @@ import autoTable from "jspdf-autotable";
 import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
 
 const DEFAULT_BANK: BankData = {
-  kontoinhaber: "Gottfried Tilger",
-  iban: "AT61 2081 5000 0423 1474",
-  bic: "STSPAT2GXXX",
+  kontoinhaber: "MONTI.PRO",
+  iban: "",
+  bic: "",
 };
 
 function fmt(val: number): string {
@@ -61,14 +61,14 @@ export async function generateInvoicePdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Bahnhofstr. 174", pageWidth - mr, y + 7, { align: "right" });
-  pdf.text("8831 Niederwölz", pageWidth - mr, y + 12, { align: "right" });
-  pdf.text("Tel: +43 664 44 35 346", pageWidth - mr, y + 17, { align: "right" });
-  pdf.text("info@ft-tilger.at", pageWidth - mr, y + 22, { align: "right" });
+  pdf.text("Adresse", pageWidth - mr, y + 7, { align: "right" });
+  pdf.text("PLZ Ort", pageWidth - mr, y + 12, { align: "right" });
+  pdf.text("Tel: Telefon", pageWidth - mr, y + 17, { align: "right" });
+  pdf.text("info@monti.pro", pageWidth - mr, y + 22, { align: "right" });
   if (firmenUid) {
     pdf.setFontSize(8);
     pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 27, { align: "right" });
@@ -84,7 +84,7 @@ export async function generateInvoicePdf(
   // Sender line
   pdf.setFontSize(7);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz", ml, y);
+  pdf.text("MONTI.PRO \u00B7 Adresse \u00B7 PLZ Ort", ml, y);
   pdf.setDrawColor(180, 180, 180);
   pdf.line(ml, y + 1.5, ml + 72, y + 1.5);
   y += 6;
@@ -154,7 +154,7 @@ export async function generateInvoicePdf(
   pdf.setTextColor(0, 0, 0);
   pdf.text(`${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}`, ml, y);
   y += 2;
-  pdf.setDrawColor(204, 0, 0);
+  pdf.setDrawColor(224, 138, 32);
   pdf.setLineWidth(0.8);
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
@@ -520,7 +520,7 @@ export async function generateInvoicePdf(
     pdf.setPage(i);
     const fy = pageHeight - 22; // Higher up to avoid printer clipping
 
-    pdf.setDrawColor(204, 0, 0);
+    pdf.setDrawColor(224, 138, 32);
     pdf.setLineWidth(0.3);
     pdf.line(ml, fy, pageWidth - mr, fy);
 
@@ -528,7 +528,7 @@ export async function generateInvoicePdf(
     pdf.setFontSize(7);
     pdf.setTextColor(0, 0, 0);
     pdf.text(
-      "Gottfried Tilger \u00B7 Fliesentechnik & Natursteinteppich \u00B7 Bahnhofstr. 174 \u00B7 8831 Niederwölz \u00B7 +43 664 44 35 346 \u00B7 info@ft-tilger.at",
+      "MONTI.PRO \u00B7 Ihr Montagetischler \u00B7 Adresse \u00B7 PLZ Ort \u00B7 Telefon \u00B7 info@monti.pro",
       pageWidth / 2, fy + 4, { align: "center" }
     );
     pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, fy + 8, { align: "center" });
@@ -564,22 +564,22 @@ export function generateStornoPdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(7.5);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Bahnhofstr. 174 · 8831 Niederwölz", pageWidth - mr, y + 6, { align: "right" });
-  pdf.text("+43 664 44 35 346 · info@ft-tilger.at", pageWidth - mr, y + 10, { align: "right" });
+  pdf.text("Adresse · PLZ Ort", pageWidth - mr, y + 6, { align: "right" });
+  pdf.text("Telefon · info@monti.pro", pageWidth - mr, y + 10, { align: "right" });
 
   y += 30;
 
   // Red "STORNO" header
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
-  pdf.setTextColor(204, 0, 0);
+  pdf.setTextColor(224, 138, 32);
   pdf.text("STORNO", ml, y);
   y += 4;
-  pdf.setDrawColor(204, 0, 0);
+  pdf.setDrawColor(224, 138, 32);
   pdf.setLineWidth(1);
   pdf.line(ml, y, pageWidth - mr, y);
   y += 10;
@@ -632,13 +632,13 @@ export function generateStornoPdf(
 
   // Footer
   const fy = pageHeight - 22;
-  pdf.setDrawColor(204, 0, 0);
+  pdf.setDrawColor(224, 138, 32);
   pdf.setLineWidth(0.3);
   pdf.line(ml, fy, pageWidth - mr, fy);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174 · 8831 Niederwölz · +43 664 44 35 346 · info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
+  pdf.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · Telefon · info@monti.pro", pageWidth / 2, fy + 4, { align: "center" });
   pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
 
   return pdf.output("blob");
@@ -667,17 +667,17 @@ export function generateMahnungPdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger", pageWidth - mr, y + 2, { align: "right" });
+  pdf.text("MONTI.PRO", pageWidth - mr, y + 2, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(7.5);
-  pdf.text("Bahnhofstr. 174 · 8831 Niederwölz", pageWidth - mr, y + 6, { align: "right" });
-  pdf.text("+43 664 44 35 346 · info@ft-tilger.at", pageWidth - mr, y + 10, { align: "right" });
+  pdf.text("Adresse · PLZ Ort", pageWidth - mr, y + 6, { align: "right" });
+  pdf.text("Telefon · info@monti.pro", pageWidth - mr, y + 10, { align: "right" });
 
   y += 25;
 
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger · Bahnhofstr. 174 · 8831 Niederwölz", ml, y);
+  pdf.text("MONTI.PRO · Adresse · PLZ Ort", ml, y);
   pdf.setDrawColor(200, 200, 200);
   pdf.setLineWidth(0.2);
   pdf.line(ml, y + 1, ml + 85, y + 1);
@@ -766,16 +766,16 @@ export function generateMahnungPdf(
   pdf.setFontSize(10);
   pdf.text("Mit freundlichen Grüßen", ml, y); y += 5;
   pdf.setFont("helvetica", "bold");
-  pdf.text("Gottfried Tilger", ml, y);
+  pdf.text("MONTI.PRO", ml, y);
 
   const fy = pageHeight - 22;
-  pdf.setDrawColor(204, 0, 0);
+  pdf.setDrawColor(224, 138, 32);
   pdf.setLineWidth(0.3);
   pdf.line(ml, fy, pageWidth - mr, fy);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Gottfried Tilger · Fliesentechnik & Natursteinteppich · Bahnhofstr. 174 · 8831 Niederwölz · +43 664 44 35 346 · info@ft-tilger.at", pageWidth / 2, fy + 4, { align: "center" });
+  pdf.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · Telefon · info@monti.pro", pageWidth / 2, fy + 4, { align: "center" });
   pdf.text(`IBAN: ${bank.iban} · BIC: ${bank.bic}`, pageWidth / 2, fy + 7.5, { align: "center" });
 
   return pdf.output("blob");

@@ -20,6 +20,8 @@ import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
 import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
+import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
+import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 
 type Profile = {
   id: string;
@@ -101,9 +103,9 @@ export default function Admin() {
 
   // App settings states
   const [regiereportEmail, setRegiereportEmail] = useState("");
-  const [bankKontoinhaber, setBankKontoinhaber] = useState("Gottfried Tilger");
-  const [bankIban, setBankIban] = useState("AT61 2081 5000 0423 1474");
-  const [bankBic, setBankBic] = useState("STSPAT2GXXX");
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("MONTI.PRO");
+  const [bankIban, setBankIban] = useState("");
+  const [bankBic, setBankBic] = useState("");
   const [firmenUid, setFirmenUid] = useState("");
   const [einheitenStr, setEinheitenStr] = useState("Stk.,m²,lfm,Std.,Pauschal,kg,Liter,Tube,Sack,Karton,Palette,Rolle,Dose,Eimer");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -597,8 +599,8 @@ export default function Admin() {
               <span className="hidden sm:inline">Zurück</span>
             </Button>
             <img 
-              src="/logo-tilger.png"
-              alt="Fliesentechnik Tilger"
+              src="/Logo_transparentWhite__msi___png.webp"
+              alt="MONTI.PRO"
               className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain" 
               onClick={() => navigate("/")}
             />
@@ -1074,6 +1076,12 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ===== WHATSAPP EINSTELLUNGEN ===== */}
+        <WhatsAppAdminSettings />
+
+        {/* ===== PLANTAFEL-FARBEN ===== */}
+        <EmployeeColorSettings />
 
       </main>
 

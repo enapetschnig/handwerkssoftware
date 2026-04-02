@@ -70,7 +70,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
       // Load logo
       let logoUri: string | undefined;
       try {
-        const resp = await fetch("/logo-tilger.png");
+        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
         const blob = await resp.blob();
         logoUri = await new Promise<string>((resolve) => {
           const r = new FileReader();

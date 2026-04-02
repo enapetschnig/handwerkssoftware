@@ -158,8 +158,8 @@ const MyHours = () => {
               <ArrowLeft className="h-4 w-4 mr-2" />Zurück
             </Button>
             <img 
-              src="/logo-tilger.png"
-              alt="Fliesentechnik Tilger"
+              src="/Logo_transparentWhite__msi___png.webp"
+              alt="MONTI.PRO"
               className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain" 
               onClick={() => navigate("/")}
             />

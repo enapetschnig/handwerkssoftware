@@ -225,7 +225,7 @@ const Reports = () => {
           </table>
           
           <div class="footer">
-            <p>Fliesentechnik Tilger - Stundenauswertung</p>
+            <p>MONTI.PRO - Stundenauswertung</p>
           </div>
         </body>
         </html>
