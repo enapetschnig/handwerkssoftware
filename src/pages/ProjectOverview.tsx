@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp, Pencil, Check } from "lucide-react";
+import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp, Pencil, Check, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +29,15 @@ const ProjectOverview = () => {
   const [projectName, setProjectName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "", beschreibung: "", adresse: "", plz: "", ort: "",
+    customer_id: null as string | null, kunde_name: "", kunde_anrede: "", kunde_titel: "",
+    kunde_adresse: "", kunde_plz: "", kunde_ort: "", kunde_email: "", kunde_telefon: "", kunde_uid: "",
+  });
+  const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
+  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [lieferscheinCount, setLieferscheinCount] = useState(0);
   const [invoiceCount, setInvoiceCount] = useState(0);
@@ -97,6 +112,115 @@ const ProjectOverview = () => {
       .maybeSingle();
 
     setIsAdmin(!!data);
+  };
+
+  const openEditDialog = async () => {
+    if (!projectId) return;
+    // Load project
+    const { data: proj } = await supabase.from("projects").select("*").eq("id", projectId).single();
+    if (!proj) return;
+    // Parse adresse (stored as "street, plz, city")
+    const parts = (proj.adresse || "").split(",").map((s: string) => s.trim());
+    // Load customer
+    let kunde: any = {};
+    if (proj.customer_id) {
+      const { data: c } = await supabase.from("customers").select("*").eq("id", proj.customer_id).single();
+      if (c) kunde = c;
+    }
+    // Load customer list
+    const { data: custs } = await supabase.from("customers").select("id, name, plz, ort").order("name");
+    setCustomers(custs || []);
+    setEditForm({
+      name: proj.name || "",
+      beschreibung: proj.beschreibung || "",
+      adresse: kunde.adresse || parts[0] || "",
+      plz: proj.plz || kunde.plz || parts[1] || "",
+      ort: kunde.ort || parts[2] || "",
+      customer_id: proj.customer_id || null,
+      kunde_name: kunde.name || "",
+      kunde_anrede: kunde.anrede || "",
+      kunde_titel: kunde.titel || "",
+      kunde_adresse: kunde.adresse || parts[0] || "",
+      kunde_plz: kunde.plz || proj.plz || "",
+      kunde_ort: kunde.ort || "",
+      kunde_email: kunde.email || "",
+      kunde_telefon: kunde.telefon || "",
+      kunde_uid: kunde.uid_nummer || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!projectId || !editForm.name.trim()) return;
+    setEditSaving(true);
+    // Update project
+    const adresseStr = [editForm.kunde_adresse, editForm.kunde_plz, editForm.kunde_ort].filter(Boolean).join(", ");
+    await supabase.from("projects").update({
+      name: editForm.name.trim(),
+      beschreibung: editForm.beschreibung.trim() || null,
+      adresse: adresseStr || null,
+      plz: editForm.kunde_plz.trim() || null,
+      customer_id: editForm.customer_id,
+    }).eq("id", projectId);
+    // Update or create customer
+    if (editForm.customer_id && editForm.kunde_name.trim()) {
+      await supabase.from("customers").update({
+        name: editForm.kunde_name.trim(),
+        anrede: editForm.kunde_anrede || null,
+        titel: editForm.kunde_titel.trim() || null,
+        adresse: editForm.kunde_adresse.trim() || null,
+        plz: editForm.kunde_plz.trim() || null,
+        ort: editForm.kunde_ort.trim() || null,
+        email: editForm.kunde_email.trim() || null,
+        telefon: editForm.kunde_telefon.trim() || null,
+        uid_nummer: editForm.kunde_uid.trim() || null,
+      }).eq("id", editForm.customer_id);
+    } else if (!editForm.customer_id && editForm.kunde_name.trim()) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: newCust } = await supabase.from("customers").insert({
+          user_id: user.id,
+          name: editForm.kunde_name.trim(),
+          anrede: editForm.kunde_anrede || null,
+          titel: editForm.kunde_titel.trim() || null,
+          adresse: editForm.kunde_adresse.trim() || null,
+          plz: editForm.kunde_plz.trim() || null,
+          ort: editForm.kunde_ort.trim() || null,
+          email: editForm.kunde_email.trim() || null,
+          telefon: editForm.kunde_telefon.trim() || null,
+          uid_nummer: editForm.kunde_uid.trim() || null,
+        }).select("id").single();
+        if (newCust) {
+          await supabase.from("projects").update({ customer_id: newCust.id }).eq("id", projectId);
+        }
+      }
+    }
+    setProjectName(editForm.name.trim());
+    setEditSaving(false);
+    setEditDialogOpen(false);
+    toast({ title: "Projekt aktualisiert" });
+  };
+
+  const selectCustomerForEdit = (c: { id: string; name: string; plz: string | null; ort: string | null }) => {
+    // Load full customer data
+    supabase.from("customers").select("*").eq("id", c.id).single().then(({ data }) => {
+      if (data) {
+        setEditForm(f => ({
+          ...f,
+          customer_id: data.id,
+          kunde_name: data.name,
+          kunde_anrede: (data as any).anrede || "",
+          kunde_titel: (data as any).titel || "",
+          kunde_adresse: data.adresse || "",
+          kunde_plz: data.plz || "",
+          kunde_ort: data.ort || "",
+          kunde_email: data.email || "",
+          kunde_telefon: data.telefon || "",
+          kunde_uid: data.uid_nummer || "",
+        }));
+      }
+    });
+    setCustomerPopoverOpen(false);
   };
 
   const fetchProjectName = async () => {
@@ -242,6 +366,10 @@ const ProjectOverview = () => {
                 <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => { setEditNameValue(projectName); setEditingName(true); }}>
                   <Pencil className="h-4 w-4 text-muted-foreground" />
                 </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={openEditDialog}>
+                  <Settings className="h-3.5 w-3.5" />
+                  Bearbeiten
+                </Button>
               </>
             )}
           </div>
@@ -366,6 +494,124 @@ const ProjectOverview = () => {
           <ImagePlus className="h-6 w-6" />
         </Button>
       </main>
+
+      {/* Projekt bearbeiten Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Projekt bearbeiten</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Projektname *</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Beschreibung</Label>
+              <Textarea value={editForm.beschreibung} onChange={(e) => setEditForm(f => ({ ...f, beschreibung: e.target.value }))} rows={2} />
+            </div>
+
+            {/* Kunde */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-base font-semibold">Kunde</Label>
+                {editForm.customer_id && <span className="text-xs text-green-600 font-medium">Verknüpft</span>}
+              </div>
+              <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start gap-2 mb-3">
+                    <Pencil className="w-4 h-4" />
+                    {editForm.kunde_name || "Kunde auswählen..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[350px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Kunde suchen..." />
+                    <CommandList>
+                      <CommandEmpty>Kein Kunde gefunden</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map(c => (
+                          <CommandItem key={c.id} value={c.name} onSelect={() => selectCustomerForEdit(c)}>
+                            <div>
+                              <p className="font-medium text-sm">{c.name}</p>
+                              {c.ort && <p className="text-xs text-muted-foreground">{c.plz} {c.ort}</p>}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {editForm.customer_id && (
+                <button className="text-xs text-muted-foreground underline mb-3" onClick={() => setEditForm(f => ({ ...f, customer_id: null, kunde_name: "", kunde_anrede: "", kunde_titel: "", kunde_adresse: "", kunde_plz: "", kunde_ort: "", kunde_email: "", kunde_telefon: "", kunde_uid: "" }))}>
+                  Verknüpfung lösen
+                </button>
+              )}
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Anrede</Label>
+                    <Select value={editForm.kunde_anrede || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, kunde_anrede: v === "none" ? "" : v }))}>
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="Herr">Herr</SelectItem>
+                        <SelectItem value="Frau">Frau</SelectItem>
+                        <SelectItem value="Firma">Firma</SelectItem>
+                        <SelectItem value="Familie">Familie</SelectItem>
+                        <SelectItem value="Divers">Divers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Titel</Label>
+                    <Input value={editForm.kunde_titel} onChange={(e) => setEditForm(f => ({ ...f, kunde_titel: e.target.value }))} placeholder="Mag., Dr." />
+                  </div>
+                  <div>
+                    <Label>Firma / Name</Label>
+                    <Input value={editForm.kunde_name} onChange={(e) => setEditForm(f => ({ ...f, kunde_name: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Adresse</Label>
+                  <Input value={editForm.kunde_adresse} onChange={(e) => setEditForm(f => ({ ...f, kunde_adresse: e.target.value }))} placeholder="Straße + Hausnr." />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>PLZ</Label>
+                    <Input value={editForm.kunde_plz} onChange={(e) => setEditForm(f => ({ ...f, kunde_plz: e.target.value }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Ort</Label>
+                    <Input value={editForm.kunde_ort} onChange={(e) => setEditForm(f => ({ ...f, kunde_ort: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>E-Mail</Label>
+                    <Input value={editForm.kunde_email} onChange={(e) => setEditForm(f => ({ ...f, kunde_email: e.target.value }))} type="email" />
+                  </div>
+                  <div>
+                    <Label>Telefon</Label>
+                    <Input value={editForm.kunde_telefon} onChange={(e) => setEditForm(f => ({ ...f, kunde_telefon: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label>UID-Nummer</Label>
+                  <Input value={editForm.kunde_uid} onChange={(e) => setEditForm(f => ({ ...f, kunde_uid: e.target.value }))} placeholder="ATU..." />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleEditSave} disabled={editSaving || !editForm.name.trim()}>
+              {editSaving ? "Speichert..." : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
