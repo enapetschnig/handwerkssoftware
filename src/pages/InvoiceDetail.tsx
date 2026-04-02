@@ -52,6 +52,7 @@ interface InvoiceItem {
   menge: number;
   einheit: string;
   einzelpreis: number;
+  rabatt_prozent?: number;
   gesamtpreis: number;
 }
 
@@ -287,6 +288,7 @@ export default function InvoiceDetail() {
               menge: it.menge || 1,
               einheit: it.einheit || "Stk.",
               einzelpreis: it.einzelpreis || 0,
+              rabatt_prozent: it.rabatt_prozent || 0,
               gesamtpreis: it.gesamtpreis || 0,
             })));
           }
@@ -386,6 +388,7 @@ export default function InvoiceDetail() {
         menge: Number(it.menge),
         einheit: it.einheit || "Stk.",
         einzelpreis: Number(it.einzelpreis),
+        rabatt_prozent: Number((it as any).rabatt_prozent) || 0,
         gesamtpreis: Number(it.gesamtpreis),
       })));
     }
@@ -414,6 +417,7 @@ export default function InvoiceDetail() {
       menge: 1,
       einheit: "Stk.",
       einzelpreis: 0,
+      rabatt_prozent: 0,
       gesamtpreis: 0,
     }]);
   };
@@ -428,6 +432,7 @@ export default function InvoiceDetail() {
       menge: 1,
       einheit: t.einheit,
       einzelpreis: netto,
+      rabatt_prozent: 0,
       gesamtpreis: netto,
     };
     setItems(prev => mergeItems(prev, [newItem]));
@@ -444,9 +449,13 @@ export default function InvoiceDetail() {
       const updated = [...prev];
       // Prevent negative menge/einzelpreis
       if ((field === "menge" || field === "einzelpreis") && Number(value) < 0) value = 0;
+      if (field === "rabatt_prozent") value = Math.max(0, Math.min(100, Number(value) || 0));
       (updated[index] as any)[field] = value;
-      if (field === "menge" || field === "einzelpreis") {
-        updated[index].gesamtpreis = Math.round(Number(updated[index].menge) * Number(updated[index].einzelpreis) * 100) / 100;
+      if (field === "menge" || field === "einzelpreis" || field === "rabatt_prozent") {
+        const m = Number(updated[index].menge);
+        const p = Number(updated[index].einzelpreis);
+        const r = Number(updated[index].rabatt_prozent) || 0;
+        updated[index].gesamtpreis = Math.round(m * p * (1 - r / 100) * 100) / 100;
       }
       return updated;
     });
@@ -1542,6 +1551,7 @@ export default function InvoiceDetail() {
                       <SelectItem value="Frau">Frau</SelectItem>
                       <SelectItem value="Firma">Firma</SelectItem>
                       <SelectItem value="Divers">Divers</SelectItem>
+                      <SelectItem value="Familie">Familie</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1827,6 +1837,10 @@ export default function InvoiceDetail() {
                         <TrendingUp className="w-4 h-4" />
                         Aus Projekt
                       </Button>
+                      <Button onClick={() => setImportLieferscheinOpen(true)} variant="outline" size="sm" className="gap-1">
+                        <Package className="w-4 h-4" />
+                        Aus Lieferschein
+                      </Button>
                     </>
                   )}
                   <Button onClick={() => setTemplateDialogOpen(true)} variant="outline" size="sm" className="gap-1">
@@ -1852,6 +1866,7 @@ export default function InvoiceDetail() {
                       <TableHead className="w-28">Menge</TableHead>
                       <TableHead className="w-24">Einheit</TableHead>
                       <TableHead className="w-32">Preis (netto) €</TableHead>
+                      <TableHead className="w-20">Rabatt %</TableHead>
                       <TableHead className="w-28 text-right">Gesamt (netto) €</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
@@ -1899,6 +1914,9 @@ export default function InvoiceDetail() {
                         <TableCell>
                           <Input type="number" value={item.einzelpreis} onChange={(e) => updateItem(idx, "einzelpreis", Number(e.target.value))} min={0} step={0.01} className="text-right" />
                         </TableCell>
+                        <TableCell>
+                          <Input type="number" value={item.rabatt_prozent || ""} onChange={(e) => updateItem(idx, "rabatt_prozent", Number(e.target.value))} min={0} max={100} step={0.5} className="text-right" placeholder="0" />
+                        </TableCell>
                         <TableCell className="text-right font-medium">
                           € {item.gesamtpreis.toFixed(2)}
                         </TableCell>
@@ -1913,7 +1931,7 @@ export default function InvoiceDetail() {
                     ))}
                     {!isLocked && (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-1">
+                        <TableCell colSpan={8} className="py-1">
                           <Button onClick={addItem} variant="ghost" size="sm" className="gap-1 text-muted-foreground">
                             <Plus className="w-3.5 h-3.5" />
                             Position hinzufügen
@@ -1924,13 +1942,13 @@ export default function InvoiceDetail() {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-right">Positionen Netto</TableCell>
+                      <TableCell colSpan={6} className="text-right">Positionen Netto</TableCell>
                       <TableCell className="text-right font-medium">€ {positionenNetto.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>
                     {rabattWert > 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-right text-orange-600">
+                        <TableCell colSpan={6} className="text-right text-orange-600">
                           Rabatt {form.rabatt_prozent > 0 ? `(${form.rabatt_prozent}%)` : ""}
                         </TableCell>
                         <TableCell className="text-right text-orange-600">- € {rabattWert.toFixed(2)}</TableCell>
@@ -1938,17 +1956,17 @@ export default function InvoiceDetail() {
                       </TableRow>
                     )}
                     <TableRow>
-                      <TableCell colSpan={5} className="text-right">Netto</TableCell>
+                      <TableCell colSpan={6} className="text-right">Netto</TableCell>
                       <TableCell className="text-right font-medium">€ {nettoSumme.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-right">MwSt ({form.mwst_satz}%)</TableCell>
+                      <TableCell colSpan={6} className="text-right">MwSt ({form.mwst_satz}%)</TableCell>
                       <TableCell className="text-right">€ {mwstBetrag.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-right font-bold text-lg">Brutto</TableCell>
+                      <TableCell colSpan={6} className="text-right font-bold text-lg">Brutto</TableCell>
                       <TableCell className="text-right font-bold text-lg">€ {bruttoSumme.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>

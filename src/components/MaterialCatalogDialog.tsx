@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Package, ShoppingCart, Plus, Minus, X } from "lucide-react";
 
@@ -30,7 +29,6 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeKategorie, setActiveKategorie] = useState<string | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedEntry>>(new Map());
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +36,6 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
     if (open) {
       fetchItems();
       setSearch("");
-      setActiveKategorie(null);
       setSelected(new Map());
     }
   }, [open]);
@@ -64,12 +61,9 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
 
   const s = search.toLowerCase();
   const filtered = items.filter(i => {
-    if (activeKategorie && (i.produktgruppe || "Allgemein") !== activeKategorie) return false;
     if (!s) return true;
     return (i.kurzbezeichnung || "").toLowerCase().includes(s) || i.name.toLowerCase().includes(s) || (i.produktgruppe || "").toLowerCase().includes(s);
   });
-
-  const kategorien = Array.from(new Set(items.map(i => i.produktgruppe || "Allgemein"))).sort();
 
   const grouped = new Map<string, CatalogItem[]>();
   filtered.forEach(i => {
@@ -129,32 +123,6 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
               autoFocus
             />
           </div>
-
-          {/* Category filter */}
-          {kategorien.length > 1 && (
-            <div className="flex gap-1.5 flex-wrap">
-              <Badge
-                variant={activeKategorie === null ? "default" : "outline"}
-                className="cursor-pointer text-xs"
-                onClick={() => setActiveKategorie(null)}
-              >
-                Alle ({items.length})
-              </Badge>
-              {kategorien.map(k => {
-                const count = items.filter(i => (i.produktgruppe || "Allgemein") === k).length;
-                return (
-                  <Badge
-                    key={k}
-                    variant={activeKategorie === k ? "default" : "outline"}
-                    className="cursor-pointer text-xs"
-                    onClick={() => setActiveKategorie(activeKategorie === k ? null : k)}
-                  >
-                    {k} ({count})
-                  </Badge>
-                );
-              })}
-            </div>
-          )}
 
           {/* Material list — mit inline Mengen-Steuerung */}
           <div className="overflow-y-auto flex-1 space-y-3 min-h-0">

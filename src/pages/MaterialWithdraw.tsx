@@ -115,9 +115,15 @@ export default function MaterialWithdraw() {
     }));
   };
 
+  const canCreate = newProjectId !== "none" || newName.trim().length > 0;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUserId) return;
+    if (!canCreate) {
+      toast({ variant: "destructive", title: "Bitte Projekt auswählen oder Name eingeben" });
+      return;
+    }
     setSubmitting(true);
 
     const { data, error } = await supabase
@@ -183,11 +189,11 @@ export default function MaterialWithdraw() {
               <form onSubmit={handleCreate} className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium">Name (optional)</label>
+                    <label className="text-sm font-medium">Name {newProjectId === "none" ? "*" : "(optional)"}</label>
                     <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="z.B. Badezimmer EG" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Projekt (optional)</label>
+                    <label className="text-sm font-medium">Projekt {!newName.trim() ? "*" : "(optional)"}</label>
                     <Select value={newProjectId} onValueChange={setNewProjectId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -201,10 +207,10 @@ export default function MaterialWithdraw() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2.5">
                   <Info className="h-4 w-4 text-blue-500 shrink-0" />
-                  <span>Wähle ein Projekt aus, um die Angebotspositionen automatisch zu laden. Bei reiner Materialabholung einfach „Kein Projekt" auswählen.</span>
+                  <span>Projekt oder Name ist erforderlich. Wähle ein Projekt, um Angebotspositionen automatisch zu laden.</span>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={submitting} className="bg-orange-600 hover:bg-orange-700">
+                  <Button type="submit" disabled={submitting || !canCreate} className="bg-orange-600 hover:bg-orange-700">
                     {submitting ? "Erstellt..." : "Erstellen & öffnen"}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Abbrechen</Button>

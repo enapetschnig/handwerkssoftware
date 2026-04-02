@@ -544,6 +544,7 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
               <SelectItem value="Frau">Frau</SelectItem>
               <SelectItem value="Firma">Firma</SelectItem>
               <SelectItem value="Divers">Divers</SelectItem>
+              <SelectItem value="Familie">Familie</SelectItem>
             </SelectContent>
           </Select>
         </div>
