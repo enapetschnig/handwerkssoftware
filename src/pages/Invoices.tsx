@@ -800,12 +800,13 @@ export default function Invoices() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Rechnungsnummer beginnt bei</Label>
+                <Label>Rechnungsnummer beginnt bei (001–999)</Label>
                 <Input
                   type="number"
                   value={rechnungStartNr}
-                  onChange={(e) => setRechnungStartNr(e.target.value)}
+                  onChange={(e) => { const v = Math.min(999, Math.max(0, Number(e.target.value))); setRechnungStartNr(String(v || "")); }}
                   min={1}
+                  max={999}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -813,16 +814,17 @@ export default function Invoices() {
                 </p>
               </div>
               <div>
-                <Label>Angebotsnummer beginnt bei</Label>
+                <Label>Angebotsnummer beginnt bei (001–999)</Label>
                 <Input
                   type="number"
                   value={angebotStartNr}
-                  onChange={(e) => setAngebotStartNr(e.target.value)}
+                  onChange={(e) => { const v = Math.min(999, Math.max(0, Number(e.target.value))); setAngebotStartNr(String(v || "")); }}
                   min={1}
+                  max={999}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Nächstes Angebot: {String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(angebotStartNr) || 1).padStart(3, "0")}
+                  Nächstes Angebot: AN{String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(angebotStartNr) || 1).padStart(3, "0")}
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
