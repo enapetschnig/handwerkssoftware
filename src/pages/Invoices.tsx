@@ -254,7 +254,7 @@ export default function Invoices() {
       // Load logo
       let logoUri: string | undefined;
       try {
-        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+        const resp = await fetch("/newmontilogo.png");
         const blob = await resp.blob();
         logoUri = await new Promise<string>((resolve) => {
           const r = new FileReader();
@@ -335,7 +335,7 @@ export default function Invoices() {
 
       let logoUri: string | undefined;
       try {
-        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+        const resp = await fetch("/newmontilogo.png");
         const blob = await resp.blob();
         logoUri = await new Promise<string>((resolve) => {
           const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(blob);
@@ -737,7 +737,7 @@ export default function Invoices() {
                                     try {
                                       let logoUri: string | undefined;
                                       try {
-                                        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                                        const resp = await fetch("/newmontilogo.png");
                                         const blob = await resp.blob();
                                         logoUri = await new Promise<string>((resolve) => {
                                           const r = new FileReader();

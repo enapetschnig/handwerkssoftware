@@ -1004,7 +1004,7 @@ export default function InvoiceDetail() {
         const { generateStornoPdf } = await import("@/lib/pdfGenerator");
         let logoUri: string | undefined;
         try {
-          const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+          const resp = await fetch("/newmontilogo.png");
           const blob = await resp.blob();
           logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
         } catch {}
@@ -1088,7 +1088,7 @@ export default function InvoiceDetail() {
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                       let logoUri: string | undefined;
                       try {
-                        const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                        const resp = await fetch("/newmontilogo.png");
                         const blob = await resp.blob();
                         logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                       } catch {}
@@ -1152,7 +1152,7 @@ export default function InvoiceDetail() {
                           // Generate Mahnung PDF
                           let logoUri: string | undefined;
                           try {
-                            const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                            const resp = await fetch("/newmontilogo.png");
                             const blob = await resp.blob();
                             logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                           } catch {}
@@ -1361,7 +1361,7 @@ export default function InvoiceDetail() {
                           try {
                             let logoUri: string | undefined;
                             try {
-                              const resp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                              const resp = await fetch("/newmontilogo.png");
                               const blob = await resp.blob();
                               logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                             } catch {}
@@ -2130,7 +2130,7 @@ export default function InvoiceDetail() {
               <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                  const logoResp = await fetch("/newmontilogo.png");
                   const logoBlob = await logoResp.blob();
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
                   const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
@@ -2653,7 +2653,7 @@ export default function InvoiceDetail() {
                 // Generate and download Storno-PDF
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/Logo_transparentWhite__msi___png.webp");
+                  const logoResp = await fetch("/newmontilogo.png");
                   const logoBlob = await logoResp.blob();
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
 

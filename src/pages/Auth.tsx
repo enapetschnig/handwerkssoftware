@@ -117,7 +117,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/Logo_transparentWhite__msi___png.webp" alt="MONTI.PRO" className="h-20 mx-auto mb-4" />
+          <img src="/newmontilogo.png" alt="MONTI.PRO" className="h-20 mx-auto mb-4" />
           <CardTitle>MONTI.PRO</CardTitle>
           <CardDescription>Ihr Montagetischler - Baustellendokumentation & Zeiterfassung</CardDescription>
         </CardHeader>
