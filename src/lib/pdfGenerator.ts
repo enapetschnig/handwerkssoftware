@@ -166,8 +166,14 @@ export async function generateInvoicePdf(
     pdf.setTextColor(0, 0, 0);
     const maxWidth = pageWidth - ml - mr;
     const lines = pdf.splitTextToSize(invoice.betreff, maxWidth);
+    const betreffHeight = lines.length * 4.5 + 4;
+    // Falls Betreff nicht mehr auf die Seite passt, neue Seite
+    if (y + betreffHeight > pageHeight - 30) {
+      pdf.addPage();
+      y = 20;
+    }
     pdf.text(lines, ml, y);
-    y += lines.length * 4.5 + 4;
+    y += betreffHeight;
   }
 
   // ======= ITEMS TABLE with TOTALS as table footer =======

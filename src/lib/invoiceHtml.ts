@@ -315,9 +315,11 @@ ${mahnBanner}
   </div>
 </div>
 
-<!-- Document Title -->
+<!-- Document Title + Betreff (kept together for page breaks) -->
+<div style="page-break-inside:avoid;">
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
 ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:pre-line;">${invoice.betreff.replace(/</g, "&lt;")}</div>` : ""}
+</div>
 
 <table class="items">
   <thead>

@@ -435,7 +435,7 @@ export default function InvoiceDetail() {
       position: 1,
       beschreibung: (t as any).kurzbezeichnung || t.name || t.beschreibung,
       kurztext: (t as any).kurzbezeichnung || t.name,
-      langtext: (t as any).langbezeichnung || t.beschreibung || "",
+      langtext: ((t as any).langbezeichnung && (t as any).langbezeichnung !== ((t as any).kurzbezeichnung || t.name)) ? (t as any).langbezeichnung : "",
       menge: 1,
       einheit: t.einheit,
       einzelpreis: netto,
@@ -1947,7 +1947,10 @@ export default function InvoiceDetail() {
                                       const netto = Number((t as any).netto_preis) || t.einzelpreis;
                                       updateItem(idx, "beschreibung", (t as any).kurzbezeichnung || t.name);
                                       updateItem(idx, "kurztext", (t as any).kurzbezeichnung || t.name);
-                                      updateItem(idx, "langtext", (t as any).langbezeichnung || t.beschreibung || "");
+                                      const lang = (t as any).langbezeichnung || "";
+                                      const kurz = (t as any).kurzbezeichnung || t.name || "";
+                                      // Langtext nur setzen wenn es eine echte Langbezeichnung gibt und sie sich vom Kurztext unterscheidet
+                                      updateItem(idx, "langtext", lang && lang !== kurz ? lang : "");
                                       updateItem(idx, "einheit", t.einheit);
                                       updateItem(idx, "einzelpreis", netto);
                                       updateItem(idx, "produktnummer", (t as any).produktnummer || "");
