@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, BoxSelect } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -383,14 +383,26 @@ export default function Index() {
             <CardContent><Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button></CardContent>
           </Card>
 
-          {/* 4. Material entnehmen - Für alle */}
-          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/material")}>
+          {/* 4. Plantafel - Für Admin */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/schedule")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><LayoutGrid className="h-6 w-6 text-primary" /></div>
+                <CardTitle className="text-lg sm:text-xl">Plantafel</CardTitle>
+                <CardDescription className="text-sm">Einsatzplanung & Mitarbeiter-Zuordnung</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="w-full" size="sm">Plantafel öffnen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 4b. Kalender */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/calendar")}>
             <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><BoxSelect className="h-6 w-6 text-orange-600" /></div>
-              <CardTitle className="text-lg sm:text-xl">Material entnehmen</CardTitle>
-              <CardDescription className="text-sm">Material mitnehmen & zurückbringen</CardDescription>
+              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><CalendarDays className="h-6 w-6 text-orange-600" /></div>
+              <CardTitle className="text-lg sm:text-xl">Kalender</CardTitle>
+              <CardDescription className="text-sm">Termine & Google Kalender Sync</CardDescription>
             </CardHeader>
-            <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Material buchen</Button></CardContent>
+            <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Kalender öffnen</Button></CardContent>
           </Card>
 
           {/* 4b. Regieberichte - Für Mitarbeiter nach Material */}
