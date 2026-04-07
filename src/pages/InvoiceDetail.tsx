@@ -17,7 +17,6 @@ import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
 import { ImportFromOfferDialog } from "@/components/ImportFromOfferDialog";
 import { ImportTimeDialog } from "@/components/ImportTimeDialog";
 import { useEinheiten } from "@/hooks/useEinheiten";
-import { ImportLieferscheinDialog } from "@/components/ImportLieferscheinDialog";
 import { ImportDisturbanceToInvoiceDialog } from "@/components/ImportDisturbanceToInvoiceDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
@@ -156,7 +155,6 @@ export default function InvoiceDetail() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSaved, setPreviewSaved] = useState(false);
   const [importMaterialsOpen, setImportMaterialsOpen] = useState(false);
-  const [importLieferscheinOpen, setImportLieferscheinOpen] = useState(false);
   const [importProjectOpen, setImportProjectOpen] = useState(false);
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
@@ -1822,10 +1820,6 @@ export default function InvoiceDetail() {
                         <TrendingUp className="w-4 h-4" />
                         Aus Projekt
                       </Button>
-                      <Button onClick={() => setImportLieferscheinOpen(true)} variant="outline" size="sm" className="gap-1">
-                        <Package className="w-4 h-4" />
-                        Aus Lieferschein
-                      </Button>
                     </>
                   )}
                   <Button onClick={() => setTemplateDialogOpen(true)} variant="outline" size="sm" className="gap-1">
@@ -2452,26 +2446,6 @@ export default function InvoiceDetail() {
             const replaced = importedItems.filter(imp => items.some(ex => ex.beschreibung.toLowerCase().trim() === imp.beschreibung.toLowerCase().trim())).length;
             const added = importedItems.length - replaced;
             toast({ title: "Aus Projekt importiert", description: `${replaced} Positionen aktualisiert${added > 0 ? `, ${added} neu hinzugefügt` : ""}` });
-          }}
-        />
-
-        {/* Import from Lieferschein Dialog */}
-        <ImportLieferscheinDialog
-          open={importLieferscheinOpen}
-          onClose={() => setImportLieferscheinOpen(false)}
-          projectId={form.project_id}
-          onImport={(importedItems) => {
-            const newItems = importedItems.map((item, idx) => ({
-              position: items.length + idx + 1,
-              beschreibung: item.beschreibung,
-              menge: item.menge,
-              einheit: item.einheit,
-              einzelpreis: item.einzelpreis,
-              gesamtpreis: item.menge * item.einzelpreis,
-            }));
-            setItems(prev => mergeItems(prev, newItems));
-            setImportLieferscheinOpen(false);
-            toast({ title: "Material importiert", description: `${newItems.length} Positionen aus Lieferscheinen hinzugefügt` });
           }}
         />
 
