@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp, Pencil, Check, Settings } from "lucide-react";
+import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -486,7 +487,14 @@ const ProjectOverview = () => {
         </div>
 
         {/* Floating Action Button für Fotos */}
-        <Button 
+        {/* Kontakthistorie */}
+        {projectId && (
+          <div className="mt-6">
+            <ContactHistoryTimeline projectId={projectId} />
+          </div>
+        )}
+
+        <Button
           className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg"
           size="icon"
           onClick={handleQuickPhotoUpload}

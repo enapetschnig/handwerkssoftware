@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -385,6 +386,11 @@ export default function Customers() {
               )}
             </CardContent>
           </Card>
+
+          {/* Contact History */}
+          {selectedCustomer && (
+            <ContactHistoryTimeline customerId={selectedCustomer.id} />
+          )}
         </div>
 
         {/* Reuse dialog */}

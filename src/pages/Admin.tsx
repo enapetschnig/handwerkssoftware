@@ -23,6 +23,9 @@ import TimeAccountManagement from "@/components/TimeAccountManagement";
 import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
+import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
+import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
+import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 
 type Profile = {
   id: string;
@@ -1077,6 +1080,15 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ===== PROJEKTSTATUS-FARBEN ===== */}
+        <ProjectStatusSettings />
+
+        {/* ===== KUNDEN-FARBCODIERUNG ===== */}
+        <CustomerColorSettings />
+
+        {/* ===== NUMMERNKREISE ===== */}
+        <NumberRangeSettings />
 
         {/* ===== RECHNUNGS-LAYOUT ===== */}
         <InvoiceLayoutEditor />
