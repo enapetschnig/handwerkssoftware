@@ -68,14 +68,26 @@ const BautagesberichtDetail = () => {
     // Fetch projects and employees in parallel
     const [projRes, empRes] = await Promise.all([
       supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name"),
-      (supabase.from("employees" as never) as any).select("id, vorname, nachname").eq("aktiv", true).order("nachname"),
+      (supabase.from("employees" as never) as any).select("id, vorname, nachname, user_id").order("nachname"),
     ]);
 
     if (projRes.data) setProjects(projRes.data as Project[]);
-    if (empRes.data) setEmployees(empRes.data as Employee[]);
+    const loadedEmployees = (empRes.data || []) as (Employee & { user_id?: string })[];
+    setEmployees(loadedEmployees);
 
     if (!isNew && id) {
       await fetchBericht(id);
+    } else if (isNew && loadedEmployees.length > 0) {
+      // Pre-select the current user as first worker
+      const currentEmployee = loadedEmployees.find((e: any) => e.user_id === session.user.id);
+      if (currentEmployee) {
+        setWorkers([{
+          id: crypto.randomUUID(),
+          employee_id: currentEmployee.id,
+          stunden: 0,
+          taetigkeit: "",
+        }]);
+      }
     }
     setLoading(false);
   };
