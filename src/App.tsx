@@ -34,6 +34,12 @@ import ScheduleBoard from "./pages/ScheduleBoard";
 import Calendar from "./pages/Calendar";
 import Bautagesberichte from "./pages/Bautagesberichte";
 import BautagesberichtDetail from "./pages/BautagesberichtDetail";
+import Besprechungsprotokolle from "./pages/Besprechungsprotokolle";
+import BesprechungsprotokollDetail from "./pages/BesprechungsprotokollDetail";
+import ErsttermineInteressent from "./pages/ErsttermineInteressent";
+import ErstterminInteressentDetail from "./pages/ErstterminInteressentDetail";
+import ErsttermineProjekt from "./pages/ErsttermineProjekt";
+import ErstterminProjektDetail from "./pages/ErstterminProjektDetail";
 import NotFound from "./pages/NotFound";
 
 // Wrapper that forces re-mount when id or query params change
@@ -98,6 +104,12 @@ function AppContent() {
         <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
         <Route path="/bautagesberichte" element={<ProtectedRoute><Bautagesberichte /></ProtectedRoute>} />
         <Route path="/bautagesberichte/:id" element={<ProtectedRoute><BautagesberichtDetail /></ProtectedRoute>} />
+        <Route path="/besprechungsprotokolle" element={<ProtectedRoute><Besprechungsprotokolle /></ProtectedRoute>} />
+        <Route path="/besprechungsprotokolle/:id" element={<ProtectedRoute><BesprechungsprotokollDetail /></ProtectedRoute>} />
+        <Route path="/ersttermine-interessent" element={<ProtectedRoute><ErsttermineInteressent /></ProtectedRoute>} />
+        <Route path="/ersttermine-interessent/:id" element={<ProtectedRoute><ErstterminInteressentDetail /></ProtectedRoute>} />
+        <Route path="/ersttermine-projekt" element={<ProtectedRoute><ErsttermineProjekt /></ProtectedRoute>} />
+        <Route path="/ersttermine-projekt/:id" element={<ProtectedRoute><ErstterminProjektDetail /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 

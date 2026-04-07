@@ -27,6 +27,7 @@ import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings"
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
+import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { Cloud, Building, AlertTriangle } from "lucide-react";
 
 type Profile = {
@@ -76,6 +77,13 @@ interface Employee {
   schuhgroesse: string | null;
   notizen: string | null;
   land: string | null;
+  nationalitaet: string | null;
+  familienstand: string | null;
+  fuehrerschein: string | null;
+  abteilung: string | null;
+  notfallkontakt_name: string | null;
+  notfallkontakt_telefon: string | null;
+  notfallkontakt_beziehung: string | null;
 }
 
 export default function Admin() {
@@ -89,6 +97,9 @@ export default function Admin() {
   const [inviteTelefon, setInviteTelefon] = useState("");
   const [sendingInvite, setSendingInvite] = useState(false);
   
+  // Config options
+  const { options: familienstandOptions } = useConfigOptions("familienstand");
+
   // Employee management states
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -1271,6 +1282,83 @@ export default function Admin() {
                         <Input
                           value={formData.sv_nummer || ""}
                           onChange={(e) => setFormData({ ...formData, sv_nummer: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Erweiterte Daten</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Nationalität</Label>
+                        <Input
+                          value={formData.nationalitaet || ""}
+                          onChange={(e) => setFormData({ ...formData, nationalitaet: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Familienstand</Label>
+                        <Select
+                          value={formData.familienstand || ""}
+                          onValueChange={(val) => setFormData({ ...formData, familienstand: val })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wählen..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {familienstandOptions.map((o) => (
+                              <SelectItem key={o.wert} value={o.wert}>{o.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Führerschein</Label>
+                        <Input
+                          value={formData.fuehrerschein || ""}
+                          onChange={(e) => setFormData({ ...formData, fuehrerschein: e.target.value })}
+                          placeholder="z.B. B, C, CE"
+                        />
+                      </div>
+                      <div>
+                        <Label>Abteilung</Label>
+                        <Input
+                          value={formData.abteilung || ""}
+                          onChange={(e) => setFormData({ ...formData, abteilung: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Notfallkontakt</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Notfallkontakt Name</Label>
+                        <Input
+                          value={formData.notfallkontakt_name || ""}
+                          onChange={(e) => setFormData({ ...formData, notfallkontakt_name: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Notfallkontakt Telefon</Label>
+                        <Input
+                          type="tel"
+                          value={formData.notfallkontakt_telefon || ""}
+                          onChange={(e) => setFormData({ ...formData, notfallkontakt_telefon: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Notfallkontakt Beziehung</Label>
+                        <Input
+                          value={formData.notfallkontakt_beziehung || ""}
+                          onChange={(e) => setFormData({ ...formData, notfallkontakt_beziehung: e.target.value })}
+                          placeholder="z.B. Ehepartner, Eltern"
                         />
                       </div>
                     </div>

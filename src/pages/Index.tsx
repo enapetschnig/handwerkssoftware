@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList, UserPlus, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -413,6 +413,33 @@ export default function Index() {
               <CardDescription className="text-sm">Tägliche Baustellendokumentation</CardDescription>
             </CardHeader>
             <CardContent><Button className="bg-emerald-600 hover:bg-emerald-700 w-full" size="sm">Berichte öffnen</Button></CardContent>
+          </Card>
+
+          {/* Ersttermine - Für Admin */}
+          {isAdmin && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/ersttermine-interessent")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-violet-500/10 flex items-center justify-center"><UserPlus className="h-6 w-6 text-violet-600" /></div>
+                <CardTitle className="text-lg sm:text-xl">Ersttermine</CardTitle>
+                <CardDescription className="text-sm">Interessenten & Projekt-Ersttermine</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Button className="flex-1 bg-violet-600 hover:bg-violet-700" size="sm" onClick={(e) => { e.stopPropagation(); navigate("/ersttermine-interessent"); }}>Interessenten</Button>
+                  <Button className="flex-1" size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); navigate("/ersttermine-projekt"); }}>Projekte</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Besprechungsprotokolle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/besprechungsprotokolle")}>
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-cyan-500/10 flex items-center justify-center"><MessageSquare className="h-6 w-6 text-cyan-600" /></div>
+              <CardTitle className="text-lg sm:text-xl">Protokolle</CardTitle>
+              <CardDescription className="text-sm">Besprechungsprotokolle erfassen</CardDescription>
+            </CardHeader>
+            <CardContent><Button className="bg-cyan-600 hover:bg-cyan-700 w-full" size="sm">Protokolle öffnen</Button></CardContent>
           </Card>
 
           {/* 4b. Regieberichte - Für Mitarbeiter nach Material */}
