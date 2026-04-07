@@ -513,15 +513,6 @@ export async function generateInvoicePdf(
 
     y += 20;
 
-    // Hinweistext (Silikon/Acryl)
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(100, 100, 100);
-    const hinweis = "Hinweis: Elastische Verfugungen (Silikon/Acryl) sind aufgrund ihrer stofflichen Eigenschaften als Wartungsfuge anzusehen und gelten daher nicht als Abdichtung. Ihre Funktion muss in regelmäßigen Abständen überprüft und das Material gegebenenfalls erneuert werden, um Folgeschäden zu vermeiden.";
-    const hinweisLines = pdf.splitTextToSize(hinweis, contentWidth);
-    pdf.text(hinweisLines, ml, y);
-    y += hinweisLines.length * 3.5 + 6;
-
     // Vielen Dank
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);

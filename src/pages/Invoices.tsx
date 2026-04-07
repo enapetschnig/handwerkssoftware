@@ -71,6 +71,7 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [filterTyp, setFilterTyp] = useState<string>("rechnung");
   const [filterStatus, setFilterStatus] = useState<string>("alle");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showArchive, setShowArchive] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMonth, setExportMonth] = useState<string>(format(new Date(), "yyyy-MM"));
@@ -486,12 +487,17 @@ export default function Invoices() {
 
   const filtered = invoices.filter(i => {
     const matchTyp = filterTyp === "alle" || i.typ === filterTyp;
+    const matchSearch = !searchQuery.trim() ||
+      i.nummer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      i.kunde_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(i.brutto_summe).includes(searchQuery) ||
+      i.brutto_summe.toFixed(2).includes(searchQuery);
     if (filterStatus === "storniert") {
-      return matchTyp && i.status === "storniert";
+      return matchTyp && matchSearch && i.status === "storniert";
     }
     // Normal filters exclude storniert
     const matchStatus = filterStatus === "alle" ? i.status !== "storniert" : i.status === filterStatus;
-    return matchTyp && matchStatus;
+    return matchTyp && matchStatus && matchSearch;
   });
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
@@ -579,6 +585,12 @@ export default function Invoices() {
                     )}
                   </SelectContent>
                 </Select>
+                <Input
+                  placeholder="Suche nach Nummer, Kunde, Betrag..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="max-w-sm"
+                />
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button onClick={() => setSettingsOpen(true)} variant="outline" size="sm" className="gap-1">
