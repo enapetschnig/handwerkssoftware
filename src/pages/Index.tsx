@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -55,7 +55,7 @@ export default function Index() {
     const { data } = await supabase
       .from("projects")
       .select("id, name, status, updated_at")
-      .eq("status", "aktiv")
+      .eq("status", "In Arbeit")
       .order("updated_at", { ascending: false })
       .limit(5);
 
@@ -403,6 +403,16 @@ export default function Index() {
               <CardDescription className="text-sm">Termine & Google Kalender Sync</CardDescription>
             </CardHeader>
             <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Kalender öffnen</Button></CardContent>
+          </Card>
+
+          {/* 4c. Bautagesberichte - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/bautagesberichte")}>
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-emerald-500/10 flex items-center justify-center"><ClipboardList className="h-6 w-6 text-emerald-600" /></div>
+              <CardTitle className="text-lg sm:text-xl">Bautagesberichte</CardTitle>
+              <CardDescription className="text-sm">Tägliche Baustellendokumentation</CardDescription>
+            </CardHeader>
+            <CardContent><Button className="bg-emerald-600 hover:bg-emerald-700 w-full" size="sm">Berichte öffnen</Button></CardContent>
           </Card>
 
           {/* 4b. Regieberichte - Für Mitarbeiter nach Material */}

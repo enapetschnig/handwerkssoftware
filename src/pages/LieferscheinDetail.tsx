@@ -79,7 +79,7 @@ export default function LieferscheinDetail() {
     setCurrentUserId(user.id);
     const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
     setIsAdmin(roleData?.role === "administrator");
-    const { data: prjData } = await supabase.from("projects").select("id, name").eq("status", "aktiv").order("name");
+    const { data: prjData } = await supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name");
     if (prjData) setProjects(prjData);
     await fetchData();
     setLoading(false);

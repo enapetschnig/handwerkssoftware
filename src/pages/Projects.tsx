@@ -185,12 +185,12 @@ const Projects = () => {
     if (togglingStatus) return; // Prevent double-click
     
     // Wenn Projekt geschlossen wird → Bestätigung anfordern
-    if (currentStatus === 'aktiv') {
+    if (currentStatus === 'In Arbeit') {
       setProjectToClose({ id: projectId, name: projectName });
       return;
     }
     // Wiedereröffnen ohne Bestätigung
-    await updateProjectStatus(projectId, 'aktiv', projectName);
+    await updateProjectStatus(projectId, 'In Arbeit', projectName);
   };
 
   const updateProjectStatus = async (projectId: string, newStatus: string, projectName: string) => {
@@ -211,8 +211,8 @@ const Projects = () => {
       setTogglingStatus(null);
     } else {
       toast({
-        title: newStatus === 'aktiv' ? 'Projekt wiedereröffnet' : 'Projekt geschlossen',
-        description: `${projectName} wurde ${newStatus === 'aktiv' ? 'wiedereröffnet' : 'geschlossen'}`,
+        title: newStatus === 'In Arbeit' ? 'Projekt wiedereröffnet' : 'Projekt geschlossen',
+        description: `${projectName} wurde ${newStatus === 'In Arbeit' ? 'wiedereröffnet' : 'geschlossen'}`,
       });
       fetchProjects();
       setTogglingStatus(null);
@@ -404,7 +404,7 @@ const Projects = () => {
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xl font-semibold">Aktive Projekte</h2>
             <Badge variant="secondary">
-              {projects.filter(p => p.status === 'aktiv').length}
+              {projects.filter(p => p.status === 'In Arbeit').length}
             </Badge>
           </div>
 
@@ -424,7 +424,7 @@ const Projects = () => {
           <div className="grid gap-3 sm:gap-4 lg:gap-6">
             {projects
               .filter((project) => {
-                if (project.status !== 'aktiv') return false;
+                if (project.status !== 'In Arbeit') return false;
                 const query = searchQuery.toLowerCase();
                 return (
                   project.name.toLowerCase().includes(query) ||
@@ -443,7 +443,7 @@ const Projects = () => {
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
                   <div className="flex gap-2 sm:gap-3">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      {project.status === "geschlossen" ? (
+                      {project.status === "Abgeschlossen" ? (
                         <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
                       ) : (
                         <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -457,10 +457,10 @@ const Projects = () => {
                     </div>
                   </div>
                   <Badge 
-                    variant={project.status === "aktiv" ? "default" : "secondary"}
+                    variant={project.status === "In Arbeit" ? "default" : "secondary"}
                     className="self-start sm:self-center whitespace-nowrap"
                   >
-                    {project.status === "aktiv" ? "Aktiv" : "Geschlossen"}
+                    {project.status === "In Arbeit" ? "Aktiv" : "Geschlossen"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -572,12 +572,12 @@ const Projects = () => {
                   </p>
                   {isAdmin && (
                     <Button
-                      variant={project.status === 'aktiv' ? 'ghost' : 'default'}
+                      variant={project.status === 'In Arbeit' ? 'ghost' : 'default'}
                       size="sm"
                       className="text-xs self-end sm:self-auto"
                       onClick={() => handleToggleProjectStatus(project.id, project.status, project.name)}
                     >
-                      {project.status === 'aktiv' ? 'Projekt schließen' : 'Projekt wiedereröffnen'}
+                      {project.status === 'In Arbeit' ? 'Projekt schließen' : 'Projekt wiedereröffnen'}
                     </Button>
                   )}
                 </div>
@@ -585,7 +585,7 @@ const Projects = () => {
             </Card>
           ))}
 
-          {projects.filter(p => p.status === 'aktiv').length === 0 && (
+          {projects.filter(p => p.status === 'In Arbeit').length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
                 <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -604,7 +604,7 @@ const Projects = () => {
         </div>
 
         {/* Geschlossene Projekte Section */}
-        {projects.filter(p => p.status === 'geschlossen').length > 0 && (
+        {projects.filter(p => p.status === 'Abgeschlossen').length > 0 && (
           <Collapsible open={closedProjectsOpen} onOpenChange={setClosedProjectsOpen}>
             <div className="mb-4">
               <CollapsibleTrigger asChild>
@@ -612,7 +612,7 @@ const Projects = () => {
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-semibold">Geschlossene Projekte</h2>
                     <Badge variant="secondary">
-                      {projects.filter(p => p.status === 'geschlossen').length}
+                      {projects.filter(p => p.status === 'Abgeschlossen').length}
                     </Badge>
                   </div>
                   <ChevronDown className={`h-5 w-5 transition-transform ${closedProjectsOpen ? 'rotate-180' : ''}`} />
@@ -623,7 +623,7 @@ const Projects = () => {
             <CollapsibleContent>
               <div className="grid gap-3 sm:gap-4 lg:gap-6">
                 {projects
-                  .filter((project) => project.status === 'geschlossen')
+                  .filter((project) => project.status === 'Abgeschlossen')
                   .map((project) => (
                   <Card 
                     key={project.id} 
@@ -764,7 +764,7 @@ const Projects = () => {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={togglingStatus !== null}>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => projectToClose && updateProjectStatus(projectToClose.id, 'geschlossen', projectToClose.name)}
+              onClick={() => projectToClose && updateProjectStatus(projectToClose.id, 'Abgeschlossen', projectToClose.name)}
               disabled={togglingStatus !== null}
             >
               {togglingStatus ? 'Wird geschlossen...' : 'Ja, Projekt schließen'}

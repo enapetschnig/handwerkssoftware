@@ -59,7 +59,7 @@ export function useScheduleData() {
         supabase
           .from("projects")
           .select("id, name")
-          .eq("status", "aktiv")
+          .eq("status", "In Arbeit")
           .order("name"),
         supabase
           .from("worker_assignments")

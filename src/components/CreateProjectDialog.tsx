@@ -180,7 +180,7 @@ export function CreateProjectDialog({
           adresse: [adresse, plz, ort].filter(Boolean).join(", ") || null,
           plz: plz.trim() || null,
           customer_id: customerId,
-          status: "aktiv",
+          status: "In Arbeit",
         })
         .select("id, name")
         .single();

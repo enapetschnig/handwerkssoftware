@@ -49,7 +49,7 @@ async function getProjectList(): Promise<string> {
   const { data: projects } = await supabase
     .from("projects")
     .select("name")
-    .eq("status", "aktiv")
+    .eq("status", "In Arbeit")
     .order("name");
 
   if (!projects?.length) return "";

@@ -228,7 +228,7 @@ async function gatherContext(userId: string) {
 
   const [projectsRes, todayEntriesRes, assignmentsRes, weekEntriesRes] =
     await Promise.all([
-      supabase.from("projects").select("id, name").eq("status", "aktiv").order("name"),
+      supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name"),
       supabase.from("time_entries")
         .select("id, stunden, taetigkeit, project_id, projects(name), created_at")
         .eq("user_id", userId).eq("datum", today)
@@ -432,7 +432,7 @@ async function executeTool(
     const { data: matches } = await supabase
       .from("projects")
       .select("id, name")
-      .eq("status", "aktiv")
+      .eq("status", "In Arbeit")
       .ilike("name", `%${searchTerm}%`)
       .limit(5);
 
@@ -442,7 +442,7 @@ async function executeTool(
       let fuzzyMatch = null;
       if (words.length > 0) {
         const { data: allProjects } = await supabase
-          .from("projects").select("id, name").eq("status", "aktiv");
+          .from("projects").select("id, name").eq("status", "In Arbeit");
         fuzzyMatch = (allProjects || []).find((p: any) =>
           words.some((w: string) => p.name.toLowerCase().includes(w.toLowerCase()))
         );
@@ -450,7 +450,7 @@ async function executeTool(
       if (fuzzyMatch) {
         input.project_id = fuzzyMatch.id;
       } else {
-        const { data: allP } = await supabase.from("projects").select("name").eq("status", "aktiv");
+        const { data: allP } = await supabase.from("projects").select("name").eq("status", "In Arbeit");
         const list = (allP || []).map((p: any, i: number) => `${i + 1}. ${p.name}`).join("\n");
         return `FEHLER: Kein Projekt "${searchTerm}" gefunden. Aktive Projekte:\n${list}`;
       }
@@ -580,7 +580,7 @@ async function executeTool(
 
     case "projekte_anzeigen": {
       const { data: projects } = await supabase
-        .from("projects").select("id, name").eq("status", "aktiv").order("name");
+        .from("projects").select("id, name").eq("status", "In Arbeit").order("name");
 
       if (!projects?.length) return "Keine aktiven Projekte.";
       return "AKTIVE PROJEKTE:\n" + projects.map((p, i) => `${i + 1}. ${p.name}`).join("\n");

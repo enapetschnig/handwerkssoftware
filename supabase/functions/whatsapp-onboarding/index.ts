@@ -133,7 +133,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: projects } = await supabase
       .from("projects")
       .select("name")
-      .eq("status", "aktiv")
+      .eq("status", "In Arbeit")
       .order("name");
 
     let projectList = "*Deine Projekte:*\n";

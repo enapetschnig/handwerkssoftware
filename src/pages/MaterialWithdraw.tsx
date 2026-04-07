@@ -61,7 +61,7 @@ export default function MaterialWithdraw() {
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name").eq("status", "aktiv").order("name");
+    const { data } = await supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name");
     if (data) setProjects(data);
   };
 

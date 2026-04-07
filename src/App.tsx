@@ -32,6 +32,8 @@ import Customers from "./pages/Customers";
 import OfferPackages from "./pages/OfferPackages";
 import ScheduleBoard from "./pages/ScheduleBoard";
 import Calendar from "./pages/Calendar";
+import Bautagesberichte from "./pages/Bautagesberichte";
+import BautagesberichtDetail from "./pages/BautagesberichtDetail";
 import NotFound from "./pages/NotFound";
 
 // Wrapper that forces re-mount when id or query params change
@@ -94,6 +96,8 @@ function AppContent() {
         <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/schedule" element={<ProtectedRoute><ScheduleBoard /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
+        <Route path="/bautagesberichte" element={<ProtectedRoute><Bautagesberichte /></ProtectedRoute>} />
+        <Route path="/bautagesberichte/:id" element={<ProtectedRoute><BautagesberichtDetail /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 

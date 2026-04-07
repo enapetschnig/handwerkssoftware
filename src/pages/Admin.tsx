@@ -26,6 +26,8 @@ import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
+import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
+import { Cloud, Building, AlertTriangle } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -1098,6 +1100,11 @@ export default function Admin() {
 
         {/* ===== PLANTAFEL-FARBEN ===== */}
         <EmployeeColorSettings />
+
+        {/* ===== KONFIGURIERBARE OPTIONEN ===== */}
+        <ConfigOptionsManager kategorie="wetter" title="Wetter-Optionen" description="Wetteroptionen für Bautagesberichte" icon={<Cloud className="h-5 w-5" />} showFarbe />
+        <ConfigOptionsManager kategorie="projektart" title="Projektarten" description="Typen von Bauprojekten" icon={<Building className="h-5 w-5" />} />
+        <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
 
       </main>
 
