@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2, Search } from "lucide-react";
+import { Calendar, Clock, User, Mail, Phone, MapPin, FileText, Package, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,23 +12,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useEinheiten } from "@/hooks/useEinheiten";
 import { format } from "date-fns";
 import { MultiEmployeeSelect } from "@/components/MultiEmployeeSelect";
+import { CustomerSelect } from "@/components/CustomerSelect";
 
 type MaterialEntry = {
   id: string;
   material: string;
   menge: string;
   einheit: string;
-};
-
-type CustomerOption = {
-  id: string;
-  name: string;
-  adresse: string | null;
-  plz: string | null;
-  ort: string | null;
-  email: string | null;
-  telefon: string | null;
-  uid_nummer: string | null;
 };
 
 type DisturbanceFormProps = {
@@ -75,13 +63,11 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [materials, setMaterials] = useState<MaterialEntry[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      supabase.from("customers").select("id, name, adresse, plz, ort, email, telefon, uid_nummer").order("name")
-        .then(({ data }) => { if (data) setCustomers(data); });
+    if (!open) {
+      setSelectedCustomerId(null);
     }
   }, [open]);
 
@@ -482,47 +468,26 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                 <User className="h-4 w-4" />
                 Kundendaten
               </h3>
-              <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Search className="w-3.5 h-3.5" />
-                    Kunde auswählen
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="end">
-                  <Command>
-                    <CommandInput placeholder="Kunde suchen..." />
-                    <CommandList>
-                      <CommandEmpty>Kein Kunde gefunden</CommandEmpty>
-                      <CommandGroup>
-                        {customers.map((c) => (
-                          <CommandItem
-                            key={c.id}
-                            value={c.name}
-                            onSelect={() => {
-                              setFormData(prev => ({
-                                ...prev,
-                                kundeName: c.name,
-                                kundeEmail: c.email || "",
-                                kundeAdresse: c.adresse || "",
-                                kundePlz: c.plz || "",
-                                kundeOrt: c.ort || "",
-                                kundeTelefon: c.telefon || "",
-                              }));
-                              setCustomerPopoverOpen(false);
-                            }}
-                          >
-                            <div>
-                              <p className="font-medium text-sm">{c.name}</p>
-                              {c.ort && <p className="text-xs text-muted-foreground">{c.plz} {c.ort}</p>}
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="w-[260px]">
+                <CustomerSelect
+                  value={selectedCustomerId}
+                  onChange={(id, customer) => {
+                    setSelectedCustomerId(id);
+                    if (customer) {
+                      setFormData(prev => ({
+                        ...prev,
+                        kundeName: customer.name,
+                        kundeEmail: customer.email || "",
+                        kundeAdresse: customer.adresse || "",
+                        kundePlz: customer.plz || "",
+                        kundeOrt: customer.ort || "",
+                        kundeTelefon: customer.telefon || "",
+                      }));
+                    }
+                  }}
+                  placeholder="Kunde auswählen"
+                />
+              </div>
             </div>
             <div className="space-y-3">
               <div>

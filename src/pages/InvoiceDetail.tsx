@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, Search, UserPlus, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -21,11 +21,10 @@ import { ImportLieferscheinDialog } from "@/components/ImportLieferscheinDialog"
 import { ImportDisturbanceToInvoiceDialog } from "@/components/ImportDisturbanceToInvoiceDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format, addMonths, parseISO } from "date-fns";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 import { PageHeader } from "@/components/PageHeader";
+import { CustomerSelect, type CustomerData } from "@/components/CustomerSelect";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,19 +92,6 @@ interface InvoiceData {
   storno_grund: string;
 }
 
-interface CustomerOption {
-  id: string;
-  name: string;
-  ansprechpartner: string | null;
-  uid_nummer: string | null;
-  adresse: string | null;
-  plz: string | null;
-  ort: string | null;
-  land: string | null;
-  email: string | null;
-  telefon: string | null;
-}
-
 interface TemplateItem {
   id: string;
   name: string;
@@ -167,8 +153,6 @@ export default function InvoiceDetail() {
   const [templateMengen, setTemplateMengen] = useState<Record<string, number>>({});
   const [addedFromDialog, setAddedFromDialog] = useState<{ name: string; menge: number; einheit: string }[]>([]);
   const [storedPdfs, setStoredPdfs] = useState<StoredPdf[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSaved, setPreviewSaved] = useState(false);
   const [importMaterialsOpen, setImportMaterialsOpen] = useState(false);
@@ -241,7 +225,6 @@ export default function InvoiceDetail() {
   useEffect(() => {
     fetchProjects();
     fetchTemplates();
-    fetchCustomers();
     // Load invoice layout settings
     supabase.from("app_settings").select("value").eq("key", "invoice_layout").single().then(({ data }) => {
       if (data) setInvoiceLayout(parseLayoutSettings(data.value));
@@ -310,10 +293,6 @@ export default function InvoiceDetail() {
     }
   }, [id]);
 
-  const fetchCustomers = async () => {
-    const { data } = await supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon, skonto_prozent, skonto_tage, nettofrist, zahlungsbedingungen, anrede, titel, kundennummer").order("name");
-    if (data) setCustomers(data);
-  };
 
   const fetchProjects = async () => {
     const { data } = await supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name");
@@ -561,7 +540,6 @@ export default function InvoiceDetail() {
           }
           updateField("customer_id", customerId);
         }
-        fetchCustomers();
       }
 
       // Rechnungen sind immer mindestens "offen", Angebote behalten ihren Status (auch "entwurf")
@@ -1463,78 +1441,57 @@ export default function InvoiceDetail() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Kundendaten</CardTitle>
-                <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                      <Search className="w-4 h-4" />
-                      Kunde auswählen
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[320px] p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="Kunde suchen..." />
-                      <CommandList>
-                        <CommandEmpty>Kein Kunde gefunden</CommandEmpty>
-                        <CommandGroup>
-                          {customers.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.name}
-                              onSelect={() => {
-                                const updates: any = {
-                                  customer_id: c.id,
-                                  kunde_name: c.name,
-                                  kunde_adresse: c.adresse || "",
-                                  kunde_plz: c.plz || "",
-                                  kunde_ort: c.ort || "",
-                                  kunde_land: c.land || "Österreich",
-                                  kunde_email: c.email || "",
-                                  kunde_telefon: c.telefon || "",
-                                  kunde_uid: c.uid_nummer || "",
-                                  kunde_anrede: (c as any).anrede || "",
-                                  kunde_titel: (c as any).titel || "",
-                                  kundennummer: (c as any).kundennummer || "",
-                                };
-                                // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
-                                const hints: string[] = [];
-                                if (form.typ === "rechnung") {
-                                  const custSkonto = Number((c as any).skonto_prozent) || 0;
-                                  const custSkontoTage = Number((c as any).skonto_tage) || 0;
-                                  const custNettofrist = Number((c as any).nettofrist) || 0;
-                                  if (custSkonto > 0) {
-                                    updates.skonto_prozent = custSkonto;
-                                    updates.skonto_tage = custSkontoTage;
-                                    hints.push(`Skonto: ${custSkonto}% / ${custSkontoTage} Tage`);
-                                  }
-                                  if (custNettofrist > 0) {
-                                    updates.zahlungsbedingungen = `${custNettofrist} Tage`;
-                                    // Recalculate due date
-                                    if (form.datum) {
-                                      const due = new Date(form.datum + "T12:00:00");
-                                      due.setDate(due.getDate() + custNettofrist);
-                                      updates.faellig_am = due.toISOString().split("T")[0];
-                                    }
-                                    hints.push(`Zahlungsfrist: ${custNettofrist} Tage`);
-                                  }
-                                }
-                                setForm(prev => ({ ...prev, ...updates }));
-                                setCustomerPopoverOpen(false);
-                                if (hints.length > 0) {
-                                  toast({ title: "Kundeneinstellungen übernommen", description: hints.join(" · ") });
-                                }
-                              }}
-                            >
-                              <div>
-                                <p className="font-medium">{c.name}</p>
-                                {c.ort && <p className="text-xs text-muted-foreground">{c.plz} {c.ort}</p>}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <CustomerSelect
+                  value={form.customer_id || null}
+                  onChange={async (id, customer) => {
+                    if (!customer) {
+                      updateField("customer_id", null);
+                      return;
+                    }
+                    const updates: any = {
+                      customer_id: customer.id,
+                      kunde_name: customer.name,
+                      kunde_adresse: customer.adresse || "",
+                      kunde_plz: customer.plz || "",
+                      kunde_ort: customer.ort || "",
+                      kunde_land: customer.land || "Österreich",
+                      kunde_email: customer.email || "",
+                      kunde_telefon: customer.telefon || "",
+                      kunde_uid: customer.uid_nummer || "",
+                      kunde_anrede: customer.anrede || "",
+                      kunde_titel: customer.titel || "",
+                      kundennummer: customer.kundennummer || "",
+                    };
+                    // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
+                    const hints: string[] = [];
+                    if (form.typ === "rechnung") {
+                      const { data: fullCust } = await supabase.from("customers").select("skonto_prozent, skonto_tage, nettofrist").eq("id", customer.id).single();
+                      if (fullCust) {
+                        const custSkonto = Number(fullCust.skonto_prozent) || 0;
+                        const custSkontoTage = Number(fullCust.skonto_tage) || 0;
+                        const custNettofrist = Number(fullCust.nettofrist) || 0;
+                        if (custSkonto > 0) {
+                          updates.skonto_prozent = custSkonto;
+                          updates.skonto_tage = custSkontoTage;
+                          hints.push(`Skonto: ${custSkonto}% / ${custSkontoTage} Tage`);
+                        }
+                        if (custNettofrist > 0) {
+                          updates.zahlungsbedingungen = `${custNettofrist} Tage`;
+                          if (form.datum) {
+                            const due = new Date(form.datum + "T12:00:00");
+                            due.setDate(due.getDate() + custNettofrist);
+                            updates.faellig_am = due.toISOString().split("T")[0];
+                          }
+                          hints.push(`Zahlungsfrist: ${custNettofrist} Tage`);
+                        }
+                      }
+                    }
+                    setForm(prev => ({ ...prev, ...updates }));
+                    if (hints.length > 0) {
+                      toast({ title: "Kundeneinstellungen übernommen", description: hints.join(" · ") });
+                    }
+                  }}
+                />
               </div>
               {form.customer_id && (
                 <p className="text-xs text-muted-foreground mt-1">

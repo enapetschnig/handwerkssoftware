@@ -15,8 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { PageHeader } from "@/components/PageHeader";
 import { BautagesberichtPhotos } from "@/components/BautagesberichtPhotos";
+import { CustomerSelect } from "@/components/CustomerSelect";
 
-type Customer = { id: string; name: string };
 const CHECKLISTE_ITEMS = [
   { key: "unterlagen_erhalten", label: "Unterlagen erhalten" },
   { key: "bestandsaufnahme", label: "Bestandsaufnahme" },
@@ -63,7 +63,6 @@ const ErstterminInteressentDetail = () => {
   const [firmenExtern, setFirmenExtern] = useState("");
   const [aufmasse, setAufmasse] = useState("");
   const [status, setStatus] = useState("entwurf");
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -74,8 +73,6 @@ const ErstterminInteressentDetail = () => {
   const init = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate("/auth"); return; }
-    const { data: custData } = await supabase.from("customers").select("id, name").order("name");
-    if (custData) setCustomers(custData as Customer[]);
     if (!isNew && id) await fetchTermin(id);
     setLoading(false);
   };
@@ -193,7 +190,20 @@ const ErstterminInteressentDetail = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Kunde *</Label>
-                <Select value={customerId} onValueChange={setCustomerId}><SelectTrigger><SelectValue placeholder="Kunde waehlen" /></SelectTrigger><SelectContent>{customers.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent></Select></div>
+                <CustomerSelect
+                  value={customerId}
+                  onChange={(id, customer) => {
+                    setCustomerId(id || "");
+                    if (customer) {
+                      if (customer.telefon) setTelefon(customer.telefon);
+                      if (customer.email) setEmail(customer.email);
+                      if (customer.adresse || customer.plz || customer.ort) {
+                        setStandort([customer.adresse, customer.plz, customer.ort].filter(Boolean).join(", "));
+                      }
+                    }
+                  }}
+                  required
+                /></div>
               <div className="space-y-1"><Label>Datum</Label><Input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} /></div>
               <div className="space-y-1"><Label>Nr.</Label><Input value={nummer} readOnly placeholder="Wird automatisch vergeben" className="bg-muted" /></div>
               <div className="space-y-1"><Label>Berater</Label><Input value={berater} onChange={(e) => setBerater(e.target.value)} placeholder="Name des Beraters" /></div>

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Zap, Package, Search, UserPlus, Minus, Plus } from "lucide-react";
+import { Zap, Package, Minus, Plus } from "lucide-react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -15,15 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CustomerSelect, type CustomerData } from "@/components/CustomerSelect";
 
 interface OfferPackage {
   id: string;
@@ -38,18 +30,6 @@ interface PackageItem {
   einzelpreis: number;
   default_menge: number;
   sort_order: number;
-}
-
-interface CustomerOption {
-  id: string;
-  name: string;
-  adresse: string | null;
-  plz: string | null;
-  ort: string | null;
-  land: string | null;
-  email: string | null;
-  telefon: string | null;
-  uid_nummer: string | null;
 }
 
 interface QuickItem {
@@ -67,12 +47,9 @@ interface QuickOfferDialogProps {
 export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) {
   const [step, setStep] = useState<"package" | "configure">("package");
   const [packages, setPackages] = useState<OfferPackage[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<OfferPackage | null>(null);
   const [quickItems, setQuickItems] = useState<QuickItem[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
-  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
-  const [newCustomerName, setNewCustomerName] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerData | null>(null);
   const [mwstSatz, setMwstSatz] = useState(20);
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
@@ -81,11 +58,9 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
   useEffect(() => {
     if (open) {
       fetchPackages();
-      fetchCustomers();
       setStep("package");
       setSelectedPackage(null);
       setSelectedCustomer(null);
-      setNewCustomerName("");
       setQuickItems([]);
     }
   }, [open]);
@@ -96,14 +71,6 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
       .select("id, name, beschreibung")
       .order("name");
     if (data) setPackages(data);
-  };
-
-  const fetchCustomers = async () => {
-    const { data } = await supabase
-      .from("customers")
-      .select("id, name, adresse, plz, ort, land, email, telefon, uid_nummer")
-      .order("name");
-    if (data) setCustomers(data);
   };
 
   const selectPackage = async (pkg: OfferPackage) => {
@@ -147,9 +114,9 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
   const bruttoSumme = nettoSumme + mwstBetrag;
 
   const handleCreate = async () => {
-    const customerName = selectedCustomer?.name || newCustomerName.trim();
+    const customerName = selectedCustomer?.name || "";
     if (!customerName) {
-      toast({ variant: "destructive", title: "Fehler", description: "Bitte Kunden auswählen oder Namen eingeben" });
+      toast({ variant: "destructive", title: "Fehler", description: "Bitte Kunden auswählen" });
       return;
     }
     if (quickItems.filter(i => i.menge > 0).length === 0) {
@@ -162,22 +129,7 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Nicht angemeldet");
 
-      // Get or create customer (with duplicate protection)
-      let customerId = selectedCustomer?.id || null;
-      if (!customerId && newCustomerName.trim()) {
-        // Check if customer already exists
-        const { data: existingCust } = await supabase
-          .from("customers").select("id").ilike("name", newCustomerName.trim()).limit(1).maybeSingle();
-        if (existingCust) {
-          customerId = existingCust.id;
-        } else {
-          const { data: newCust } = await supabase.from("customers").insert({
-            user_id: user.id,
-            name: newCustomerName.trim(),
-          }).select("id").single();
-          if (newCust) customerId = newCust.id;
-        }
-      }
+      const customerId = selectedCustomer?.id || null;
 
       // Generate offer number
       const { data: numData, error: numError } = await supabase.rpc("next_invoice_number", {
@@ -294,51 +246,13 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
             {/* Customer selection */}
             <div className="space-y-2">
               <Label className="font-medium">Kunde</Label>
-              <div className="flex gap-2">
-                <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="flex-1 justify-start text-left font-normal">
-                      <Search className="w-4 h-4 mr-2 text-muted-foreground" />
-                      {selectedCustomer ? selectedCustomer.name : "Kunde suchen..."}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[300px]" align="start">
-                    <Command>
-                      <CommandInput placeholder="Kunde suchen..." />
-                      <CommandList>
-                        <CommandEmpty>Kein Kunde gefunden</CommandEmpty>
-                        <CommandGroup>
-                          {customers.map(c => (
-                            <CommandItem
-                              key={c.id}
-                              onSelect={() => {
-                                setSelectedCustomer(c);
-                                setNewCustomerName("");
-                                setCustomerPopoverOpen(false);
-                              }}
-                            >
-                              {c.name}
-                              {c.ort && <span className="ml-2 text-xs text-muted-foreground">{c.ort}</span>}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {!selectedCustomer && (
-                <Input
-                  placeholder="Oder neuen Kundennamen eingeben..."
-                  value={newCustomerName}
-                  onChange={e => setNewCustomerName(e.target.value)}
-                />
-              )}
-              {selectedCustomer && (
-                <Button variant="ghost" size="sm" onClick={() => setSelectedCustomer(null)} className="text-xs">
-                  Anderen Kunden wählen
-                </Button>
-              )}
+              <CustomerSelect
+                value={selectedCustomer?.id || null}
+                onChange={(id, customer) => {
+                  setSelectedCustomer(customer);
+                }}
+                required
+              />
             </div>
 
             {/* Package items */}

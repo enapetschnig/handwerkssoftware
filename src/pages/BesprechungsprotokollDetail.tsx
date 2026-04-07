@@ -14,8 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { PageHeader } from "@/components/PageHeader";
 import { ProtokollMassnahmen, type Massnahme } from "@/components/ProtokollMassnahmen";
+import { CustomerSelect } from "@/components/CustomerSelect";
 
-type Customer = { id: string; name: string };
 type Project = { id: string; name: string; customer_id: string | null };
 
 const BesprechungsprotokollDetail = () => {
@@ -47,7 +47,6 @@ const BesprechungsprotokollDetail = () => {
   const [massnahmen, setMassnahmen] = useState<Massnahme[]>([]);
 
   // Reference data
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
 
   // UI state
@@ -61,12 +60,8 @@ const BesprechungsprotokollDetail = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate("/auth"); return; }
 
-    const [custRes, projRes] = await Promise.all([
-      supabase.from("customers").select("id, name").order("name"),
-      supabase.from("projects").select("id, name, customer_id").order("name"),
-    ]);
-    if (custRes.data) setCustomers(custRes.data as Customer[]);
-    if (projRes.data) setProjects(projRes.data as Project[]);
+    const { data: projData } = await supabase.from("projects").select("id, name, customer_id").order("name");
+    if (projData) setProjects(projData as Project[]);
 
     if (!isNew && id) await fetchProtokoll(id);
     setLoading(false);
@@ -289,14 +284,10 @@ const BesprechungsprotokollDetail = () => {
               </div>
               <div>
                 <Label>Kunde</Label>
-                <Select value={customerId} onValueChange={(val) => { setCustomerId(val); setProjectId(""); }}>
-                  <SelectTrigger><SelectValue placeholder="Kunde wählen..." /></SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CustomerSelect
+                  value={customerId}
+                  onChange={(id) => { setCustomerId(id || ""); setProjectId(""); }}
+                />
               </div>
               <div>
                 <Label>Projekt</Label>
