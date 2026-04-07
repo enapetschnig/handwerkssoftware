@@ -375,9 +375,9 @@ export default function ScheduleBoard() {
               <span className="hidden sm:inline">Zurück</span>
             </Button>
             <img
-              src="/schafferhofer-logo.svg"
-              alt="Schafferhofer Bau"
-              className="h-10 w-10 sm:h-14 sm:w-14 cursor-pointer hover:opacity-80 transition-opacity object-contain"
+              src="/newmontilogo.png"
+              alt="MONTI.PRO"
+              className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
               onClick={() => navigate("/")}
             />
           </div>
