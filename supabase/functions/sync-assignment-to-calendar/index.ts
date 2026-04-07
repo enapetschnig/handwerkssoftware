@@ -10,7 +10,11 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const CALENDAR_ID = "d072ed86f2ea170721f8fd46100ac8326a2a17c328a767b83591a2f16a5456aa@group.calendar.google.com";
+// Calendar ID loaded from app_settings (fallback to empty string)
+async function getCalendarId(): Promise<string> {
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "google_calendar_id").maybeSingle();
+  return data?.value || "";
+}
 
 // ─── Google Auth (JWT → Access Token) ────────────────────
 
@@ -88,9 +92,10 @@ async function createOrUpdateEvent(
     transparency: "opaque",
   };
 
+  const calId = await getCalendarId();
   const url = existingEventId
-    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events/${existingEventId}`
-    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`;
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${existingEventId}`
+    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
 
   const res = await fetch(url, {
     method: existingEventId ? "PUT" : "POST",
@@ -112,7 +117,7 @@ async function createOrUpdateEvent(
 
 async function deleteEvent(accessToken: string, eventId: string) {
   await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events/${eventId}`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(await getCalendarId())}/events/${eventId}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },

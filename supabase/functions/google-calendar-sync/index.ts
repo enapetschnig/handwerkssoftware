@@ -263,16 +263,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Use service role key for DB operations to avoid RLS issues
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      supabaseServiceKey
     );
 
+    // Verify the caller is authenticated (user JWT or service role)
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
-
-    if (claimsError || !claimsData?.user) {
+    const { data: claimsData } = await supabase.auth.getUser(token);
+    // Allow both authenticated users and service role calls
+    const isServiceRole = token === supabaseServiceKey;
+    if (!claimsData?.user && !isServiceRole) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }

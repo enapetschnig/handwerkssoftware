@@ -126,16 +126,16 @@ const BesprechungsprotokollDetail = () => {
     }
 
     const payload = {
-      typ: typ || null,
-      datum,
-      zeit_von: zeitVon,
-      zeit_bis: zeitBis,
+      typ: typ || "persoenlich",
+      datum: datum || new Date().toISOString().split("T")[0],
+      zeit_von: zeitVon || null,
+      zeit_bis: zeitBis || null,
       ort: ort || null,
       customer_id: customerId || null,
       project_id: projectId || null,
       protokollant: protokollant || null,
-      nummer: protokollNummer,
-      status,
+      nummer: protokollNummer || null,
+      status: status || "entwurf",
       teilnehmer: teilnehmer || null,
       inhalt: inhalt || null,
       vereinbarungen: vereinbarungen || null,
@@ -157,7 +157,8 @@ const BesprechungsprotokollDetail = () => {
       const { data: inserted, error } = await (supabase.from("besprechungsprotokolle" as never) as any)
         .insert({ ...payload, erstellt_von: user?.id }).select("id").single();
       if (error || !inserted) {
-        toast({ variant: "destructive", title: "Fehler", description: "Erstellen fehlgeschlagen" });
+        console.error("Insert error:", error);
+        toast({ variant: "destructive", title: "Fehler", description: error?.message || "Erstellen fehlgeschlagen" });
         setSaving(false);
         return;
       }
