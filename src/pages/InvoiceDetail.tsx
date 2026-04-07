@@ -631,6 +631,7 @@ export default function InvoiceDetail() {
         einzelpreis: item.einzelpreis,
         gesamtpreis: item.gesamtpreis,
         produktnummer: item.produktnummer || null,
+        rabatt_prozent: item.rabatt_prozent || 0,
       }));
 
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert);
@@ -899,6 +900,8 @@ export default function InvoiceDetail() {
         einheit: item.einheit,
         einzelpreis: item.einzelpreis,
         gesamtpreis: item.gesamtpreis,
+        produktnummer: (item as any).produktnummer || null,
+        rabatt_prozent: (item as any).rabatt_prozent || 0,
       }));
 
       await supabase.from("invoice_items").insert(itemsToInsert);

@@ -181,10 +181,14 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
         invoice_id: newInvoice.id,
         position: idx + 1,
         beschreibung: item.beschreibung,
+        kurztext: item.beschreibung,
+        langtext: null,
         menge: item.menge,
         einheit: item.einheit,
         einzelpreis: item.einzelpreis,
         gesamtpreis: item.menge * item.einzelpreis,
+        produktnummer: null,
+        rabatt_prozent: 0,
       }));
 
       await supabase.from("invoice_items").insert(itemsToInsert);
