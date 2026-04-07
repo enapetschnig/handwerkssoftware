@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, LogOut, Loader2 } from "lucide-react";
+import { Clock, LogOut, Loader2, ShieldX } from "lucide-react";
+import type { FeatureKey } from "@/hooks/usePermissions";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  feature?: FeatureKey;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated" | "pending">("loading");
+export function ProtectedRoute({ children, feature }: ProtectedRouteProps) {
+  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated" | "pending" | "forbidden">("loading");
+  const navigate = useNavigate();
 
   useEffect(() => {
     checkAccess();
@@ -37,9 +40,22 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     if (!profile || profile.is_active === false || profile.is_active === null) {
       setStatus("pending");
-    } else {
-      setStatus("authenticated");
+      return;
     }
+
+    // Check feature-based permissions
+    if (feature) {
+      const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
+      const role = roleData?.role || "mitarbeiter";
+      const { data: permData } = await (supabase.from("role_permissions" as never) as any)
+        .select("can_view").eq("role", role).eq("feature", feature).maybeSingle();
+      if (!permData?.can_view) {
+        setStatus("forbidden");
+        return;
+      }
+    }
+
+    setStatus("authenticated");
   };
 
   if (status === "loading") {
@@ -76,6 +92,29 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
             }}>
               <LogOut className="mr-2 h-4 w-4" />
               Abmelden
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (status === "forbidden") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
+              <ShieldX className="h-8 w-8 text-red-600" />
+            </div>
+            <CardTitle className="text-xl">Kein Zugriff</CardTitle>
+            <CardDescription className="text-base mt-2">
+              Du hast keine Berechtigung für diesen Bereich.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Button onClick={() => navigate("/")}>
+              Zurück zum Dashboard
             </Button>
           </CardContent>
         </Card>

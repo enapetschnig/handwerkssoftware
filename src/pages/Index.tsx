@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Project = {
   id: string;
@@ -40,6 +41,7 @@ type RecentTimeEntry = {
 export default function Index() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { canView, isAdmin, loading: permsLoading } = usePermissions();
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -260,8 +262,6 @@ export default function Index() {
     );
   }
 
-  const isAdmin = userRole === "administrator";
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -349,8 +349,8 @@ export default function Index() {
         {/* Main Actions Grid — Admin: R&A, Projekte, Material, Materialien, Kunden, Admin, Zeit, Stunden */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
 
-          {/* 1. Admin: Rechnungen & Angebote */}
-          {isAdmin && (
+          {/* 1. Rechnungen & Angebote */}
+          {canView('rechnungen') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/invoices")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Receipt className="h-6 w-6 text-primary" /></div>
@@ -361,17 +361,15 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 2. Zeiterfassung - Für Mitarbeiter ganz vorne */}
-          {!isAdmin && (
-            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
-              <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
-                <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
-                <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
-              </CardHeader>
-              <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
-            </Card>
-          )}
+          {/* 2. Zeiterfassung - Für alle */}
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
+            <CardHeader className="space-y-2 pb-3">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
+              <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
+              <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
+            </CardHeader>
+            <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
+          </Card>
 
           {/* 3. Projekte - Für alle */}
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/projects")}>
@@ -383,8 +381,8 @@ export default function Index() {
             <CardContent><Button className="w-full" size="sm" variant="secondary">Projekte öffnen</Button></CardContent>
           </Card>
 
-          {/* 4. Plantafel - Für Admin */}
-          {isAdmin && (
+          {/* 4. Plantafel */}
+          {canView('plantafel') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/schedule")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><LayoutGrid className="h-6 w-6 text-primary" /></div>
@@ -396,6 +394,7 @@ export default function Index() {
           )}
 
           {/* 4b. Kalender */}
+          {canView('kalender') && (
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/calendar")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><CalendarDays className="h-6 w-6 text-orange-600" /></div>
@@ -404,8 +403,10 @@ export default function Index() {
             </CardHeader>
             <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Kalender öffnen</Button></CardContent>
           </Card>
+          )}
 
-          {/* 4c. Bautagesberichte - Für alle */}
+          {/* 4c. Bautagesberichte */}
+          {canView('bautagesberichte') && (
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/bautagesberichte")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-emerald-500/10 flex items-center justify-center"><ClipboardList className="h-6 w-6 text-emerald-600" /></div>
@@ -414,9 +415,10 @@ export default function Index() {
             </CardHeader>
             <CardContent><Button className="bg-emerald-600 hover:bg-emerald-700 w-full" size="sm">Berichte öffnen</Button></CardContent>
           </Card>
+          )}
 
-          {/* Ersttermine - Für Admin */}
-          {isAdmin && (
+          {/* Ersttermine */}
+          {canView('ersttermine') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/ersttermine-interessent")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-violet-500/10 flex items-center justify-center"><UserPlus className="h-6 w-6 text-violet-600" /></div>
@@ -433,6 +435,7 @@ export default function Index() {
           )}
 
           {/* Besprechungsprotokolle */}
+          {canView('protokolle') && (
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/besprechungsprotokolle")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-cyan-500/10 flex items-center justify-center"><MessageSquare className="h-6 w-6 text-cyan-600" /></div>
@@ -441,8 +444,10 @@ export default function Index() {
             </CardHeader>
             <CardContent><Button className="bg-cyan-600 hover:bg-cyan-700 w-full" size="sm">Protokolle öffnen</Button></CardContent>
           </Card>
+          )}
 
-          {/* 4b. Regieberichte - Für alle */}
+          {/* 4b. Regieberichte */}
+          {canView('regieberichte') && (
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/disturbances")}>
             <CardHeader className="space-y-2 pb-3">
               <div className="h-12 w-12 rounded-lg bg-yellow-500/10 flex items-center justify-center"><FileText className="h-6 w-6 text-yellow-600" /></div>
@@ -451,9 +456,10 @@ export default function Index() {
             </CardHeader>
             <CardContent><Button className="bg-yellow-600 hover:bg-yellow-700 w-full" size="sm">Regieberichte öffnen</Button></CardContent>
           </Card>
+          )}
 
-          {/* 5. Admin: Materialien */}
-          {isAdmin && (
+          {/* 5. Materialien */}
+          {canView('materialien') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/materials")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Package className="h-6 w-6 text-primary" /></div>
@@ -464,8 +470,8 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 5. Admin: Kunden */}
-          {isAdmin && (
+          {/* 5. Kunden */}
+          {canView('kunden') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/customers")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><BookUser className="h-6 w-6 text-primary" /></div>
@@ -476,8 +482,8 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 6. Admin: Admin-Bereich */}
-          {isAdmin && (
+          {/* 6. Admin-Bereich */}
+          {canView('admin') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/admin")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="h-6 w-6 text-primary" /></div>
@@ -488,17 +494,6 @@ export default function Index() {
             </Card>
           )}
 
-          {/* 7. Zeiterfassung - Für Admin (Mitarbeiter haben es oben) */}
-          {isAdmin && (
-            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/time-tracking")}>
-              <CardHeader className="space-y-2 pb-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Clock className="h-6 w-6 text-primary" /></div>
-                <CardTitle className="text-lg sm:text-xl">Zeiterfassung</CardTitle>
-                <CardDescription className="text-sm">Stunden auf Projekte buchen</CardDescription>
-              </CardHeader>
-              <CardContent><Button className="w-full" size="sm">Stunden erfassen</Button></CardContent>
-            </Card>
-          )}
 
           {/* 8. Meine Stunden - Für alle */}
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/my-hours")}>
@@ -522,8 +517,8 @@ export default function Index() {
             </Card>
           )}
 
-          {/* Admin: Stundenauswertung */}
-          {isAdmin && (
+          {/* Stundenauswertung */}
+          {canView('stundenauswertung') && (
             <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/hours-report")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><BarChart3 className="h-6 w-6 text-primary" /></div>

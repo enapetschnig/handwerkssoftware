@@ -87,29 +87,29 @@ function AppContent() {
         <Route path="/my-documents" element={<ProtectedRoute><MyDocuments /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/construction-sites" element={<ProtectedRoute><ConstructionSites /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-        <Route path="/hours-report" element={<ProtectedRoute><HoursReport /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute feature="admin"><Admin /></ProtectedRoute>} />
+        <Route path="/hours-report" element={<ProtectedRoute feature="stundenauswertung"><HoursReport /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/notepad" element={<ProtectedRoute><Notepad /></ProtectedRoute>} />
         <Route path="/disturbances" element={<ProtectedRoute><Disturbances /></ProtectedRoute>} />
         <Route path="/disturbances/:id" element={<ProtectedRoute><DisturbanceDetail /></ProtectedRoute>} />
-        <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-        <Route path="/invoices/templates" element={<ProtectedRoute><InvoiceTemplates /></ProtectedRoute>} />
-        <Route path="/invoices/packages" element={<ProtectedRoute><OfferPackages /></ProtectedRoute>} />
-        <Route path="/invoices/new" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
-        <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetailKeyed /></ProtectedRoute>} />
-        <Route path="/materials" element={<ProtectedRoute><InvoiceTemplates /></ProtectedRoute>} />
-        <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-        <Route path="/schedule" element={<ProtectedRoute><ScheduleBoard /></ProtectedRoute>} />
-        <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
-        <Route path="/bautagesberichte" element={<ProtectedRoute><Bautagesberichte /></ProtectedRoute>} />
-        <Route path="/bautagesberichte/:id" element={<ProtectedRoute><BautagesberichtDetail /></ProtectedRoute>} />
-        <Route path="/besprechungsprotokolle" element={<ProtectedRoute><Besprechungsprotokolle /></ProtectedRoute>} />
-        <Route path="/besprechungsprotokolle/:id" element={<ProtectedRoute><BesprechungsprotokollDetail /></ProtectedRoute>} />
-        <Route path="/ersttermine-interessent" element={<ProtectedRoute><ErsttermineInteressent /></ProtectedRoute>} />
-        <Route path="/ersttermine-interessent/:id" element={<ProtectedRoute><ErstterminInteressentDetail /></ProtectedRoute>} />
-        <Route path="/ersttermine-projekt" element={<ProtectedRoute><ErsttermineProjekt /></ProtectedRoute>} />
-        <Route path="/ersttermine-projekt/:id" element={<ProtectedRoute><ErstterminProjektDetail /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute feature="rechnungen"><Invoices /></ProtectedRoute>} />
+        <Route path="/invoices/templates" element={<ProtectedRoute feature="rechnungen"><InvoiceTemplates /></ProtectedRoute>} />
+        <Route path="/invoices/packages" element={<ProtectedRoute feature="rechnungen"><OfferPackages /></ProtectedRoute>} />
+        <Route path="/invoices/new" element={<ProtectedRoute feature="rechnungen"><InvoiceDetailKeyed /></ProtectedRoute>} />
+        <Route path="/invoices/:id" element={<ProtectedRoute feature="rechnungen"><InvoiceDetailKeyed /></ProtectedRoute>} />
+        <Route path="/materials" element={<ProtectedRoute feature="materialien"><InvoiceTemplates /></ProtectedRoute>} />
+        <Route path="/customers" element={<ProtectedRoute feature="kunden"><Customers /></ProtectedRoute>} />
+        <Route path="/schedule" element={<ProtectedRoute feature="plantafel"><ScheduleBoard /></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute feature="kalender"><Calendar /></ProtectedRoute>} />
+        <Route path="/bautagesberichte" element={<ProtectedRoute feature="bautagesberichte"><Bautagesberichte /></ProtectedRoute>} />
+        <Route path="/bautagesberichte/:id" element={<ProtectedRoute feature="bautagesberichte"><BautagesberichtDetail /></ProtectedRoute>} />
+        <Route path="/besprechungsprotokolle" element={<ProtectedRoute feature="protokolle"><Besprechungsprotokolle /></ProtectedRoute>} />
+        <Route path="/besprechungsprotokolle/:id" element={<ProtectedRoute feature="protokolle"><BesprechungsprotokollDetail /></ProtectedRoute>} />
+        <Route path="/ersttermine-interessent" element={<ProtectedRoute feature="ersttermine"><ErsttermineInteressent /></ProtectedRoute>} />
+        <Route path="/ersttermine-interessent/:id" element={<ProtectedRoute feature="ersttermine"><ErstterminInteressentDetail /></ProtectedRoute>} />
+        <Route path="/ersttermine-projekt" element={<ProtectedRoute feature="ersttermine"><ErsttermineProjekt /></ProtectedRoute>} />
+        <Route path="/ersttermine-projekt/:id" element={<ProtectedRoute feature="ersttermine"><ErstterminProjektDetail /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 

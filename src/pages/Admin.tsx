@@ -27,6 +27,7 @@ import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings"
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
+import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { Cloud, Building, AlertTriangle } from "lucide-react";
 
@@ -636,6 +637,7 @@ export default function Admin() {
             <TabsTrigger value="rechnung" className="flex-shrink-0">Rechnungs-Layout</TabsTrigger>
             <TabsTrigger value="farben" className="flex-shrink-0">Farben & Plantafel</TabsTrigger>
             <TabsTrigger value="konfiguration" className="flex-shrink-0">Konfiguration</TabsTrigger>
+            <TabsTrigger value="berechtigungen" className="flex-shrink-0">Berechtigungen</TabsTrigger>
             <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
           </TabsList>
 
@@ -691,6 +693,7 @@ export default function Admin() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
+                                <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                                 <SelectItem value="administrator">Administrator</SelectItem>
                               </SelectContent>
                             </Select>
@@ -789,6 +792,7 @@ export default function Admin() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="administrator">Administrator</SelectItem>
+                              <SelectItem value="vorarbeiter">Vorarbeiter</SelectItem>
                               <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
                             </SelectContent>
                           </Select>
@@ -1129,7 +1133,12 @@ export default function Admin() {
             <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
           </TabsContent>
 
-          {/* ===== TAB 6: WHATSAPP ===== */}
+          {/* ===== TAB 6: BERECHTIGUNGEN ===== */}
+          <TabsContent value="berechtigungen" className="space-y-6">
+            <PermissionMatrix />
+          </TabsContent>
+
+          {/* ===== TAB 7: WHATSAPP ===== */}
           <TabsContent value="whatsapp" className="space-y-6">
             <WhatsAppAdminSettings />
           </TabsContent>
