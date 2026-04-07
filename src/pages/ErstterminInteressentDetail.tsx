@@ -95,7 +95,7 @@ const ErstterminInteressentDetail = () => {
     setEntscheidungsstatus(t.entscheidungsstatus || ""); setZeitrahmen(t.zeitrahmen || "");
     setBudget(t.budget || ""); setQuelle(t.quelle || ""); setPrioritaeten(t.prioritaeten || "");
     setCheckliste(t.checkliste || defaultCheckliste());
-    setZufahrt(t.zufahrt || ""); setInfrastruktur(t.infrastruktur || "");
+    setZufahrt(t.zufahrt_parkplatz || ""); setInfrastruktur(t.infrastruktur || "");
     setMaterialien(t.materialien || ""); setSicherheit(t.sicherheit || "");
     setHindernisse(t.hindernisse || ""); setEntsorgung(t.entsorgung || "");
     setLeistungsbeschreibung(t.leistungsbeschreibung || "");
@@ -120,7 +120,7 @@ const ErstterminInteressentDetail = () => {
       projektart: projektart || null, umfang: umfang || null,
       entscheidungsstatus: entscheidungsstatus || null, zeitrahmen: zeitrahmen || null,
       budget: budget || null, quelle: quelle || null, prioritaeten: prioritaeten || null,
-      checkliste, zufahrt: zufahrt || null, infrastruktur: infrastruktur || null,
+      checkliste, zufahrt_parkplatz: zufahrt || null, infrastruktur: infrastruktur || null,
       materialien: materialien || null, sicherheit: sicherheit || null,
       hindernisse: hindernisse || null, entsorgung: entsorgung || null,
       leistungsbeschreibung: leistungsbeschreibung || null,
@@ -134,7 +134,7 @@ const ErstterminInteressentDetail = () => {
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: inserted, error } = await (supabase.from("ersttermin_interessent" as never) as any)
-        .insert({ ...payload, user_id: user?.id }).select("id").single();
+        .insert({ ...payload, erstellt_von: user?.id }).select("id").single();
       if (error || !inserted) { toast({ variant: "destructive", title: "Fehler", description: "Erstellen fehlgeschlagen" }); setSaving(false); return; }
       terminId = (inserted as any).id; setSavedId(terminId); setNummer(terminNummer);
     }

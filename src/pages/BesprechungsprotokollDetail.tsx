@@ -100,7 +100,7 @@ const BesprechungsprotokollDetail = () => {
     setSavedId(protokollId);
 
     // Load massnahmen
-    const { data: mData } = await (supabase.from("protokoll_massnahmen" as never) as any)
+    const { data: mData } = await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any)
       .select("*").eq("protokoll_id", protokollId).order("created_at");
 
     if (mData) {
@@ -155,7 +155,7 @@ const BesprechungsprotokollDetail = () => {
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: inserted, error } = await (supabase.from("besprechungsprotokolle" as never) as any)
-        .insert({ ...payload, user_id: user?.id }).select("id").single();
+        .insert({ ...payload, erstellt_von: user?.id }).select("id").single();
       if (error || !inserted) {
         toast({ variant: "destructive", title: "Fehler", description: "Erstellen fehlgeschlagen" });
         setSaving(false);
@@ -168,7 +168,7 @@ const BesprechungsprotokollDetail = () => {
 
     // Save massnahmen: delete + reinsert
     if (protokollId) {
-      await (supabase.from("protokoll_massnahmen" as never) as any)
+      await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any)
         .delete().eq("protokoll_id", protokollId);
 
       const rows = massnahmen.filter((m) => m.aufgabe).map((m) => ({
@@ -180,7 +180,7 @@ const BesprechungsprotokollDetail = () => {
       }));
 
       if (rows.length > 0) {
-        await (supabase.from("protokoll_massnahmen" as never) as any).insert(rows);
+        await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any).insert(rows);
       }
     }
 
@@ -191,7 +191,7 @@ const BesprechungsprotokollDetail = () => {
 
   const handleDelete = async () => {
     if (!savedId) return;
-    await (supabase.from("protokoll_massnahmen" as never) as any).delete().eq("protokoll_id", savedId);
+    await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any).delete().eq("protokoll_id", savedId);
     const { error } = await (supabase.from("besprechungsprotokolle" as never) as any).delete().eq("id", savedId);
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Löschen fehlgeschlagen" });

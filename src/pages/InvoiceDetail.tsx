@@ -533,19 +533,10 @@ export default function InvoiceDetail() {
       let savedId = invoiceId;
       let customerId = form.customer_id;
 
-      // Auto-create or update customer
+      // Auto-create customer if no customer_id is set (never overwrite existing customer master data)
       if (form.kunde_name.trim()) {
         if (customerId) {
-          await supabase.from("customers").update({
-            name: form.kunde_name,
-            adresse: form.kunde_adresse || null,
-            plz: form.kunde_plz || null,
-            ort: form.kunde_ort || null,
-            land: form.kunde_land || null,
-            email: form.kunde_email || null,
-            telefon: form.kunde_telefon || null,
-            uid_nummer: form.kunde_uid || null,
-          }).eq("id", customerId);
+          // Customer already linked – keep as-is, invoice stores its own snapshot
         } else {
           // Check for existing customer with same name + PLZ (duplicate protection)
           let custQuery = supabase.from("customers").select("id").ilike("name", form.kunde_name.trim());
@@ -554,16 +545,6 @@ export default function InvoiceDetail() {
 
           if (existingCust) {
             customerId = existingCust.id;
-            // Update existing customer data
-            await supabase.from("customers").update({
-              adresse: form.kunde_adresse || null,
-              plz: form.kunde_plz || null,
-              ort: form.kunde_ort || null,
-              land: form.kunde_land || null,
-              email: form.kunde_email || null,
-              telefon: form.kunde_telefon || null,
-              uid_nummer: form.kunde_uid || null,
-            }).eq("id", existingCust.id);
           } else {
             const { data: newCust } = await supabase.from("customers").insert({
               user_id: user.id,
@@ -629,7 +610,7 @@ export default function InvoiceDetail() {
 
         if (numError) throw numError;
         const nummer = numData as string;
-        const laufnummer = parseInt(nummer.split("-")[2]);
+        const laufnummer = parseInt(nummer.replace(/^AN/, '').slice(2)) || 1;
 
         const { data: insertData, error: insertError } = await supabase
           .from("invoices")
@@ -886,7 +867,7 @@ export default function InvoiceDetail() {
       if (numError) throw numError;
 
       const nummer = numData as string;
-      const laufnummer = parseInt(nummer.split("-")[2]);
+      const laufnummer = parseInt(nummer.replace(/^AN/, '').slice(2)) || 1;
 
       const { data: newInvoice, error: insertError } = await supabase
         .from("invoices")
@@ -2560,6 +2541,7 @@ export default function InvoiceDetail() {
                 kunde_email: kundeData.kunde_email || prev.kunde_email,
                 kunde_telefon: kundeData.kunde_telefon || prev.kunde_telefon,
                 kunde_uid: kundeData.kunde_uid || prev.kunde_uid,
+                customer_id: kundeData.customer_id || prev.customer_id,
               }));
             }
             setImportRegieOpen(false);

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Zap, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList, UserPlus, MessageSquare } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList, UserPlus, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {

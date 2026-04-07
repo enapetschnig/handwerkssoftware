@@ -106,8 +106,8 @@ const BautagesberichtDetail = () => {
     setAusgefuehrteArbeiten(b.ausgefuehrte_arbeiten || "");
     setBesondereVorkommnisse(b.besondere_vorkommnisse || "");
     setStatus(b.status || "entwurf");
-    setSignaturBauleiter(b.signatur_bauleiter || null);
-    setSignaturKunde(b.signatur_kunde || null);
+    setSignaturBauleiter(b.unterschrift_bauleiter || null);
+    setSignaturKunde(b.unterschrift_kunde || null);
     setSavedId(berichtId);
 
     // Fetch workers
@@ -158,8 +158,8 @@ const BautagesberichtDetail = () => {
       ausgefuehrte_arbeiten: ausgefuehrteArbeiten,
       besondere_vorkommnisse: besondereVorkommnisse,
       status,
-      signatur_bauleiter: signaturBauleiter,
-      signatur_kunde: signaturKunde,
+      unterschrift_bauleiter: signaturBauleiter,
+      unterschrift_kunde: signaturKunde,
     };
 
     let berichtId = savedId;
@@ -179,7 +179,7 @@ const BautagesberichtDetail = () => {
       // Insert
       const { data: { user } } = await supabase.auth.getUser();
       const { data: inserted, error } = await (supabase.from("bautagesberichte" as never) as any)
-        .insert({ ...payload, user_id: user?.id })
+        .insert({ ...payload, erstellt_von: user?.id })
         .select("id")
         .single();
 

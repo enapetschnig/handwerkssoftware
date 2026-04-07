@@ -91,7 +91,7 @@ const ErstterminProjektDetail = () => {
     setFreigabeIntern(t.freigabe_intern || false); setFreigabeKunde(t.freigabe_kunde || false);
     setFreigabeBehoerde(t.freigabe_behoerde || false); setFreigabeBemerkung(t.freigabe_bemerkung || "");
     setBekannteRisiken(t.bekannte_risiken || ""); setBesondereAnforderungen(t.besondere_anforderungen || "");
-    setFreigabeDatum(t.freigabe_datum || ""); setSignaturFreigabe(t.signatur_freigabe || null);
+    setFreigabeDatum(t.freigabe_datum || ""); setSignaturFreigabe(t.freigabe_unterschrift || null);
     setStatus(t.status || "entwurf"); setSavedId(terminId);
     if (t.project_id) {
       const proj = projects.find((p) => p.id === t.project_id);
@@ -118,7 +118,7 @@ const ErstterminProjektDetail = () => {
       freigabe_intern: freigabeIntern, freigabe_kunde: freigabeKunde, freigabe_behoerde: freigabeBehoerde,
       freigabe_bemerkung: freigabeBemerkung || null,
       bekannte_risiken: bekannteRisiken || null, besondere_anforderungen: besondereAnforderungen || null,
-      freigabe_datum: freigabeDatum || null, signatur_freigabe: signaturFreigabe, status,
+      freigabe_datum: freigabeDatum || null, freigabe_unterschrift: signaturFreigabe, status,
     };
     let terminId = savedId;
     if (savedId) {
@@ -127,7 +127,7 @@ const ErstterminProjektDetail = () => {
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: inserted, error } = await (supabase.from("ersttermin_projekt" as never) as any)
-        .insert({ ...payload, user_id: user?.id }).select("id").single();
+        .insert({ ...payload, erstellt_von: user?.id }).select("id").single();
       if (error || !inserted) { toast({ variant: "destructive", title: "Fehler", description: "Erstellen fehlgeschlagen" }); setSaving(false); return; }
       terminId = (inserted as any).id; setSavedId(terminId); setNummer(terminNummer);
     }

@@ -628,495 +628,512 @@ export default function Admin() {
         </div>
       </header>
 
-      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 space-y-6">
-        {/* ===== WARTENDE AKTIVIERUNGEN ===== */}
-        {profiles.filter(p => !p.is_active).length > 0 && (
-          <section>
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              Wartende Aktivierungen
-              <span className="bg-destructive text-destructive-foreground text-sm px-2 py-1 rounded-full">
-                {profiles.filter(p => !p.is_active).length}
-              </span>
-            </h2>
-            
-            <Card className="mb-6 border-destructive/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-destructive" />
-                  Neue Registrierungen
-                </CardTitle>
-                <CardDescription>
-                  Diese Benutzer haben sich registriert und warten auf Freischaltung
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {profiles.filter(p => !p.is_active).map((profile) => (
-                    <div key={profile.id} className="flex items-center justify-between p-4 rounded-lg border bg-card">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarFallback className="bg-destructive/10 text-destructive">
-                            {profile.vorname[0]}
-                            {profile.nachname[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">
-                            {profile.vorname} {profile.nachname}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Wartet auf Freischaltung
-                          </p>
+      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+        <Tabs defaultValue="benutzer" className="w-full">
+          <TabsList className="flex w-full overflow-x-auto mb-6">
+            <TabsTrigger value="benutzer" className="flex-shrink-0">Benutzer & Mitarbeiter</TabsTrigger>
+            <TabsTrigger value="einstellungen" className="flex-shrink-0">Einstellungen</TabsTrigger>
+            <TabsTrigger value="rechnung" className="flex-shrink-0">Rechnungs-Layout</TabsTrigger>
+            <TabsTrigger value="farben" className="flex-shrink-0">Farben & Plantafel</TabsTrigger>
+            <TabsTrigger value="konfiguration" className="flex-shrink-0">Konfiguration</TabsTrigger>
+            <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
+          </TabsList>
+
+          {/* ===== TAB 1: BENUTZER & MITARBEITER ===== */}
+          <TabsContent value="benutzer" className="space-y-6">
+            {/* ===== WARTENDE AKTIVIERUNGEN ===== */}
+            {profiles.filter(p => !p.is_active).length > 0 && (
+              <section>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  Wartende Aktivierungen
+                  <span className="bg-destructive text-destructive-foreground text-sm px-2 py-1 rounded-full">
+                    {profiles.filter(p => !p.is_active).length}
+                  </span>
+                </h2>
+
+                <Card className="mb-6 border-destructive/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <UserIcon className="h-5 w-5 text-destructive" />
+                      Neue Registrierungen
+                    </CardTitle>
+                    <CardDescription>
+                      Diese Benutzer haben sich registriert und warten auf Freischaltung
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {profiles.filter(p => !p.is_active).map((profile) => (
+                        <div key={profile.id} className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                          <div className="flex items-center gap-3">
+                            <Avatar>
+                              <AvatarFallback className="bg-destructive/10 text-destructive">
+                                {profile.vorname[0]}
+                                {profile.nachname[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">
+                                {profile.vorname} {profile.nachname}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Wartet auf Freischaltung
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={pendingRoles[profile.id] || "mitarbeiter"}
+                              onValueChange={(val) => setPendingRoles(prev => ({...prev, [profile.id]: val as "administrator" | "mitarbeiter"}))}
+                            >
+                              <SelectTrigger className="w-[160px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
+                                <SelectItem value="administrator">Administrator</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button onClick={() => handleActivateUser(profile.id, true)}>
+                              Freischalten
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={pendingRoles[profile.id] || "mitarbeiter"}
-                          onValueChange={(val) => setPendingRoles(prev => ({...prev, [profile.id]: val as "administrator" | "mitarbeiter"}))}
-                        >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
-                            <SelectItem value="administrator">Administrator</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button onClick={() => handleActivateUser(profile.id, true)}>
-                          Freischalten
-                        </Button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        )}
+                  </CardContent>
+                </Card>
+              </section>
+            )}
 
-        {/* ===== BENUTZERROLLEN SEKTION ===== */}
-        <section>
-          <h2 className="text-2xl font-bold mb-4">Benutzerrollen & Einladungen</h2>
-          
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  Administratoren
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-primary">
-                  {profiles.filter(p => userRoles[p.id] === "administrator").length}
-                </p>
-              </CardContent>
-            </Card>
+            {/* ===== BENUTZERROLLEN SEKTION ===== */}
+            <section>
+              <h2 className="text-2xl font-bold mb-4">Benutzerrollen & Einladungen</h2>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-accent" />
-                  Benutzerverwaltung
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-accent">
-                  {profiles.filter(p => userRoles[p.id] === "mitarbeiter").length}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-primary" />
+                      Administratoren
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-primary">
+                      {profiles.filter(p => userRoles[p.id] === "administrator").length}
+                    </p>
+                  </CardContent>
+                </Card>
 
-          {/* Users List */}
-          <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <CardTitle>Registrierte Benutzer</CardTitle>
-            <CardDescription>
-              Rollen verwalten und Mitarbeiterdaten/Dokumente bearbeiten
-            </CardDescription>
-          </div>
-          <Button variant="outline" onClick={() => setShowSizesDialog(true)}>
-            <Shirt className="w-4 h-4 mr-2" />
-            Arbeitskleidung/Schuhe Größen
-          </Button>
-        </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {profiles.filter(p => p.is_active).map((profile) => (
-                  <div
-                    key={profile.id}
-                    id={`registered-user-${profile.id}`}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-lg border bg-card transition-shadow"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>
-                          {profile.vorname[0]}
-                          {profile.nachname[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">
-                          {profile.vorname} {profile.nachname}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {userRoles[profile.id] === "administrator" ? "Administrator" : "Mitarbeiter"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <Select
-                        value={userRoles[profile.id]}
-                        onValueChange={(val) => handleRoleChange(profile.id, val as "administrator" | "mitarbeiter")}
-                      >
-                        <SelectTrigger className="w-full sm:w-[200px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="administrator">Administrator</SelectItem>
-                          <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => openEmployeeEditorForUser(profile.id, 'stammdaten')}
-                        >
-                          Bearbeiten
-                        </Button>
-                        <Button onClick={() => openEmployeeEditorForUser(profile.id, 'dokumente')}>
-                          <FileText className="w-4 h-4 mr-2" />
-                          Dokumente
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setUserToDelete(profile);
-                            setDeleteDialogOpen(true);
-                          }}
-                        >
-                          Deaktivieren
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                      <UserIcon className="h-5 w-5 text-accent" />
+                      Benutzerverwaltung
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-accent">
+                      {profiles.filter(p => userRoles[p.id] === "mitarbeiter").length}
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Sick Notes Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Neue Krankmeldungen
-              </CardTitle>
-              <CardDescription>
-                Zuletzt hochgeladene Krankmeldungen der Mitarbeiter
-              </CardDescription>
+              {/* Users List */}
+              <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Registrierte Benutzer</CardTitle>
+                <CardDescription>
+                  Rollen verwalten und Mitarbeiterdaten/Dokumente bearbeiten
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => setShowSizesDialog(true)}>
+                <Shirt className="w-4 h-4 mr-2" />
+                Arbeitskleidung/Schuhe Größen
+              </Button>
             </CardHeader>
-            <CardContent>
-              {sickNotes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Keine Krankmeldungen vorhanden
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {sickNotes.map((note) => {
-                    const documentPath = note.notizen?.replace("Krankmeldung: ", "");
-
-                    return (
-                      <div key={note.id} className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                <CardContent>
+                  <div className="space-y-4">
+                    {profiles.filter(p => p.is_active).map((profile) => (
+                      <div
+                        key={profile.id}
+                        id={`registered-user-${profile.id}`}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-lg border bg-card transition-shadow"
+                      >
                         <div className="flex items-center gap-3">
                           <Avatar>
                             <AvatarFallback>
-                              {note.profiles.vorname[0]}
-                              {note.profiles.nachname[0]}
+                              {profile.vorname[0]}
+                              {profile.nachname[0]}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="font-medium">
-                              {note.profiles.vorname} {note.profiles.nachname}
+                              {profile.vorname} {profile.nachname}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {format(new Date(note.datum), "dd.MM.yyyy")}
+                              {userRoles[profile.id] === "administrator" ? "Administrator" : "Mitarbeiter"}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {documentPath && (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <Select
+                            value={userRoles[profile.id]}
+                            onValueChange={(val) => handleRoleChange(profile.id, val as "administrator" | "mitarbeiter")}
+                          >
+                            <SelectTrigger className="w-full sm:w-[200px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="administrator">Administrator</SelectItem>
+                              <SelectItem value="mitarbeiter">Mitarbeiter</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => openEmployeeEditorForUser(profile.id, 'stammdaten')}
+                            >
+                              Bearbeiten
+                            </Button>
+                            <Button onClick={() => openEmployeeEditorForUser(profile.id, 'dokumente')}>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Dokumente
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={async () => {
-                                if (!documentPath) return;
-
-                                const rawPath = documentPath.trim();
-
-                                // Falls alter Eintrag bereits eine komplette URL enthält
-                                if (rawPath.startsWith("http://") || rawPath.startsWith("https://")) {
-                                  window.open(rawPath, "_blank");
-                                  return;
-                                }
-
-                                // Pfad bereinigen (entfernt evtl. Bucket-Präfixe oder führende Slashes)
-                                const sanitizedPath = rawPath
-                                  .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(sign|public)\/employee-documents\//, "")
-                                  .replace(/^employee-documents\//, "")
-                                  .replace(/^\/+/, "");
-
-                                const { data, error } = await supabase.storage
-                                  .from("employee-documents")
-                                  .createSignedUrl(sanitizedPath, 300);
-
-                                if (error) {
-                                  console.error("Signed URL error:", error, { rawPath, sanitizedPath });
-                                  toast({ 
-                                    variant: "destructive", 
-                                    title: "Fehler", 
-                                    description: "Dokument konnte nicht geöffnet werden" 
-                                  });
-                                  return;
-                                }
-
-                                if (data?.signedUrl) {
-                                  window.open(data.signedUrl, "_blank");
-                                } else {
-                                  toast({ 
-                                    variant: "destructive", 
-                                    title: "Fehler", 
-                                    description: "Dokument konnte nicht geöffnet werden" 
-                                  });
-                                }
+                              onClick={() => {
+                                setUserToDelete(profile);
+                                setDeleteDialogOpen(true);
                               }}
                             >
-                              Ansehen
+                              Deaktivieren
                             </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteSickNote(note.id, documentPath)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          </div>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sick Notes Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Neue Krankmeldungen
+                  </CardTitle>
+                  <CardDescription>
+                    Zuletzt hochgeladene Krankmeldungen der Mitarbeiter
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {sickNotes.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">
+                      Keine Krankmeldungen vorhanden
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {sickNotes.map((note) => {
+                        const documentPath = note.notizen?.replace("Krankmeldung: ", "");
+
+                        return (
+                          <div key={note.id} className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarFallback>
+                                  {note.profiles.vorname[0]}
+                                  {note.profiles.nachname[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">
+                                  {note.profiles.vorname} {note.profiles.nachname}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {format(new Date(note.datum), "dd.MM.yyyy")}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {documentPath && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!documentPath) return;
+
+                                    const rawPath = documentPath.trim();
+
+                                    // Falls alter Eintrag bereits eine komplette URL enthält
+                                    if (rawPath.startsWith("http://") || rawPath.startsWith("https://")) {
+                                      window.open(rawPath, "_blank");
+                                      return;
+                                    }
+
+                                    // Pfad bereinigen (entfernt evtl. Bucket-Präfixe oder führende Slashes)
+                                    const sanitizedPath = rawPath
+                                      .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(sign|public)\/employee-documents\//, "")
+                                      .replace(/^employee-documents\//, "")
+                                      .replace(/^\/+/, "");
+
+                                    const { data, error } = await supabase.storage
+                                      .from("employee-documents")
+                                      .createSignedUrl(sanitizedPath, 300);
+
+                                    if (error) {
+                                      console.error("Signed URL error:", error, { rawPath, sanitizedPath });
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Fehler",
+                                        description: "Dokument konnte nicht geöffnet werden"
+                                      });
+                                      return;
+                                    }
+
+                                    if (data?.signedUrl) {
+                                      window.open(data.signedUrl, "_blank");
+                                    } else {
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Fehler",
+                                        description: "Dokument konnte nicht geöffnet werden"
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Ansehen
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteSickNote(note.id, documentPath)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* ===== URLAUBSVERWALTUNG ===== */}
+            <LeaveManagement profiles={profiles.filter(p => p.is_active)} />
+          </TabsContent>
+
+          {/* ===== TAB 2: EINSTELLUNGEN ===== */}
+          <TabsContent value="einstellungen" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Einstellungen
+                </CardTitle>
+                <CardDescription>
+                  E-Mail-Adressen für automatische Benachrichtigungen
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="disturbance-email">Regiebericht E-Mail-Empfänger</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="disturbance-email"
+                      type="email"
+                      placeholder="office@example.com"
+                      value={regiereportEmail}
+                      onChange={(e) => setRegiereportEmail(e.target.value)}
+                      disabled={loadingSettings}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={saveRegiereportEmail}
+                      disabled={savingSettings || loadingSettings}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      {savingSettings ? "Speichert..." : "Speichern"}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Diese E-Mail-Adresse erhält alle Regieberichte als Kopie.
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
 
-        {/* ===== URLAUBSVERWALTUNG ===== */}
-        <LeaveManagement profiles={profiles.filter(p => p.is_active)} />
-
-        {/* Zeitkonto ausgeblendet */}
-
-        {/* ===== EINSTELLUNGEN ===== */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Einstellungen
-            </CardTitle>
-            <CardDescription>
-              E-Mail-Adressen für automatische Benachrichtigungen
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="disturbance-email">Regiebericht E-Mail-Empfänger</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="disturbance-email"
-                  type="email"
-                  placeholder="office@example.com"
-                  value={regiereportEmail}
-                  onChange={(e) => setRegiereportEmail(e.target.value)}
-                  disabled={loadingSettings}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={saveRegiereportEmail}
-                  disabled={savingSettings || loadingSettings}
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {savingSettings ? "Speichert..." : "Speichern"}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Diese E-Mail-Adresse erhält alle Regieberichte als Kopie.
-              </p>
-            </div>
-
-            {/* Firmen-UID */}
-            <div className="border-t pt-4 space-y-3">
-              <h4 className="font-medium text-sm">Firmen-UID</h4>
-              <p className="text-sm text-muted-foreground">
-                Die UID-Nummer wird auf allen Rechnungs-PDFs angezeigt (Pflicht bei Rechnungen über €400).
-              </p>
-              <div className="flex gap-3 items-end">
-                <div className="space-y-1 flex-1 max-w-xs">
-                  <Label>UID-Nummer</Label>
-                  <Input value={firmenUid} onChange={(e) => setFirmenUid(e.target.value)} disabled={loadingSettings} placeholder="ATU12345678" />
-                </div>
-                <Button
-                  onClick={async () => {
-                    setSavingSettings(true);
-                    try {
-                      await supabase.from("app_settings").upsert([
-                        { key: "firmen_uid", value: firmenUid, updated_at: new Date().toISOString() },
-                      ]);
-                      toast({ title: "UID-Nummer gespeichert" });
-                    } catch (err: any) {
-                      toast({ variant: "destructive", title: "Fehler", description: err.message });
-                    } finally {
-                      setSavingSettings(false);
-                    }
-                  }}
-                  disabled={savingSettings || loadingSettings}
-                  size="sm"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Speichern
-                </Button>
-              </div>
-            </div>
-
-            {/* Bankverbindung */}
-            <div className="border-t pt-4 space-y-3">
-              <h4 className="font-medium text-sm">Bankverbindung</h4>
-              <p className="text-sm text-muted-foreground">
-                Wird auf allen PDFs (Rechnungen, Angebote, Regieberichte) und im QR-Code verwendet.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <Label>Kontoinhaber</Label>
-                  <Input value={bankKontoinhaber} onChange={(e) => setBankKontoinhaber(e.target.value)} disabled={loadingSettings} />
-                </div>
-                <div className="space-y-1">
-                  <Label>IBAN</Label>
-                  <Input value={bankIban} onChange={(e) => setBankIban(e.target.value)} disabled={loadingSettings} placeholder="AT..." />
-                </div>
-                <div className="space-y-1">
-                  <Label>BIC</Label>
-                  <Input value={bankBic} onChange={(e) => setBankBic(e.target.value)} disabled={loadingSettings} placeholder="z.B. STSPAT2GXXX" />
-                </div>
-              </div>
-              <Button
-                onClick={async () => {
-                  setSavingSettings(true);
-                  try {
-                    await supabase.from("app_settings").upsert([
-                      { key: "bank_kontoinhaber", value: bankKontoinhaber, updated_at: new Date().toISOString() },
-                      { key: "bank_iban", value: bankIban, updated_at: new Date().toISOString() },
-                      { key: "bank_bic", value: bankBic, updated_at: new Date().toISOString() },
-                    ]);
-                    toast({ title: "Bankverbindung gespeichert" });
-                  } catch (err: any) {
-                    toast({ variant: "destructive", title: "Fehler", description: err.message });
-                  } finally {
-                    setSavingSettings(false);
-                  }
-                }}
-                disabled={savingSettings || loadingSettings}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Bankverbindung speichern
-              </Button>
-            </div>
-
-            {/* Einheiten */}
-            <div className="border-t pt-4 space-y-3">
-              <h4 className="font-medium text-sm">Mengeneinheiten</h4>
-              <p className="text-sm text-muted-foreground">
-                Verfügbare Einheiten für Materialien, Rechnungen, Angebote, Lieferscheine und Regieberichte.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {einheitenStr.split(",").map(e => e.trim()).filter(Boolean).map((e, i) => (
-                  <Badge key={i} variant="secondary" className="text-sm px-2.5 py-1 gap-1">
-                    {e}
-                    <button
-                      className="ml-1 text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        const updated = einheitenStr.split(",").map(x => x.trim()).filter(x => x && x !== e).join(",");
-                        setEinheitenStr(updated);
+                {/* Firmen-UID */}
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium text-sm">Firmen-UID</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Die UID-Nummer wird auf allen Rechnungs-PDFs angezeigt (Pflicht bei Rechnungen über €400).
+                  </p>
+                  <div className="flex gap-3 items-end">
+                    <div className="space-y-1 flex-1 max-w-xs">
+                      <Label>UID-Nummer</Label>
+                      <Input value={firmenUid} onChange={(e) => setFirmenUid(e.target.value)} disabled={loadingSettings} placeholder="ATU12345678" />
+                    </div>
+                    <Button
+                      onClick={async () => {
+                        setSavingSettings(true);
+                        try {
+                          await supabase.from("app_settings").upsert([
+                            { key: "firmen_uid", value: firmenUid, updated_at: new Date().toISOString() },
+                          ]);
+                          toast({ title: "UID-Nummer gespeichert" });
+                        } catch (err: any) {
+                          toast({ variant: "destructive", title: "Fehler", description: err.message });
+                        } finally {
+                          setSavingSettings(false);
+                        }
                       }}
-                    >×</button>
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Neue Einheit hinzufügen..."
-                  className="max-w-xs"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      const val = (e.target as HTMLInputElement).value.trim();
-                      if (val && !einheitenStr.split(",").map(x => x.trim()).includes(val)) {
-                        setEinheitenStr(prev => prev ? `${prev},${val}` : val);
-                        (e.target as HTMLInputElement).value = "";
+                      disabled={savingSettings || loadingSettings}
+                      size="sm"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Speichern
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Bankverbindung */}
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium text-sm">Bankverbindung</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Wird auf allen PDFs (Rechnungen, Angebote, Regieberichte) und im QR-Code verwendet.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label>Kontoinhaber</Label>
+                      <Input value={bankKontoinhaber} onChange={(e) => setBankKontoinhaber(e.target.value)} disabled={loadingSettings} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>IBAN</Label>
+                      <Input value={bankIban} onChange={(e) => setBankIban(e.target.value)} disabled={loadingSettings} placeholder="AT..." />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>BIC</Label>
+                      <Input value={bankBic} onChange={(e) => setBankBic(e.target.value)} disabled={loadingSettings} placeholder="z.B. STSPAT2GXXX" />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      setSavingSettings(true);
+                      try {
+                        await supabase.from("app_settings").upsert([
+                          { key: "bank_kontoinhaber", value: bankKontoinhaber, updated_at: new Date().toISOString() },
+                          { key: "bank_iban", value: bankIban, updated_at: new Date().toISOString() },
+                          { key: "bank_bic", value: bankBic, updated_at: new Date().toISOString() },
+                        ]);
+                        toast({ title: "Bankverbindung gespeichert" });
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Fehler", description: err.message });
+                      } finally {
+                        setSavingSettings(false);
                       }
-                    }
-                  }}
-                />
-                <Button
-                  onClick={async () => {
-                    setSavingSettings(true);
-                    try {
-                      await supabase.from("app_settings").upsert([
-                        { key: "einheiten", value: einheitenStr.trim(), updated_at: new Date().toISOString() },
-                      ]);
-                      toast({ title: "Einheiten gespeichert" });
-                    } catch (err: any) {
-                      toast({ variant: "destructive", title: "Fehler", description: err.message });
-                    } finally {
-                      setSavingSettings(false);
-                    }
-                  }}
-                  disabled={savingSettings || loadingSettings}
-                  size="sm"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Speichern
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                    }}
+                    disabled={savingSettings || loadingSettings}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Bankverbindung speichern
+                  </Button>
+                </div>
 
-        {/* ===== PROJEKTSTATUS-FARBEN ===== */}
-        <ProjectStatusSettings />
+                {/* Einheiten */}
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium text-sm">Mengeneinheiten</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Verfügbare Einheiten für Materialien, Rechnungen, Angebote, Lieferscheine und Regieberichte.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {einheitenStr.split(",").map(e => e.trim()).filter(Boolean).map((e, i) => (
+                      <Badge key={i} variant="secondary" className="text-sm px-2.5 py-1 gap-1">
+                        {e}
+                        <button
+                          className="ml-1 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            const updated = einheitenStr.split(",").map(x => x.trim()).filter(x => x && x !== e).join(",");
+                            setEinheitenStr(updated);
+                          }}
+                        >×</button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Neue Einheit hinzufügen..."
+                      className="max-w-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val && !einheitenStr.split(",").map(x => x.trim()).includes(val)) {
+                            setEinheitenStr(prev => prev ? `${prev},${val}` : val);
+                            (e.target as HTMLInputElement).value = "";
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      onClick={async () => {
+                        setSavingSettings(true);
+                        try {
+                          await supabase.from("app_settings").upsert([
+                            { key: "einheiten", value: einheitenStr.trim(), updated_at: new Date().toISOString() },
+                          ]);
+                          toast({ title: "Einheiten gespeichert" });
+                        } catch (err: any) {
+                          toast({ variant: "destructive", title: "Fehler", description: err.message });
+                        } finally {
+                          setSavingSettings(false);
+                        }
+                      }}
+                      disabled={savingSettings || loadingSettings}
+                      size="sm"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Speichern
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* ===== KUNDEN-FARBCODIERUNG ===== */}
-        <CustomerColorSettings />
+            {/* ===== NUMMERNKREISE ===== */}
+            <NumberRangeSettings />
+          </TabsContent>
 
-        {/* ===== NUMMERNKREISE ===== */}
-        <NumberRangeSettings />
+          {/* ===== TAB 3: RECHNUNGS-LAYOUT ===== */}
+          <TabsContent value="rechnung" className="space-y-6">
+            <InvoiceLayoutEditor />
+          </TabsContent>
 
-        {/* ===== RECHNUNGS-LAYOUT ===== */}
-        <InvoiceLayoutEditor />
+          {/* ===== TAB 4: FARBEN & PLANTAFEL ===== */}
+          <TabsContent value="farben" className="space-y-6">
+            <ProjectStatusSettings />
+            <CustomerColorSettings />
+            <EmployeeColorSettings />
+          </TabsContent>
 
-        {/* ===== WHATSAPP EINSTELLUNGEN ===== */}
-        <WhatsAppAdminSettings />
+          {/* ===== TAB 5: KONFIGURATION ===== */}
+          <TabsContent value="konfiguration" className="space-y-6">
+            <ConfigOptionsManager kategorie="wetter" title="Wetter-Optionen" description="Wetteroptionen für Bautagesberichte" icon={<Cloud className="h-5 w-5" />} showFarbe />
+            <ConfigOptionsManager kategorie="projektart" title="Projektarten" description="Typen von Bauprojekten" icon={<Building className="h-5 w-5" />} />
+            <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
+          </TabsContent>
 
-        {/* ===== PLANTAFEL-FARBEN ===== */}
-        <EmployeeColorSettings />
-
-        {/* ===== KONFIGURIERBARE OPTIONEN ===== */}
-        <ConfigOptionsManager kategorie="wetter" title="Wetter-Optionen" description="Wetteroptionen für Bautagesberichte" icon={<Cloud className="h-5 w-5" />} showFarbe />
-        <ConfigOptionsManager kategorie="projektart" title="Projektarten" description="Typen von Bauprojekten" icon={<Building className="h-5 w-5" />} />
-        <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
-
+          {/* ===== TAB 6: WHATSAPP ===== */}
+          <TabsContent value="whatsapp" className="space-y-6">
+            <WhatsAppAdminSettings />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Employee Detail Dialog */}
