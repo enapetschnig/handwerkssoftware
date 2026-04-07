@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, ExternalLink, Calendar as CalIcon, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { RefreshCw, Plus, Calendar as CalIcon, Clock, MapPin, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, isSameDay, isSameMonth } from "date-fns";
 import { de } from "date-fns/locale";
@@ -20,6 +26,7 @@ type CalendarEvent = {
   mitarbeiter: string[] | null;
   all_day: boolean;
   calendar_type: string | null;
+  google_event_id: string | null;
 };
 
 type Assignment = {
@@ -33,6 +40,28 @@ type Assignment = {
   profiles: { vorname: string; nachname: string } | null;
 };
 
+type EventFormData = {
+  title: string;
+  start_date: string;
+  end_date: string;
+  all_day: boolean;
+  start_time: string;
+  end_time: string;
+  description: string;
+  calendar_type: string;
+};
+
+const emptyFormData: EventFormData = {
+  title: "",
+  start_date: "",
+  end_date: "",
+  all_day: true,
+  start_time: "08:00",
+  end_time: "17:00",
+  description: "",
+  calendar_type: "allgemein",
+};
+
 export default function Calendar() {
   const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -43,12 +72,20 @@ export default function Calendar() {
   const [calendarId, setCalendarId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [currentMonth]);
+  // Event dialog state
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [formData, setFormData] = useState<EventFormData>(emptyFormData);
+  const [saving, setSaving] = useState(false);
 
-  const loadData = async () => {
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -64,7 +101,7 @@ export default function Calendar() {
     const monthStart = format(startOfMonth(currentMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
-    // Fetch assignments for the month (with profile names)
+    // Fetch assignments for the month
     const { data: assignData } = await supabase
       .from("worker_assignments")
       .select("id, datum, start_time, end_time, notizen, user_id, projects(name)")
@@ -97,19 +134,46 @@ export default function Calendar() {
       ...a,
       profiles: profileMap[a.user_id] || null,
     })));
-    setCalendarEvents(eventData || []);
+    setCalendarEvents((eventData || []) as CalendarEvent[]);
     setLoading(false);
-  };
+  }, [currentMonth]);
+
+  // Auto-sync on page load
+  useEffect(() => {
+    const autoSync = async () => {
+      await loadData();
+      // Trigger bidirectional sync in background on page load
+      try {
+        const { data, error } = await supabase.functions.invoke("google-calendar-sync?action=sync_bidirectional", {
+          method: "GET",
+        });
+        if (!error && data?.success) {
+          setLastSyncTime(new Date());
+          // Reload data after sync
+          await loadData();
+        }
+      } catch (e) {
+        console.error("Auto-sync failed:", e);
+      }
+    };
+    autoSync();
+  }, []); // Only on mount
+
+  // Reload data when month changes (but don't re-sync)
+  useEffect(() => {
+    loadData();
+  }, [currentMonth, loadData]);
 
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("google-calendar-sync", {
-        body: { action: "fetch" },
+      const { data, error } = await supabase.functions.invoke("google-calendar-sync?action=sync_bidirectional", {
+        method: "GET",
       });
       if (error) throw error;
-      toast({ title: "Kalender synchronisiert" });
-      loadData();
+      setLastSyncTime(new Date());
+      toast({ title: "Kalender synchronisiert", description: `${data?.synced || 0} Events synchronisiert, ${data?.pushedToGoogle || 0} hochgeladen` });
+      await loadData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Sync fehlgeschlagen", description: err.message });
     } finally {
@@ -117,7 +181,112 @@ export default function Calendar() {
     }
   };
 
-  // Calendar grid
+  // ─── Event CRUD ───────────────────────────────────────────
+
+  const openCreateDialog = (date?: Date) => {
+    const dateStr = date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
+    setEditingEvent(null);
+    setFormData({ ...emptyFormData, start_date: dateStr, end_date: dateStr });
+    setEventDialogOpen(true);
+  };
+
+  const openEditDialog = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setFormData({
+      title: event.title,
+      start_date: event.start_date,
+      end_date: event.end_date || event.start_date,
+      all_day: event.all_day,
+      start_time: event.start_time || "08:00",
+      end_time: event.end_time || "17:00",
+      description: event.description || "",
+      calendar_type: event.calendar_type || "allgemein",
+    });
+    setEventDialogOpen(true);
+  };
+
+  const handleSaveEvent = async () => {
+    if (!formData.title.trim() || !formData.start_date) {
+      toast({ variant: "destructive", title: "Titel und Datum sind erforderlich" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingEvent) {
+        // Update existing event
+        const { data, error } = await supabase.functions.invoke("google-calendar-sync?action=update_event", {
+          method: "POST",
+          body: {
+            event_id: editingEvent.id,
+            title: formData.title,
+            start_date: formData.start_date,
+            end_date: formData.end_date || formData.start_date,
+            all_day: formData.all_day,
+            start_time: formData.all_day ? null : formData.start_time,
+            end_time: formData.all_day ? null : formData.end_time,
+            description: formData.description || null,
+            calendar_type: formData.calendar_type,
+          },
+        });
+        if (error) throw error;
+        toast({ title: "Termin aktualisiert" });
+      } else {
+        // Create new event
+        const { data, error } = await supabase.functions.invoke("google-calendar-sync?action=create_event", {
+          method: "POST",
+          body: {
+            title: formData.title,
+            start_date: formData.start_date,
+            end_date: formData.end_date || formData.start_date,
+            all_day: formData.all_day,
+            start_time: formData.all_day ? null : formData.start_time,
+            end_time: formData.all_day ? null : formData.end_time,
+            description: formData.description || null,
+            calendar_type: formData.calendar_type,
+          },
+        });
+        if (error) throw error;
+        toast({ title: "Termin erstellt" });
+      }
+
+      setEventDialogOpen(false);
+      setEditingEvent(null);
+      await loadData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler beim Speichern", description: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!deletingEvent) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-calendar-sync?action=delete_event", {
+        method: "POST",
+        body: { event_id: deletingEvent.id },
+      });
+      if (error) throw error;
+      toast({ title: "Termin geloescht" });
+      setDeleteDialogOpen(false);
+      setDeletingEvent(null);
+      await loadData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler beim Loeschen", description: err.message });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDelete = (event: CalendarEvent) => {
+    setDeletingEvent(event);
+    setDeleteDialogOpen(true);
+  };
+
+  // ─── Calendar grid ────────────────────────────────────────
+
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -167,12 +336,23 @@ export default function Calendar() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {lastSyncTime && (
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Zuletzt synchronisiert: {format(lastSyncTime, "HH:mm", { locale: de })}
+              </span>
+            )}
             {isAdmin && (
-              <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-                Sync
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+                  Sync
+                </Button>
+                <Button size="sm" onClick={() => openCreateDialog(selectedDate || new Date())}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Neuer Termin
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -214,15 +394,20 @@ export default function Calendar() {
                       <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-primary font-bold" : ""}`}>
                         {format(d, "d")}
                       </div>
-                      {/* Dots for assignments */}
+                      {/* Event indicators */}
                       <div className="space-y-0.5">
-                        {dayAssignments.slice(0, 3).map((a) => (
+                        {dayAssignments.slice(0, 2).map((a) => (
                           <div key={a.id} className="text-[10px] leading-tight truncate px-0.5 py-px rounded bg-primary/10 text-primary">
                             {a.profiles ? `${a.profiles.vorname.charAt(0)}.` : ""} {a.projects?.name?.slice(0, 10) || "?"}
                           </div>
                         ))}
-                        {dayAssignments.length > 3 && (
-                          <div className="text-[10px] text-muted-foreground">+{dayAssignments.length - 3}</div>
+                        {dayEvents.slice(0, 2).map((e) => (
+                          <div key={e.id} className="text-[10px] leading-tight truncate px-0.5 py-px rounded bg-blue-100 text-blue-700">
+                            {e.title?.slice(0, 12) || "Termin"}
+                          </div>
+                        ))}
+                        {(dayAssignments.length + dayEvents.length) > 4 && (
+                          <div className="text-[10px] text-muted-foreground">+{dayAssignments.length + dayEvents.length - 4}</div>
                         )}
                       </div>
                     </div>
@@ -237,17 +422,27 @@ export default function Calendar() {
         {selectedDate && (
           <Card className="mt-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">
-                {format(selectedDate, "EEEE, dd. MMMM yyyy", { locale: de })}
-              </CardTitle>
-              <CardDescription>
-                {selectedAssignments.length} Einteilung{selectedAssignments.length !== 1 ? "en" : ""}
-                {selectedEvents.length > 0 && ` · ${selectedEvents.length} Kalender-Event${selectedEvents.length !== 1 ? "s" : ""}`}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">
+                    {format(selectedDate, "EEEE, dd. MMMM yyyy", { locale: de })}
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedAssignments.length} Einteilung{selectedAssignments.length !== 1 ? "en" : ""}
+                    {selectedEvents.length > 0 && ` · ${selectedEvents.length} Kalender-Event${selectedEvents.length !== 1 ? "s" : ""}`}
+                  </CardDescription>
+                </div>
+                {isAdmin && (
+                  <Button size="sm" variant="outline" onClick={() => openCreateDialog(selectedDate)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Termin
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {selectedAssignments.length === 0 && selectedEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Einträge für diesen Tag.</p>
+                <p className="text-sm text-muted-foreground">Keine Eintraege fuer diesen Tag.</p>
               ) : (
                 <div className="space-y-3">
                   {selectedAssignments.map((a) => (
@@ -275,7 +470,7 @@ export default function Calendar() {
                   {selectedEvents.map((e) => (
                     <div key={e.id} className="flex items-start gap-3 p-2 rounded-lg border border-blue-200 bg-blue-50/50">
                       <CalIcon className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                      <div>
+                      <div className="flex-1">
                         <p className="font-semibold text-sm">{e.title}</p>
                         {!e.all_day && e.start_time && (
                           <p className="text-xs text-muted-foreground">
@@ -291,6 +486,16 @@ export default function Calendar() {
                           </div>
                         )}
                       </div>
+                      {isAdmin && (
+                        <div className="flex gap-1 shrink-0">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditDialog(e)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => confirmDelete(e)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -308,7 +513,7 @@ export default function Calendar() {
                 <div>
                   <p className="text-sm font-medium">Google Kalender abonnieren</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Öffne Google Kalender → "Weitere Kalender" → "Per URL abonnieren" und füge diese ID ein:
+                    Oeffne Google Kalender &rarr; "Weitere Kalender" &rarr; "Per URL abonnieren" und fuege diese ID ein:
                   </p>
                   <code className="text-xs bg-muted px-2 py-1 rounded mt-1 block break-all select-all">
                     {calendarId}
@@ -319,6 +524,114 @@ export default function Calendar() {
           </Card>
         )}
       </main>
+
+      {/* ─── Create/Edit Event Dialog ─────────────────────────── */}
+      <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{editingEvent ? "Termin bearbeiten" : "Neuer Termin"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="event-title">Titel</Label>
+              <Input
+                id="event-title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Termin-Bezeichnung"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="event-start">Startdatum</Label>
+                <Input
+                  id="event-start"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value, end_date: formData.end_date || e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="event-end">Enddatum</Label>
+                <Input
+                  id="event-end"
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Switch
+                id="event-allday"
+                checked={formData.all_day}
+                onCheckedChange={(checked) => setFormData({ ...formData, all_day: checked })}
+              />
+              <Label htmlFor="event-allday">Ganztaegig</Label>
+            </div>
+
+            {!formData.all_day && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="event-start-time">Startzeit</Label>
+                  <Input
+                    id="event-start-time"
+                    type="time"
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="event-end-time">Endzeit</Label>
+                  <Input
+                    id="event-end-time"
+                    type="time"
+                    value={formData.end_time}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="event-desc">Beschreibung</Label>
+              <Textarea
+                id="event-desc"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Optionale Beschreibung..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEventDialogOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleSaveEvent} disabled={saving}>
+              {saving ? "Speichern..." : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Confirmation Dialog ───────────────────────── */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Termin loeschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Der Termin "{deletingEvent?.title}" wird aus dem Kalender und aus Google Calendar entfernt. Diese Aktion kann nicht rueckgaengig gemacht werden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEvent} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? "Loeschen..." : "Loeschen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

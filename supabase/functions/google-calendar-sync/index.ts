@@ -291,11 +291,339 @@ Deno.serve(async (req) => {
     const accessToken = await getGoogleAccessToken(serviceAccountKey);
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
+    let action = url.searchParams.get("action");
+
+    // Also support action from body (for supabase.functions.invoke with body)
+    if (!action && req.method === "POST") {
+      try {
+        const clonedReq = req.clone();
+        const bodyPeek = await clonedReq.json();
+        if (bodyPeek?.action) {
+          action = bodyPeek.action;
+        }
+      } catch { /* ignore parse errors */ }
+    }
 
     console.log(`Processing action: ${action}`);
 
-    // SYNC: Create/Update event in Google Calendar
+    // ─── CREATE_EVENT: Create event in Google Calendar AND local DB ───
+    if (req.method === "POST" && action === "create_event") {
+      const body = await req.json();
+      const { title, start_date, end_date, start_time, end_time, description, all_day, calendar_type: reqCalType } = body;
+      const calendarType: CalendarType = reqCalType || 'allgemein';
+
+      const calendarId = await getCalendarIdForType(supabase, calendarType);
+      if (!calendarId) {
+        return new Response(
+          JSON.stringify({ error: `Calendar ID for type "${calendarType}" not configured` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const eventData: CalendarEvent = {
+        project_id: `manual-${crypto.randomUUID()}`,
+        title: title || "Neuer Termin",
+        start_date,
+        end_date: end_date || start_date,
+        all_day: all_day ?? true,
+        start_time: start_time || null,
+        end_time: end_time || null,
+        description: description || null,
+        calendar_type: calendarType,
+      };
+
+      // 1. Create in Google Calendar
+      const googleEventId = await syncEventToGoogle(accessToken, calendarId, eventData);
+
+      // 2. Store in calendar_events with google_event_id
+      const { data: dbEvent, error: dbError } = await supabase
+        .from("calendar_events")
+        .insert({
+          project_id: eventData.project_id,
+          google_event_id: googleEventId,
+          title: eventData.title,
+          start_date: eventData.start_date,
+          end_date: eventData.end_date,
+          all_day: eventData.all_day,
+          start_time: eventData.start_time,
+          end_time: eventData.end_time,
+          description: eventData.description,
+          calendar_type: calendarType,
+          synced_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (dbError) throw new Error(`Database error: ${dbError.message}`);
+
+      return new Response(
+        JSON.stringify({ success: true, event: dbEvent, googleEventId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─── UPDATE_EVENT: Update event in Google Calendar AND local DB ───
+    if (req.method === "POST" && action === "update_event") {
+      const body = await req.json();
+      const { event_id, title, start_date, end_date, start_time, end_time, description, all_day, calendar_type: reqCalType } = body;
+
+      if (!event_id) {
+        return new Response(
+          JSON.stringify({ error: "event_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get existing event from DB
+      const { data: existingEvent, error: fetchErr } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .eq("id", event_id)
+        .single();
+
+      if (fetchErr || !existingEvent) {
+        return new Response(
+          JSON.stringify({ error: "Event not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const calendarType: CalendarType = reqCalType || existingEvent.calendar_type || 'allgemein';
+      const calendarId = await getCalendarIdForType(supabase, calendarType);
+
+      if (!calendarId) {
+        return new Response(
+          JSON.stringify({ error: `Calendar ID for type "${calendarType}" not configured` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const updatedEvent: CalendarEvent = {
+        project_id: existingEvent.project_id,
+        title: title ?? existingEvent.title,
+        start_date: start_date ?? existingEvent.start_date,
+        end_date: end_date ?? existingEvent.end_date,
+        all_day: all_day ?? existingEvent.all_day,
+        start_time: start_time !== undefined ? start_time : existingEvent.start_time,
+        end_time: end_time !== undefined ? end_time : existingEvent.end_time,
+        description: description !== undefined ? description : existingEvent.description,
+        calendar_type: calendarType,
+      };
+
+      // 1. Update in Google Calendar (if google_event_id exists)
+      let googleEventId = existingEvent.google_event_id;
+      if (googleEventId) {
+        try {
+          googleEventId = await syncEventToGoogle(accessToken, calendarId, updatedEvent, googleEventId);
+        } catch (e) {
+          console.error("Failed to update Google event, creating new:", e);
+          googleEventId = await syncEventToGoogle(accessToken, calendarId, updatedEvent);
+        }
+      } else {
+        // No Google event yet - create one
+        googleEventId = await syncEventToGoogle(accessToken, calendarId, updatedEvent);
+      }
+
+      // 2. Update in local DB
+      const { data: dbEvent, error: dbError } = await supabase
+        .from("calendar_events")
+        .update({
+          google_event_id: googleEventId,
+          title: updatedEvent.title,
+          start_date: updatedEvent.start_date,
+          end_date: updatedEvent.end_date,
+          all_day: updatedEvent.all_day,
+          start_time: updatedEvent.start_time,
+          end_time: updatedEvent.end_time,
+          description: updatedEvent.description,
+          calendar_type: calendarType,
+          synced_at: new Date().toISOString(),
+        })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (dbError) throw new Error(`Database error: ${dbError.message}`);
+
+      return new Response(
+        JSON.stringify({ success: true, event: dbEvent, googleEventId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─── DELETE_EVENT: Delete event from Google Calendar AND local DB ───
+    if ((req.method === "POST" || req.method === "DELETE") && action === "delete_event") {
+      const body = await req.json();
+      const { event_id } = body;
+
+      if (!event_id) {
+        return new Response(
+          JSON.stringify({ error: "event_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get existing event
+      const { data: existingEvent } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .eq("id", event_id)
+        .single();
+
+      if (existingEvent?.google_event_id) {
+        const calendarType: CalendarType = (existingEvent.calendar_type as CalendarType) || 'allgemein';
+        const calendarId = await getCalendarIdForType(supabase, calendarType);
+        if (calendarId) {
+          try {
+            await deleteEventFromGoogle(accessToken, calendarId, existingEvent.google_event_id);
+          } catch (e) {
+            console.error("Failed to delete from Google (may already be gone):", e);
+          }
+        }
+      }
+
+      // Delete from local DB
+      await supabase.from("calendar_events").delete().eq("id", event_id);
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─── SYNC_BIDIRECTIONAL: Full two-way sync ───
+    if ((req.method === "GET" || req.method === "POST") && action === "sync_bidirectional") {
+      const timeMin = url.searchParams.get("timeMin");
+      const timeMax = url.searchParams.get("timeMax");
+
+      const calendars = await getAllCalendarIds(supabase);
+
+      if (calendars.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "No calendars configured." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`Bidirectional sync with ${calendars.length} calendar(s)`);
+
+      // ── Step 1+2: Fetch from Google and upsert locally ──
+      let totalSynced = 0;
+      const allGoogleEventIds = new Set<string>();
+
+      for (const calendar of calendars) {
+        const googleEvents = await fetchEventsFromGoogle(
+          accessToken, calendar.id, timeMin || undefined, timeMax || undefined
+        );
+
+        for (const gEvent of googleEvents) {
+          allGoogleEventIds.add(gEvent.id);
+
+          const isAllDay = !!gEvent.start?.date;
+          const startDate = gEvent.start?.date || gEvent.start?.dateTime?.split("T")[0];
+          let endDate = gEvent.end?.date || gEvent.end?.dateTime?.split("T")[0];
+          const startTime = !isAllDay ? gEvent.start?.dateTime?.match(/T(\d{2}:\d{2})/)?.[1] || null : null;
+          const endTime = !isAllDay ? gEvent.end?.dateTime?.match(/T(\d{2}:\d{2})/)?.[1] || null : null;
+
+          if (isAllDay && endDate) endDate = subtractOneDay(endDate);
+          if (!startDate) continue;
+
+          const { error } = await supabase.from("calendar_events").upsert({
+            google_event_id: gEvent.id,
+            title: gEvent.summary || "Unbenannter Termin",
+            start_date: startDate,
+            end_date: endDate,
+            all_day: isAllDay,
+            start_time: startTime,
+            end_time: endTime,
+            description: gEvent.description,
+            synced_at: new Date().toISOString(),
+            project_id: `google-${gEvent.id}`,
+            calendar_type: calendar.type,
+          }, { onConflict: "google_event_id" });
+
+          if (!error) totalSynced++;
+        }
+      }
+
+      // ── Step 3: Delete orphaned local events (google-* projects not in Google anymore) ──
+      const { data: localGoogleEvents } = await supabase
+        .from("calendar_events")
+        .select("id, google_event_id, project_id")
+        .like("project_id", "google-%");
+
+      let deletedOrphans = 0;
+      for (const localEvent of localGoogleEvents || []) {
+        if (localEvent.google_event_id && !allGoogleEventIds.has(localEvent.google_event_id)) {
+          await supabase.from("calendar_events").delete().eq("id", localEvent.id);
+          deletedOrphans++;
+        }
+      }
+
+      // ── Step 4: Push local events without google_event_id to Google ──
+      const { data: unpushedEvents } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .is("google_event_id", null);
+
+      let pushedToGoogle = 0;
+      for (const localEvent of unpushedEvents || []) {
+        const calType: CalendarType = (localEvent.calendar_type as CalendarType) || 'allgemein';
+        const calId = await getCalendarIdForType(supabase, calType);
+        if (!calId) continue;
+
+        try {
+          const gEventId = await syncEventToGoogle(accessToken, calId, {
+            project_id: localEvent.project_id,
+            title: localEvent.title,
+            start_date: localEvent.start_date,
+            end_date: localEvent.end_date,
+            all_day: localEvent.all_day,
+            start_time: localEvent.start_time,
+            end_time: localEvent.end_time,
+            description: localEvent.description,
+            calendar_type: calType,
+          });
+
+          await supabase.from("calendar_events").update({
+            google_event_id: gEventId,
+            synced_at: new Date().toISOString(),
+          }).eq("id", localEvent.id);
+
+          pushedToGoogle++;
+        } catch (e) {
+          console.error(`Failed to push local event ${localEvent.id} to Google:`, e);
+        }
+      }
+
+      // ── Step 5: Detect locally deleted events and remove from Google ──
+      // Events that have a google_event_id in Google but were deleted locally
+      // (We track this by checking google events that no longer have a local row with matching google_event_id)
+      // This is already handled by the orphan cleanup above for google->local direction.
+      // For local->google: if a user deletes a local event with a google_event_id,
+      // we need a "deleted_events" tracking mechanism. For now, this is handled by the
+      // delete_event action which removes from both places simultaneously.
+
+      // Fetch updated events from DB
+      const { data: dbEvents } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .order("start_date", { ascending: true });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          events: dbEvents,
+          synced: totalSynced,
+          deletedOrphans,
+          pushedToGoogle,
+          calendarsChecked: calendars.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // SYNC: Create/Update event in Google Calendar (legacy - used by Plantafel)
     if (req.method === "POST" && action === "sync") {
       const event: CalendarEvent = await req.json();
       const calendarType = event.calendar_type || 'allgemein';
