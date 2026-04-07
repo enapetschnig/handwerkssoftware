@@ -26,13 +26,14 @@ type Project = {
   status: string;
   created_at: string;
   updated_at: string;
-  fileCount?: {
-    plans: number;
-    reports: number;
-    materials: number;
-    photos: number;
-    chef: number;
-  };
+  projektart: string | null;
+  prioritaet: string | null;
+  geplanter_start: string | null;
+  geplantes_ende: string | null;
+  budget: number | null;
+  auftragsvolumen: number | null;
+  bauleiter_id: string | null;
+  ort: string | null;
 };
 
 const Projects = () => {
@@ -105,25 +106,7 @@ const Projects = () => {
       return;
     }
 
-    // Fetch file counts for each project
-    const projectsWithCounts = await Promise.all(
-      (data || []).map(async (project) => {
-        const [plans, reports, materials, photos, chef] = await Promise.all([
-          getFileCount(project.id, 'project-plans'),
-          getFileCount(project.id, 'project-reports'),
-          getFileCount(project.id, 'project-materials'),
-          getFileCount(project.id, 'project-photos'),
-          getFileCount(project.id, 'project-chef'),
-        ]);
-
-        return {
-          ...project,
-          fileCount: { plans, reports, materials, photos, chef },
-        };
-      })
-    );
-
-    setProjects(projectsWithCounts);
+    setProjects(data || []);
     setLoading(false);
   };
 
@@ -328,19 +311,6 @@ const Projects = () => {
     fetchProjects();
   };
 
-  const getFileCount = async (projectId: string, bucketName: string): Promise<number> => {
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .list(projectId);
-
-    if (error) {
-      console.error(`Error fetching file count from ${bucketName}:`, error);
-      return 0;
-    }
-
-    return data?.length || 0;
-  };
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -454,14 +424,32 @@ const Projects = () => {
                       {project.adresse && (
                         <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
                       )}
+                      {(project as any).ort && !(project.adresse || "").includes((project as any).ort) && (
+                        <CardDescription className="text-xs text-muted-foreground">{(project as any).ort}</CardDescription>
+                      )}
                     </div>
                   </div>
-                  <Badge 
-                    variant={project.status === "In Arbeit" ? "default" : "secondary"}
-                    className="self-start sm:self-center whitespace-nowrap"
-                  >
-                    {project.status === "In Arbeit" ? "Aktiv" : "Geschlossen"}
-                  </Badge>
+                  <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
+                    {(project as any).projektart && (
+                      <Badge variant="outline" className="whitespace-nowrap text-xs">
+                        {(project as any).projektart}
+                      </Badge>
+                    )}
+                    {(project as any).prioritaet && (project as any).prioritaet !== "normal" && (
+                      <Badge
+                        variant={(project as any).prioritaet === "hoch" || (project as any).prioritaet === "dringend" ? "destructive" : "secondary"}
+                        className="whitespace-nowrap text-xs"
+                      >
+                        {(project as any).prioritaet}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={project.status === "In Arbeit" ? "default" : "secondary"}
+                      className="whitespace-nowrap"
+                    >
+                      {project.status === "In Arbeit" ? "Aktiv" : "Geschlossen"}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 sm:pt-6">
@@ -471,42 +459,27 @@ const Projects = () => {
                   </p>
                 )}
                 
-                <div className={`grid ${isAdmin ? 'grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'} gap-2 sm:gap-3 mb-4`}>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
+                <div className={`flex flex-wrap gap-2 sm:gap-3 mb-4`}>
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                    <FileText className="w-4 h-4 text-primary" />
                     <span className="text-xs font-medium">Pläne</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.plans || 0}
-                    </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <FileText className="w-5 h-5 text-primary" />
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                    <FileText className="w-4 h-4 text-primary" />
                     <span className="text-xs font-medium">Berichte</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.reports || 0}
-                    </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <Package className="w-5 h-5 text-primary" />
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                    <Package className="w-4 h-4 text-primary" />
                     <span className="text-xs font-medium">Material</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.materials || 0}
-                    </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 p-2">
-                    <Image className="w-5 h-5 text-primary" />
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                    <Image className="w-4 h-4 text-primary" />
                     <span className="text-xs font-medium">Fotos</span>
-                    <span className="text-xs text-muted-foreground">
-                      {project.fileCount?.photos || 0}
-                    </span>
                   </div>
                   {isAdmin && (
-                    <div className="flex flex-col items-center gap-1 p-2">
-                      <Lock className="w-5 h-5 text-primary" />
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                      <Lock className="w-4 h-4 text-primary" />
                       <span className="text-xs font-medium">Chef</span>
-                      <span className="text-xs text-muted-foreground">
-                        {project.fileCount?.chef || 0}
-                      </span>
                     </div>
                   )}
                 </div>
@@ -655,34 +628,22 @@ const Projects = () => {
                         </p>
                       )}
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <FileText className="w-5 h-5 text-primary" />
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                          <FileText className="w-4 h-4 text-primary" />
                           <span className="text-xs font-medium">Pläne</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.plans || 0}
-                          </span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <FileText className="w-5 h-5 text-primary" />
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                          <FileText className="w-4 h-4 text-primary" />
                           <span className="text-xs font-medium">Berichte</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.reports || 0}
-                          </span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <Package className="w-5 h-5 text-primary" />
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                          <Package className="w-4 h-4 text-primary" />
                           <span className="text-xs font-medium">Material</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.materials || 0}
-                          </span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 p-2">
-                          <Image className="w-5 h-5 text-primary" />
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                          <Image className="w-4 h-4 text-primary" />
                           <span className="text-xs font-medium">Fotos</span>
-                          <span className="text-xs text-muted-foreground">
-                            {project.fileCount?.photos || 0}
-                          </span>
                         </div>
                       </div>
 

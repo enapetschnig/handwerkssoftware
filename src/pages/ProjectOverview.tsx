@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { useConfigOptions } from "@/hooks/useConfigOptions";
 
 type DocumentCategory = {
   type: "plans" | "reports" | "photos" | "chef";
@@ -32,10 +33,15 @@ const ProjectOverview = () => {
   const [editNameValue, setEditNameValue] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const { options: projektartOptions } = useConfigOptions("projektart");
+  const { options: prioritaetOptions } = useConfigOptions("prioritaet");
+  const [employees, setEmployees] = useState<{id: string, vorname: string, nachname: string}[]>([]);
   const [editForm, setEditForm] = useState({
     name: "", beschreibung: "", adresse: "", plz: "", ort: "",
     customer_id: null as string | null, kunde_name: "", kunde_anrede: "", kunde_titel: "",
     kunde_adresse: "", kunde_plz: "", kunde_ort: "", kunde_email: "", kunde_telefon: "", kunde_uid: "",
+    projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
+    budget: "", auftragsvolumen: "", bauleiter_id: "", projekt_ort: "",
   });
   const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
@@ -128,9 +134,13 @@ const ProjectOverview = () => {
       const { data: c } = await supabase.from("customers").select("*").eq("id", proj.customer_id).single();
       if (c) kunde = c;
     }
-    // Load customer list
-    const { data: custs } = await supabase.from("customers").select("id, name, plz, ort").order("name");
+    // Load customer list + employees
+    const [{ data: custs }, { data: emps }] = await Promise.all([
+      supabase.from("customers").select("id, name, plz, ort").order("name"),
+      supabase.from("employees").select("id, vorname, nachname").eq("aktiv", true).order("nachname"),
+    ]);
     setCustomers(custs || []);
+    setEmployees(emps || []);
     setEditForm({
       name: proj.name || "",
       beschreibung: proj.beschreibung || "",
@@ -147,6 +157,14 @@ const ProjectOverview = () => {
       kunde_email: kunde.email || "",
       kunde_telefon: kunde.telefon || "",
       kunde_uid: kunde.uid_nummer || "",
+      projektart: (proj as any).projektart || "",
+      prioritaet: (proj as any).prioritaet || "normal",
+      geplanter_start: (proj as any).geplanter_start || "",
+      geplantes_ende: (proj as any).geplantes_ende || "",
+      budget: (proj as any).budget != null ? String((proj as any).budget) : "",
+      auftragsvolumen: (proj as any).auftragsvolumen != null ? String((proj as any).auftragsvolumen) : "",
+      bauleiter_id: (proj as any).bauleiter_id || "",
+      projekt_ort: (proj as any).ort || "",
     });
     setEditDialogOpen(true);
   };
@@ -162,7 +180,15 @@ const ProjectOverview = () => {
       adresse: adresseStr || null,
       plz: editForm.kunde_plz.trim() || null,
       customer_id: editForm.customer_id,
-    }).eq("id", projectId);
+      projektart: editForm.projektart || null,
+      prioritaet: editForm.prioritaet || "normal",
+      geplanter_start: editForm.geplanter_start || null,
+      geplantes_ende: editForm.geplantes_ende || null,
+      budget: editForm.budget ? parseFloat(editForm.budget) : null,
+      auftragsvolumen: editForm.auftragsvolumen ? parseFloat(editForm.auftragsvolumen) : null,
+      bauleiter_id: editForm.bauleiter_id || null,
+      ort: editForm.projekt_ort.trim() || null,
+    } as any).eq("id", projectId);
     // Update or create customer
     if (editForm.customer_id && editForm.kunde_name.trim()) {
       await supabase.from("customers").update({
@@ -517,6 +543,79 @@ const ProjectOverview = () => {
             <div>
               <Label>Beschreibung</Label>
               <Textarea value={editForm.beschreibung} onChange={(e) => setEditForm(f => ({ ...f, beschreibung: e.target.value }))} rows={2} />
+            </div>
+
+            {/* Erweiterte Projektfelder */}
+            <div className="border-t pt-4 space-y-3">
+              <Label className="text-base font-semibold">Projektdetails</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Projektart</Label>
+                  <Select value={editForm.projektart || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, projektart: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">--</SelectItem>
+                      {projektartOptions.map(o => (
+                        <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Priorität</Label>
+                  <Select value={editForm.prioritaet || "normal"} onValueChange={(v) => setEditForm(f => ({ ...f, prioritaet: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Normal" /></SelectTrigger>
+                    <SelectContent>
+                      {prioritaetOptions.length > 0 ? prioritaetOptions.map(o => (
+                        <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                      )) : (
+                        <>
+                          <SelectItem value="niedrig">Niedrig</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="hoch">Hoch</SelectItem>
+                          <SelectItem value="dringend">Dringend</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Geplanter Start</Label>
+                  <Input type="date" value={editForm.geplanter_start} onChange={(e) => setEditForm(f => ({ ...f, geplanter_start: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Geplantes Ende</Label>
+                  <Input type="date" value={editForm.geplantes_ende} onChange={(e) => setEditForm(f => ({ ...f, geplantes_ende: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Budget</Label>
+                  <Input type="number" step="0.01" min="0" value={editForm.budget} onChange={(e) => setEditForm(f => ({ ...f, budget: e.target.value }))} placeholder="0.00" />
+                </div>
+                <div>
+                  <Label>Auftragsvolumen</Label>
+                  <Input type="number" step="0.01" min="0" value={editForm.auftragsvolumen} onChange={(e) => setEditForm(f => ({ ...f, auftragsvolumen: e.target.value }))} placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <Label>Bauleiter</Label>
+                <Select value={editForm.bauleiter_id || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, bauleiter_id: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">--</SelectItem>
+                    {employees.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.vorname} {e.nachname}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Ort (Projektstandort)</Label>
+                <Input value={editForm.projekt_ort} onChange={(e) => setEditForm(f => ({ ...f, projekt_ort: e.target.value }))} placeholder="z.B. Wien, Graz..." />
+              </div>
             </div>
 
             {/* Kunde */}

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, UserPlus, Building } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useConfigOptions } from "@/hooks/useConfigOptions";
 
 interface CustomerOption {
   id: string;
@@ -64,8 +65,20 @@ export function CreateProjectDialog({
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [customerTab, setCustomerTab] = useState<"existing" | "new">("existing");
 
+  const { options: projektartOptions } = useConfigOptions("projektart");
+  const { options: prioritaetOptions } = useConfigOptions("prioritaet");
+  const [employees, setEmployees] = useState<{id: string, vorname: string, nachname: string}[]>([]);
+
   const [projectName, setProjectName] = useState(defaultName);
   const [beschreibung, setBeschreibung] = useState("");
+  const [projektart, setProjektart] = useState("");
+  const [prioritaet, setPrioritaet] = useState("normal");
+  const [geplanterStart, setGeplanterStart] = useState("");
+  const [geplantesEnde, setGeplantesEnde] = useState("");
+  const [budget, setBudget] = useState("");
+  const [auftragsvolumen, setAuftragsvolumen] = useState("");
+  const [bauleiterId, setBauleiterId] = useState("");
+  const [projektOrt, setProjektOrt] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(defaultCustomerId);
   const [customerName, setCustomerName] = useState(defaultCustomerName);
   const [adresse, setAdresse] = useState(defaultAdresse);
@@ -92,11 +105,21 @@ export function CreateProjectDialog({
       setAnrede(defaultAnrede);
       setTitel(defaultTitel);
       setBeschreibung("");
+      setProjektart("");
+      setPrioritaet("normal");
+      setGeplanterStart("");
+      setGeplantesEnde("");
+      setBudget("");
+      setAuftragsvolumen("");
+      setBauleiterId("");
+      setProjektOrt("");
       setLand("Österreich");
       // If customer is pre-selected, show as existing customer tab
       setCustomerTab(defaultCustomerId ? "existing" : defaultCustomerName ? "existing" : "existing");
       supabase.from("customers").select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon").order("name")
         .then(({ data }) => { if (data) setCustomers(data); });
+      supabase.from("employees").select("id, vorname, nachname").eq("aktiv", true).order("nachname")
+        .then(({ data }) => { if (data) setEmployees(data); });
     }
   }, [open]);
 
@@ -181,7 +204,15 @@ export function CreateProjectDialog({
           plz: plz.trim() || null,
           customer_id: customerId,
           status: "In Arbeit",
-        })
+          projektart: projektart || null,
+          prioritaet: prioritaet || "normal",
+          geplanter_start: geplanterStart || null,
+          geplantes_ende: geplantesEnde || null,
+          budget: budget ? parseFloat(budget) : null,
+          auftragsvolumen: auftragsvolumen ? parseFloat(auftragsvolumen) : null,
+          bauleiter_id: bauleiterId || null,
+          ort: projektOrt.trim() || null,
+        } as any)
         .select("id, name")
         .single();
 
@@ -214,6 +245,79 @@ export function CreateProjectDialog({
           <div>
             <Label>Beschreibung</Label>
             <Textarea value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} placeholder="Kurze Projektbeschreibung..." rows={2} />
+          </div>
+
+          {/* Erweiterte Projektfelder */}
+          <div className="border-t pt-4 space-y-3">
+            <Label className="text-base font-semibold">Projektdetails</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Projektart</Label>
+                <Select value={projektart || "none"} onValueChange={(v) => setProjektart(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">--</SelectItem>
+                    {projektartOptions.map(o => (
+                      <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Priorität</Label>
+                <Select value={prioritaet || "normal"} onValueChange={(v) => setPrioritaet(v)}>
+                  <SelectTrigger><SelectValue placeholder="Normal" /></SelectTrigger>
+                  <SelectContent>
+                    {prioritaetOptions.length > 0 ? prioritaetOptions.map(o => (
+                      <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                    )) : (
+                      <>
+                        <SelectItem value="niedrig">Niedrig</SelectItem>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="hoch">Hoch</SelectItem>
+                        <SelectItem value="dringend">Dringend</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Geplanter Start</Label>
+                <Input type="date" value={geplanterStart} onChange={(e) => setGeplanterStart(e.target.value)} />
+              </div>
+              <div>
+                <Label>Geplantes Ende</Label>
+                <Input type="date" value={geplantesEnde} onChange={(e) => setGeplantesEnde(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Budget</Label>
+                <Input type="number" step="0.01" min="0" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <Label>Auftragsvolumen</Label>
+                <Input type="number" step="0.01" min="0" value={auftragsvolumen} onChange={(e) => setAuftragsvolumen(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+            <div>
+              <Label>Bauleiter</Label>
+              <Select value={bauleiterId || "none"} onValueChange={(v) => setBauleiterId(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">--</SelectItem>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.vorname} {e.nachname}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Ort (Projektstandort)</Label>
+              <Input value={projektOrt} onChange={(e) => setProjektOrt(e.target.value)} placeholder="z.B. Wien, Graz..." />
+            </div>
           </div>
 
           {/* Kunde */}

@@ -51,6 +51,14 @@ interface Customer {
   telefon: string | null;
   telefon2: string | null;
   notizen: string | null;
+  kundentyp: string | null;
+  firmenname: string | null;
+  branche: string | null;
+  website: string | null;
+  rechnungs_adresse: string | null;
+  rechnungs_plz: string | null;
+  rechnungs_ort: string | null;
+  rechnungs_land: string | null;
   zahlungsbedingungen: string | null;
   skonto_prozent: number | null;
   skonto_tage: number | null;
@@ -87,6 +95,14 @@ const emptyForm = {
   skonto_prozent: 0,
   skonto_tage: 0,
   nettofrist: 0,
+  kundentyp: "geschaeftskunde",
+  firmenname: "",
+  branche: "",
+  website: "",
+  rechnungs_adresse: "",
+  rechnungs_plz: "",
+  rechnungs_ort: "",
+  rechnungs_land: "",
 };
 
 const statusLabels: Record<string, string> = {
@@ -198,6 +214,14 @@ export default function Customers() {
       skonto_prozent: Number((c as any).skonto_prozent) || 0,
       skonto_tage: Number((c as any).skonto_tage) || 0,
       nettofrist: Number((c as any).nettofrist) || 0,
+      kundentyp: (c as any).kundentyp || "geschaeftskunde",
+      firmenname: (c as any).firmenname || "",
+      branche: (c as any).branche || "",
+      website: (c as any).website || "",
+      rechnungs_adresse: (c as any).rechnungs_adresse || "",
+      rechnungs_plz: (c as any).rechnungs_plz || "",
+      rechnungs_ort: (c as any).rechnungs_ort || "",
+      rechnungs_land: (c as any).rechnungs_land || "",
     });
     setDialogOpen(true);
   };
@@ -248,6 +272,14 @@ export default function Customers() {
           skonto_prozent: form.skonto_prozent || 0,
           skonto_tage: form.skonto_tage || 0,
           nettofrist: form.nettofrist || 0,
+          kundentyp: form.kundentyp || "geschaeftskunde",
+          firmenname: form.firmenname || null,
+          branche: form.branche || null,
+          website: form.website || null,
+          rechnungs_adresse: form.rechnungs_adresse || null,
+          rechnungs_plz: form.rechnungs_plz || null,
+          rechnungs_ort: form.rechnungs_ort || null,
+          rechnungs_land: form.rechnungs_land || null,
       };
 
       if (editId) {
@@ -333,9 +365,19 @@ export default function Customers() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                {(selectedCustomer as any).kundentyp && (
+                  <div>
+                    <Badge variant={(selectedCustomer as any).kundentyp === "geschaeftskunde" ? "default" : "secondary"}>
+                      {(selectedCustomer as any).kundentyp === "geschaeftskunde" ? "Geschäftskunde" : "Privatkunde"}
+                    </Badge>
+                  </div>
+                )}
+                {(selectedCustomer as any).firmenname && <div><span className="text-muted-foreground">Firma:</span> {(selectedCustomer as any).firmenname}</div>}
+                {(selectedCustomer as any).branche && <div><span className="text-muted-foreground">Branche:</span> {(selectedCustomer as any).branche}</div>}
                 {selectedCustomer.ansprechpartner && <div><span className="text-muted-foreground">Ansprechpartner:</span> {selectedCustomer.ansprechpartner}</div>}
                 {selectedCustomer.email && <div><span className="text-muted-foreground">E-Mail:</span> {selectedCustomer.email}</div>}
                 {selectedCustomer.telefon && <div><span className="text-muted-foreground">Telefon:</span> {selectedCustomer.telefon}</div>}
+                {(selectedCustomer as any).website && <div><span className="text-muted-foreground">Website:</span> {(selectedCustomer as any).website}</div>}
                 {selectedCustomer.adresse && <div><span className="text-muted-foreground">Adresse:</span> {selectedCustomer.adresse}</div>}
                 {selectedCustomer.uid_nummer && <div><span className="text-muted-foreground">UID:</span> {selectedCustomer.uid_nummer}</div>}
               </div>
@@ -535,6 +577,32 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
 
   return (
     <div className="space-y-4">
+      {/* Kundentyp toggle */}
+      <div className="flex gap-2 mb-4">
+        <Button type="button" variant={form.kundentyp === "geschaeftskunde" ? "default" : "outline"} size="sm" className="flex-1"
+          onClick={() => setForm(prev => ({...prev, kundentyp: "geschaeftskunde"}))}>
+          Geschäftskunde
+        </Button>
+        <Button type="button" variant={form.kundentyp === "privatkunde" ? "default" : "outline"} size="sm" className="flex-1"
+          onClick={() => setForm(prev => ({...prev, kundentyp: "privatkunde"}))}>
+          Privatkunde
+        </Button>
+      </div>
+
+      {/* Firmenname & Branche (nur Geschäftskunde) */}
+      {form.kundentyp === "geschaeftskunde" && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Firmenname</Label>
+            <Input value={form.firmenname} onChange={(e) => setForm(p => ({ ...p, firmenname: e.target.value }))} placeholder="Firmenname" />
+          </div>
+          <div>
+            <Label>Branche</Label>
+            <Input value={form.branche} onChange={(e) => setForm(p => ({ ...p, branche: e.target.value }))} placeholder="z.B. Bau, IT, Handel" />
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>Kundennr.</Label>
@@ -631,6 +699,18 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Input value={form.land} onChange={(e) => setForm(p => ({ ...p, land: e.target.value }))} />
         </div>
       </div>
+      {/* Rechnungsadresse (abweichend) */}
+      <div className="border-t pt-3 mt-3">
+        <Label className="text-sm font-medium">Rechnungsadresse (falls abweichend)</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          <Input placeholder="Straße" value={form.rechnungs_adresse} onChange={(e) => setForm(p => ({ ...p, rechnungs_adresse: e.target.value }))} />
+          <div className="flex gap-2">
+            <Input placeholder="PLZ" className="w-24" value={form.rechnungs_plz} onChange={(e) => setForm(p => ({ ...p, rechnungs_plz: e.target.value }))} />
+            <Input placeholder="Ort" className="flex-1" value={form.rechnungs_ort} onChange={(e) => setForm(p => ({ ...p, rechnungs_ort: e.target.value }))} />
+          </div>
+          <Input placeholder="Land" value={form.rechnungs_land} onChange={(e) => setForm(p => ({ ...p, rechnungs_land: e.target.value }))} />
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>E-Mail</Label>
@@ -640,6 +720,10 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Label>Telefon</Label>
           <Input value={form.telefon} onChange={(e) => setForm(p => ({ ...p, telefon: e.target.value }))} />
         </div>
+      </div>
+      <div>
+        <Label>Website</Label>
+        <Input value={form.website} onChange={(e) => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://www.beispiel.at" />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
