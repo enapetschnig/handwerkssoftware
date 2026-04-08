@@ -130,11 +130,22 @@ export default function Calendar() {
       });
     }
 
-    setAssignments((assignData || []).map((a: any) => ({
+    const mappedAssignments = (assignData || []).map((a: any) => ({
       ...a,
       profiles: profileMap[a.user_id] || null,
-    })));
-    setCalendarEvents((eventData || []) as CalendarEvent[]);
+    }));
+    setAssignments(mappedAssignments);
+
+    // Filter out calendar_events that are already shown as worker_assignments
+    // (to avoid duplicates when Plantafel syncs to Google and bidirectional sync imports them back)
+    const assignmentGoogleIds = new Set(
+      (assignData || []).map((a: any) => a.google_event_id).filter(Boolean)
+    );
+    setCalendarEvents(
+      ((eventData || []) as CalendarEvent[]).filter(
+        (e) => !e.google_event_id || !assignmentGoogleIds.has(e.google_event_id)
+      )
+    );
     setLoading(false);
   }, [currentMonth]);
 

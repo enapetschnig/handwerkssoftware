@@ -69,7 +69,8 @@ export function ProjectGanttSection({
                     a.project_id === project.id &&
                     isSameDay(parseISO(a.datum), day)
                 );
-                const workerCount = dayAssignments.length;
+                const uniqueWorkers = new Set(dayAssignments.map(a => a.user_id));
+                const workerCount = uniqueWorkers.size;
                 const range = ranges.find(
                   (r) => dayIdx >= r.startIdx && dayIdx <= r.endIdx
                 );
