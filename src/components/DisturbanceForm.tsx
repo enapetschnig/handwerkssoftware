@@ -489,77 +489,19 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                 />
               </div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="kundeName">Firma / Name *</Label>
-                <Input
-                  id="kundeName"
-                  value={formData.kundeName}
-                  onChange={(e) => setFormData({ ...formData, kundeName: e.target.value })}
-                  placeholder="Max Mustermann"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="kundeAdresse" className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" /> Adresse
-                  </Label>
-                  <Input
-                    id="kundeAdresse"
-                    value={formData.kundeAdresse}
-                    onChange={(e) => setFormData({ ...formData, kundeAdresse: e.target.value })}
-                    placeholder="Musterstraße 1"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label htmlFor="kundePlz">PLZ</Label>
-                    <Input
-                      id="kundePlz"
-                      value={formData.kundePlz}
-                      onChange={(e) => setFormData({ ...formData, kundePlz: e.target.value })}
-                      placeholder="8831"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="kundeOrt">Ort</Label>
-                    <Input
-                      id="kundeOrt"
-                      value={formData.kundeOrt}
-                      onChange={(e) => setFormData({ ...formData, kundeOrt: e.target.value })}
-                      placeholder="Niederwölz"
-                    />
-                  </div>
+            {formData.kundeName ? (
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm">
+                <div className="font-medium">{formData.kundeName}</div>
+                {formData.kundeAdresse && <div className="text-muted-foreground">{formData.kundeAdresse}</div>}
+                {(formData.kundePlz || formData.kundeOrt) && <div className="text-muted-foreground">{formData.kundePlz} {formData.kundeOrt}</div>}
+                <div className="flex gap-4">
+                  {formData.kundeEmail && <span className="text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{formData.kundeEmail}</span>}
+                  {formData.kundeTelefon && <span className="text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{formData.kundeTelefon}</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="kundeEmail" className="flex items-center gap-1">
-                    <Mail className="h-3 w-3" /> E-Mail
-                  </Label>
-                  <Input
-                    id="kundeEmail"
-                    type="email"
-                    value={formData.kundeEmail}
-                    onChange={(e) => setFormData({ ...formData, kundeEmail: e.target.value })}
-                    placeholder="kunde@email.at"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="kundeTelefon" className="flex items-center gap-1">
-                    <Phone className="h-3 w-3" /> Telefon
-                  </Label>
-                  <Input
-                    id="kundeTelefon"
-                    type="tel"
-                    value={formData.kundeTelefon}
-                    onChange={(e) => setFormData({ ...formData, kundeTelefon: e.target.value })}
-                    placeholder="+43 664 ..."
-                  />
-                </div>
-              </div>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Bitte wählen Sie oben einen Kunden aus oder erstellen Sie einen neuen.</p>
+            )}
           </div>
 
           {/* Multi-Employee Selection */}
