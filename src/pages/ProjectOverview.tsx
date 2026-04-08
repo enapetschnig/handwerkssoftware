@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCheck, Package, Camera, ImagePlus, Lock, ArrowUp, Pencil, Check, Settings } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,8 +48,11 @@ const ProjectOverview = () => {
   const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [lieferscheinCount, setLieferscheinCount] = useState(0);
   const [invoiceCount, setInvoiceCount] = useState(0);
+  const [btbCount, setBtbCount] = useState(0);
+  const [regieCount, setRegieCount] = useState(0);
+  const [projectData, setProjectData] = useState<any>(null);
+  const [projectHours, setProjectHours] = useState<{user_id: string, name: string, total: number}[]>([]);
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([
     {
@@ -84,7 +89,6 @@ const ProjectOverview = () => {
   useEffect(() => {
     if (projectId) {
       fetchFileCounts();
-      fetchLieferscheinCount();
       fetchInvoiceCount();
       fetchAngebotPositionen();
     }
@@ -119,6 +123,29 @@ const ProjectOverview = () => {
       .maybeSingle();
 
     setIsAdmin(!!data);
+
+    // Fetch project hours for admins
+    if (data && projectId) {
+      const { data: entries } = await supabase
+        .from("time_entries")
+        .select("user_id, stunden")
+        .eq("project_id", projectId);
+
+      if (entries) {
+        const grouped: Record<string, number> = {};
+        entries.forEach((e: any) => { grouped[e.user_id] = (grouped[e.user_id] || 0) + Number(e.stunden); });
+
+        const userIds = Object.keys(grouped);
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase.from("profiles").select("id, vorname, nachname").in("id", userIds);
+
+          setProjectHours(userIds.map(uid => {
+            const p = profiles?.find((pr: any) => pr.id === uid);
+            return { user_id: uid, name: p ? `${p.vorname} ${p.nachname}` : "Unbekannt", total: grouped[uid] };
+          }).sort((a, b) => b.total - a.total));
+        }
+      }
+    }
   };
 
   const openEditDialog = async () => {
@@ -252,25 +279,28 @@ const ProjectOverview = () => {
 
   const fetchProjectName = async () => {
     if (!projectId) return;
-    
+
     const { data } = await supabase
       .from("projects")
-      .select("name")
+      .select("*")
       .eq("id", projectId)
       .single();
 
     if (data) {
       setProjectName(data.name);
+      setProjectData(data);
     }
-  };
 
-  const fetchLieferscheinCount = async () => {
-    if (!projectId) return;
-    const { count } = await supabase
-      .from("lieferscheine")
-      .select("*", { count: "exact", head: true })
-      .eq("project_id", projectId);
-    setLieferscheinCount(count || 0);
+    // Fetch BTB count
+    (supabase.from("bautagesberichte" as never) as any)
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .then(({ count }: any) => setBtbCount(count || 0));
+
+    // Fetch Regie count
+    (supabase.from("disturbances" as never) as any)
+      .select("id", { count: "exact", head: true })
+      .then(({ count }: any) => setRegieCount(count || 0));
   };
 
   const fetchInvoiceCount = async () => {
@@ -317,29 +347,6 @@ const ProjectOverview = () => {
 
   const handleQuickPhotoUpload = () => {
     navigate(`/projects/${projectId}/photos`);
-  };
-
-  const handleMaterialentnahme = async () => {
-    if (!projectId) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const today = new Date().toISOString().split("T")[0];
-    // Check for existing Lieferschein today
-    const { data: existing } = await supabase.from("lieferscheine")
-      .select("id").eq("project_id", projectId).eq("datum", today)
-      .order("created_at", { ascending: false }).limit(1);
-    if (existing?.[0]) {
-      navigate(`/material/${existing[0].id}`);
-    } else {
-      const { data: created, error } = await supabase.from("lieferscheine")
-        .insert({ project_id: projectId, user_id: user.id, datum: today })
-        .select("id").single();
-      if (created) {
-        navigate(`/material/${created.id}`);
-      } else {
-        toast({ variant: "destructive", title: "Fehler", description: error?.message || "Konnte nicht erstellt werden" });
-      }
-    }
   };
 
   // Filter categories based on admin status
@@ -403,6 +410,57 @@ const ProjectOverview = () => {
           <p className="text-muted-foreground">Dokumentation und Dateien</p>
         </div>
 
+        {/* Projektinfos */}
+        {projectData && (
+          <Card className="mb-4">
+            <CardContent className="p-4 space-y-2">
+              {projectData.adresse && (
+                <div className="text-sm"><span className="text-muted-foreground">Adresse:</span> {projectData.adresse}{projectData.plz || (projectData as any).ort ? `, ${projectData.plz || ""} ${(projectData as any).ort || ""}`.trim() : ""}</div>
+              )}
+              {(projectData as any).geplanter_start && (
+                <div className="text-sm"><span className="text-muted-foreground">Start:</span> {format(parseISO((projectData as any).geplanter_start), "dd.MM.yyyy")}</div>
+              )}
+              {(projectData as any).geplantes_ende && (
+                <div className="text-sm"><span className="text-muted-foreground">Ende:</span> {format(parseISO((projectData as any).geplantes_ende), "dd.MM.yyyy")}</div>
+              )}
+              {(projectData as any).projektart && (
+                <div className="text-sm"><span className="text-muted-foreground">Projektart:</span> {(projectData as any).projektart}</div>
+              )}
+              {(projectData as any).prioritaet && (projectData as any).prioritaet !== "normal" && (
+                <div className="text-sm"><span className="text-muted-foreground">Priorität:</span> {(projectData as any).prioritaet}</div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Projektstunden (Admin only) */}
+        {isAdmin && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="text-base">Projektstunden</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {projectHours.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Stunden gebucht</p>
+              ) : (
+                <div className="space-y-2">
+                  {projectHours.map((h) => (
+                    <div key={h.user_id} className="flex justify-between text-sm">
+                      <span>{h.name}</span>
+                      <span className="font-medium">{h.total.toFixed(1)} Std.</span>
+                    </div>
+                  ))}
+                  <Separator />
+                  <div className="flex justify-between font-medium">
+                    <span>Gesamt</span>
+                    <span>{projectHours.reduce((s, h) => s + h.total, 0).toFixed(1)} Std.</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-4 md:grid-cols-2">
           {visibleCategories.map((category) => (
             <Card 
@@ -450,42 +508,25 @@ const ProjectOverview = () => {
             </Card>
           )}
 
-          {/* Materialentnahme — direkter Einstieg */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow border-orange-200"
-            onClick={handleMaterialentnahme}
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="text-orange-600"><ArrowUp className="h-8 w-8" /></div>
+          {/* Bautagesberichte */}
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/bautagesberichte?project=${projectId}`)}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <ClipboardList className="h-5 w-5 text-emerald-600" />
+              <div className="flex-1">
+                <p className="font-medium">Bautagesberichte</p>
+                <p className="text-xs text-muted-foreground">{btbCount} Berichte</p>
               </div>
-              <CardTitle className="text-xl">Materialentnahme</CardTitle>
-              <CardDescription>Material entnehmen oder zurückgeben</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50">
-                Materialentnahme starten
-              </Button>
             </CardContent>
           </Card>
 
-          {/* Lieferscheine */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate(`/material?project=${projectId}`)}
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="text-primary"><Package className="h-8 w-8" /></div>
-                <div className="text-2xl font-bold">{lieferscheinCount}</div>
+          {/* Regieberichte */}
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/disturbances?project=${projectId}`)}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <FileText className="h-5 w-5 text-yellow-600" />
+              <div className="flex-1">
+                <p className="font-medium">Regieberichte</p>
+                <p className="text-xs text-muted-foreground">{regieCount} Berichte</p>
               </div>
-              <CardTitle className="text-xl">Lieferscheine</CardTitle>
-              <CardDescription>Material-Entnahmen und Rückgaben</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" className="w-full">
-                Öffnen
-              </Button>
             </CardContent>
           </Card>
 
