@@ -77,10 +77,6 @@ export default function Invoices() {
   const [exportMonth, setExportMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [exportMode, setExportMode] = useState<"month" | "year">("month");
   const [exporting, setExporting] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [rechnungStartNr, setRechnungStartNr] = useState("1");
-  const [angebotStartNr, setAngebotStartNr] = useState("1");
-  const [savingSettings, setSavingSettings] = useState(false);
   const [bankKontoinhaber, setBankKontoinhaber] = useState("MONTI.PRO");
   const [bankIban, setBankIban] = useState("");
   const [bankBic, setBankBic] = useState("");
@@ -109,26 +105,15 @@ export default function Invoices() {
     const { data } = await supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", ["rechnung_start_nummer", "angebot_start_nummer", "bank_kontoinhaber", "bank_iban", "bank_bic", "invoice_layout"]);
+      .in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "invoice_layout"]);
     if (data) {
       data.forEach(s => {
-        if (s.key === "rechnung_start_nummer") setRechnungStartNr(s.value);
-        if (s.key === "angebot_start_nummer") setAngebotStartNr(s.value);
         if (s.key === "bank_kontoinhaber") setBankKontoinhaber(s.value);
         if (s.key === "bank_iban") setBankIban(s.value);
         if (s.key === "bank_bic") setBankBic(s.value);
         if (s.key === "invoice_layout") setInvoiceLayout(parseLayoutSettings(s.value));
       });
     }
-  };
-
-  const saveNumberSettings = async () => {
-    setSavingSettings(true);
-    await supabase.from("app_settings").upsert({ key: "rechnung_start_nummer", value: rechnungStartNr });
-    await supabase.from("app_settings").upsert({ key: "angebot_start_nummer", value: angebotStartNr });
-    toast({ title: "Einstellungen gespeichert" });
-    setSavingSettings(false);
-    setSettingsOpen(false);
   };
 
   // Reset status filter when typ changes
@@ -593,7 +578,7 @@ export default function Invoices() {
                 />
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button onClick={() => setSettingsOpen(true)} variant="outline" size="sm" className="gap-1">
+                <Button onClick={() => navigate("/admin")} variant="outline" size="sm" className="gap-1" title="Nummernkreise im Admin-Bereich konfigurieren">
                   <Settings className="w-4 h-4" />
                 </Button>
                 <Button onClick={() => setExportDialogOpen(true)} variant="outline" size="sm" className="gap-1">
@@ -804,53 +789,6 @@ export default function Invoices() {
           </CardContent>
         </Card>
 
-        {/* Settings Dialog */}
-        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Nummernkreise
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Rechnungsnummer beginnt bei (001–999)</Label>
-                <Input
-                  type="number"
-                  value={rechnungStartNr}
-                  onChange={(e) => { const v = Math.min(999, Math.max(0, Number(e.target.value))); setRechnungStartNr(String(v || "")); }}
-                  min={1}
-                  max={999}
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Nächste Rechnung: {String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(rechnungStartNr) || 1).padStart(3, "0")}
-                </p>
-              </div>
-              <div>
-                <Label>Angebotsnummer beginnt bei (001–999)</Label>
-                <Input
-                  type="number"
-                  value={angebotStartNr}
-                  onChange={(e) => { const v = Math.min(999, Math.max(0, Number(e.target.value))); setAngebotStartNr(String(v || "")); }}
-                  min={1}
-                  max={999}
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Nächstes Angebot: AN{String(new Date().getFullYear() % 100).padStart(2, "0")}{String(Number(angebotStartNr) || 1).padStart(3, "0")}
-                </p>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setSettingsOpen(false)}>Abbrechen</Button>
-                <Button onClick={saveNumberSettings} disabled={savingSettings}>
-                  {savingSettings ? "Speichert..." : "Speichern"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Export Dialog */}
         <ExportInvoicesDialog
