@@ -18,7 +18,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { PageHeader } from "@/components/PageHeader";
-import { SignaturePad } from "@/components/SignaturePad";
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 
@@ -101,25 +100,21 @@ export default function ErstterminDetail() {
   const [customCheckItems, setCustomCheckItems] = useState<string[]>([]);
   const [newCheckItem, setNewCheckItem] = useState("");
 
-  // Signatures & status
+  // Status
   const [status, setStatus] = useState("entwurf");
-  const [signaturBerater, setSignaturBerater] = useState<string | null>(null);
-  const [signaturInteressent, setSignaturInteressent] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [signDialogOpen, setSignDialogOpen] = useState(false);
-  const [skipSignBerater, setSkipSignBerater] = useState(false);
-  const [skipSignInteressent, setSkipSignInteressent] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(isNew ? null : id || null);
   const [ressourcenOpen, setRessourcenOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
-  // Photos state
+  // Photos state (DB photos + local pending photos)
   const [photos, setPhotos] = useState<ErstterminPhoto[]>([]);
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -167,8 +162,6 @@ export default function ErstterminDetail() {
         const customs = Object.keys(loadedChecklist).filter(k => !configKeys.includes(k) && k.startsWith("custom_"));
         setCustomCheckItems(customs.map(k => k.replace("custom_", "")));
         setStatus(d.status || "entwurf");
-        setSignaturBerater(d.unterschrift_berater || null);
-        setSignaturInteressent(d.unterschrift_interessent || null);
         setProjectId(d.project_id || null);
       }
       fetchPhotos(id);
@@ -190,7 +183,22 @@ export default function ErstterminDetail() {
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || !savedId) return;
+    if (!files) return;
+
+    if (!savedId) {
+      // No savedId yet → store locally as preview
+      const newPending: { file: File; preview: string }[] = [];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) continue;
+        newPending.push({ file, preview: URL.createObjectURL(file) });
+      }
+      setPendingPhotos(prev => [...prev, ...newPending]);
+      toast({ title: "Fotos hinzugefügt", description: `${newPending.length} Foto(s) werden beim Speichern hochgeladen` });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // savedId exists → upload directly
     setUploading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUploading(false); return; }
@@ -208,6 +216,22 @@ export default function ErstterminDetail() {
     if (count > 0) { toast({ title: "Erfolg", description: `${count} Foto${count > 1 ? "s" : ""} hochgeladen` }); fetchPhotos(savedId); }
     if (fileInputRef.current) fileInputRef.current.value = "";
     setUploading(false);
+  };
+
+  // Upload pending photos after first save
+  const uploadPendingPhotos = async (eid: string) => {
+    if (pendingPhotos.length === 0) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    for (const { file } of pendingPhotos) {
+      const fileName = `${eid}/${Date.now()}_${file.name}`;
+      const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
+      if (upErr) continue;
+      await (supabase.from("ersttermin_interessent_photos" as never) as any)
+        .insert({ ersttermin_interessent_id: eid, user_id: user.id, file_path: fileName, file_name: file.name });
+    }
+    setPendingPhotos([]);
+    fetchPhotos(eid);
   };
 
   const handlePhotoDelete = async (p: ErstterminPhoto) => {
@@ -239,7 +263,7 @@ export default function ErstterminDetail() {
       materialkosten: materialkosten === "" ? null : materialkosten,
       fremdkosten: fremdkosten === "" ? null : fremdkosten,
       gesamtkosten: gesamtkosten === "" ? null : gesamtkosten,
-      checkliste, status, unterschrift_berater: signaturBerater, unterschrift_interessent: signaturInteressent,
+      checkliste, status,
       project_id: projectId,
     };
 
@@ -257,10 +281,12 @@ export default function ErstterminDetail() {
       setNummer(docNummer);
     }
 
+    // Upload pending photos after first save
+    if (eid && pendingPhotos.length > 0) await uploadPendingPhotos(eid);
+
     toast({ title: "Gespeichert", description: "Ersttermin wurde gespeichert" });
     if (isNew && eid) navigate(`/ersttermine/${eid}`, { replace: true });
     setSaving(false);
-    if (status === "entwurf") setSignDialogOpen(true);
   };
 
   const handleDelete = async () => {
@@ -270,21 +296,6 @@ export default function ErstterminDetail() {
     if (error) { toast({ variant: "destructive", title: "Fehler", description: "Loeschen fehlgeschlagen" }); }
     else { toast({ title: "Geloescht" }); navigate("/ersttermine"); }
     setDeleting(false);
-  };
-
-  const handleFinalize = async () => {
-    if (!savedId) return;
-    setSaving(true);
-    const finalPayload: any = {
-      status: "abgeschlossen",
-      unterschrift_berater: skipSignBerater ? null : signaturBerater,
-      unterschrift_interessent: skipSignInteressent ? null : signaturInteressent,
-    };
-    if (signaturBerater || signaturInteressent) finalPayload.unterschrift_am = new Date().toISOString();
-    const { error } = await (supabase.from("ersttermin_interessent" as never) as any).update(finalPayload).eq("id", savedId);
-    if (error) { toast({ variant: "destructive", title: "Fehler", description: "Abschliessen fehlgeschlagen" }); }
-    else { setStatus("abgeschlossen"); setSignDialogOpen(false); toast({ title: "Abgeschlossen", description: "Ersttermin wurde abgeschlossen" }); }
-    setSaving(false);
   };
 
   const handleProjectCreated = async (project: { id: string; name: string }) => {
@@ -508,26 +519,32 @@ export default function ErstterminDetail() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
-              <Button variant="outline" size="sm" onClick={async () => {
-                if (!savedId) {
-                  // Auto-save first to get an ID
-                  toast({ title: "Wird gespeichert...", description: "Ersttermin wird zuerst gespeichert" });
-                  await handleSave();
-                  // After save, savedId is set via setSavedId - open file picker on next render
-                  setTimeout(() => fileInputRef.current?.click(), 500);
-                  return;
-                }
-                fileInputRef.current?.click();
-              }} disabled={uploading || saving} className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
                 <Upload className="h-4 w-4" />{uploading ? "Laedt..." : "Foto hinzufuegen"}
               </Button>
             </div>
-            {savedId && <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />}
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
           </CardHeader>
             <CardContent>
-              {!savedId ? (
-              <div className="text-center py-8 text-muted-foreground">Bitte zuerst speichern, um Fotos hochladen zu können.</div>
-            ) : photosLoading ? (
+              {/* Pending (local) photos */}
+            {pendingPhotos.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-muted-foreground mb-2">Noch nicht gespeichert ({pendingPhotos.length}):</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {pendingPhotos.map((pp, idx) => (
+                    <div key={idx} className="relative group aspect-square">
+                      <img src={pp.preview} alt={pp.file.name} className="w-full h-full object-cover rounded-lg border-2 border-dashed border-primary/30" />
+                      <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
+                        URL.revokeObjectURL(pp.preview);
+                        setPendingPhotos(prev => prev.filter((_, i) => i !== idx));
+                      }}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Saved photos */}
+            {photosLoading ? (
               <div className="text-center py-8 text-muted-foreground">Laedt Fotos...</div>
             ) : photos.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
@@ -612,54 +629,10 @@ export default function ErstterminDetail() {
           </CardContent>
         </Card>
 
-        {/* Signatures summary */}
-        {savedId && (signaturBerater || signaturInteressent) && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Unterschriften</CardTitle></CardHeader>
-            <CardContent className="flex gap-6">
-              {signaturBerater && <div><Label className="text-xs text-muted-foreground">Berater</Label><img src={signaturBerater} alt="Unterschrift Berater" className="border rounded-lg max-h-20 mt-1" /></div>}
-              {signaturInteressent && <div><Label className="text-xs text-muted-foreground">Interessent</Label><img src={signaturInteressent} alt="Unterschrift Interessent" className="border rounded-lg max-h-20 mt-1" /></div>}
-            </CardContent>
-          </Card>
-        )}
-
         {/* Bottom save */}
         <div className="flex justify-end gap-2">
           <Button onClick={handleSave} disabled={saving} className="gap-2"><Save className="h-4 w-4" />{saving ? "Speichert..." : "Speichern"}</Button>
         </div>
-
-        {/* 9. Signature Dialog */}
-        <Dialog open={signDialogOpen} onOpenChange={setSignDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Unterschriften & Abschluss</DialogTitle></DialogHeader>
-            <div className="space-y-6 py-2">
-              {([["Berater", signaturBerater, setSignaturBerater, skipSignBerater, setSkipSignBerater],
-                ["Interessent", signaturInteressent, setSignaturInteressent, skipSignInteressent, setSkipSignInteressent],
-              ] as const).map(([label, sig, setSig, skip, setSkip], i) => (
-                <div key={label}>
-                  {i > 0 && <Separator className="mb-6" />}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="font-medium">Unterschrift {label}</Label>
-                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => { (setSig as any)(null); (setSkip as any)((p: boolean) => !p); }}>
-                        {skip ? "Unterschrift hinzufuegen" : "Keine Unterschrift erforderlich"}
-                      </Button>
-                    </div>
-                    {skip ? <div className="border rounded-lg p-3 bg-muted/50 text-sm text-muted-foreground text-center">Keine Unterschrift erforderlich</div>
-                      : sig ? <div className="space-y-2"><img src={sig as string} alt={`Unterschrift ${label}`} className="border rounded-lg max-h-32" /><Button variant="outline" size="sm" onClick={() => (setSig as any)(null)}>Neu unterschreiben</Button></div>
-                      : <SignaturePad onSignatureChange={setSig as any} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
-              <Button variant="outline" onClick={() => setSignDialogOpen(false)}>Spaeter abschliessen</Button>
-              <Button onClick={handleFinalize} disabled={saving} className="bg-green-600 hover:bg-green-700 gap-2">
-                <CheckCircle className="h-4 w-4" />{saving ? "Wird abgeschlossen..." : "Ersttermin abschliessen"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Photo lightbox */}
         <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
