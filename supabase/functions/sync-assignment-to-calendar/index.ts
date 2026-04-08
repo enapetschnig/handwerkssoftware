@@ -166,18 +166,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     if (action === "sync" && assignment_id) {
-      // Fetch full assignment with project and profile
-      const { data: assignment } = await supabase
+      // Fetch assignment (without join for reliability)
+      const { data: assignment, error: assignErr } = await supabase
         .from("worker_assignments")
-        .select("*, projects(name)")
+        .select("*")
         .eq("id", assignment_id)
         .maybeSingle();
 
+      if (assignErr) {
+        console.error("Assignment query error:", assignErr);
+        return new Response(JSON.stringify({ error: "Assignment query failed", details: assignErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       if (!assignment) {
-        return new Response(JSON.stringify({ error: "Assignment not found" }), {
+        console.error("Assignment not found for id:", assignment_id);
+        return new Response(JSON.stringify({ error: "Assignment not found", id: assignment_id }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // Get project name separately
+      let projectName = "Projekt";
+      if (assignment.project_id) {
+        const { data: project } = await supabase
+          .from("projects")
+          .select("name")
+          .eq("id", assignment.project_id)
+          .maybeSingle();
+        if (project) projectName = project.name;
       }
 
       // Get worker name
@@ -188,7 +208,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .maybeSingle();
 
       const workerName = profile ? `${profile.vorname} ${profile.nachname}` : "Mitarbeiter";
-      const projectName = (assignment as any).projects?.name || "Projekt";
 
       const googleEventId = await createOrUpdateEvent(
         accessToken,

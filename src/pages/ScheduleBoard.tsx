@@ -137,15 +137,18 @@ export default function ScheduleBoard() {
       }
     }
 
-    // Sync to Google Calendar (fire and forget)
+    // Sync to Google Calendar (small delay to ensure DB write is committed)
     if (assignmentId) {
-      supabase.functions.invoke("sync-assignment-to-calendar", {
-        body: { action: "sync", assignment_id: assignmentId },
-      }).then(({ error: syncErr }) => {
-        if (syncErr) {
-          toast({ variant: "destructive", title: "Kalender-Sync fehlgeschlagen", description: syncErr.message?.slice(0, 200) || "" });
-        }
-      }).catch(() => {});
+      setTimeout(() => {
+        supabase.functions.invoke("sync-assignment-to-calendar", {
+          body: { action: "sync", assignment_id: assignmentId },
+        }).then(({ data: syncData, error: syncErr }) => {
+          if (syncErr) {
+            console.error("Calendar sync error:", syncErr, syncData);
+            toast({ variant: "destructive", title: "Kalender-Sync fehlgeschlagen", description: syncErr.message?.slice(0, 200) || "" });
+          }
+        }).catch(() => {});
+      }, 500);
     }
   };
 
