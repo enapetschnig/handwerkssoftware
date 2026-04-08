@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
@@ -51,6 +51,7 @@ const ProjectOverview = () => {
   const [invoiceCount, setInvoiceCount] = useState(0);
   const [btbCount, setBtbCount] = useState(0);
   const [regieCount, setRegieCount] = useState(0);
+  const [protokollCount, setProtokollCount] = useState(0);
   const [projectData, setProjectData] = useState<any>(null);
   const [projectHours, setProjectHours] = useState<{user_id: string, name: string, total: number}[]>([]);
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
@@ -301,6 +302,12 @@ const ProjectOverview = () => {
     (supabase.from("disturbances" as never) as any)
       .select("id", { count: "exact", head: true })
       .then(({ count }: any) => setRegieCount(count || 0));
+
+    // Fetch Protokoll count
+    (supabase.from("besprechungsprotokolle" as never) as any)
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .then(({ count }: any) => setProtokollCount(count || 0));
   };
 
   const fetchInvoiceCount = async () => {
@@ -526,6 +533,17 @@ const ProjectOverview = () => {
               <div className="flex-1">
                 <p className="font-medium">Regieberichte</p>
                 <p className="text-xs text-muted-foreground">{regieCount} Berichte</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Protokolle */}
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/besprechungsprotokolle?project=${projectId}`)}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <MessageSquare className="h-5 w-5 text-cyan-600" />
+              <div className="flex-1">
+                <p className="font-medium">Protokolle</p>
+                <p className="text-xs text-muted-foreground">{protokollCount} Protokolle</p>
               </div>
             </CardContent>
           </Card>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FileText, Plus, Calendar, Filter, Search, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +28,8 @@ type Protokoll = {
 
 const Besprechungsprotokolle = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectFilter = searchParams.get("project");
   const { toast } = useToast();
   const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +48,11 @@ const Besprechungsprotokolle = () => {
 
   const fetchProtokolle = async () => {
     setLoading(true);
-    const { data, error } = await (supabase.from("besprechungsprotokolle" as never) as any)
+    let query = (supabase.from("besprechungsprotokolle" as never) as any)
       .select("*")
       .order("datum", { ascending: false });
+    if (projectFilter) query = query.eq("project_id", projectFilter);
+    const { data, error } = await query;
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Protokolle konnten nicht geladen werden" });
@@ -105,7 +109,7 @@ const Besprechungsprotokolle = () => {
       (p.project_name || "").toLowerCase().includes(q) ||
       (p.nummer || "").toLowerCase().includes(q) ||
       (p.ort || "").toLowerCase().includes(q);
-    const matchesStatus = statusFilter === "alle" || p.status === statusFilter;
+    const matchesStatus = true;
     return matchesSearch && matchesStatus;
   });
 

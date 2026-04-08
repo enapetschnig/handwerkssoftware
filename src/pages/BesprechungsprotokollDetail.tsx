@@ -130,7 +130,7 @@ const BesprechungsprotokollDetail = () => {
       project_id: projectId || null,
       protokollant: protokollant || null,
       nummer: protokollNummer || null,
-      status: status || "entwurf",
+      status: "abgeschlossen",
       teilnehmer: teilnehmer || null,
       inhalt: inhalt || null,
       vereinbarungen: vereinbarungen || null,
@@ -214,17 +214,7 @@ const BesprechungsprotokollDetail = () => {
       <PageHeader title={isNew ? "Neues Protokoll" : `Protokoll ${nummer || ""}`} />
       <main className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
         {/* Action bar */}
-        <div className="flex justify-between items-center">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="entwurf">Entwurf</SelectItem>
-              <SelectItem value="abgeschlossen">Abgeschlossen</SelectItem>
-              <SelectItem value="versendet">Versendet</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex justify-end items-center">
           <div className="flex gap-2">
             {savedId && (
               <AlertDialog>
