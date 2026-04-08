@@ -41,6 +41,7 @@ export default function ErstterminDetail() {
 
   // Section 1: Allgemeine Daten
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [selectedCustomerData, setSelectedCustomerData] = useState<any>(null);
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [projektname, setProjektname] = useState("");
   const [standort, setStandort] = useState("");
@@ -358,15 +359,31 @@ export default function ErstterminDetail() {
             <div className="space-y-1"><Label>Kunde</Label>
               <CustomerSelect value={customerId} onChange={(cid, customer) => {
                 setCustomerId(cid);
-                if (customer) {
-                  if (customer.adresse || customer.plz || customer.ort) {
-                    setStandort([customer.adresse, [customer.plz, customer.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "));
-                  }
-                  if (customer.telefon && !telefon) setTelefon(customer.telefon);
-                  if (customer.email && !email) setEmail(customer.email);
-                }
+                if (customer) setSelectedCustomerData(customer);
               }} />
             </div>
+            {/* Kundendaten übernehmen */}
+            {selectedCustomerData && (
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{selectedCustomerData.name}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                    const c = selectedCustomerData;
+                    if (c.adresse || c.plz || c.ort) setStandort([c.adresse, [c.plz, c.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "));
+                    if (c.telefon) setTelefon(c.telefon);
+                    if (c.email) setEmail(c.email);
+                    toast({ title: "Kundendaten übernommen" });
+                  }}>Daten übernehmen</Button>
+                </div>
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  {selectedCustomerData.adresse && <div>{selectedCustomerData.adresse}, {selectedCustomerData.plz} {selectedCustomerData.ort}</div>}
+                  <div className="flex gap-3">
+                    {selectedCustomerData.telefon && <span>{selectedCustomerData.telefon}</span>}
+                    {selectedCustomerData.email && <span>{selectedCustomerData.email}</span>}
+                  </div>
+                </div>
+              </div>
+            )}
             {field("Ansprechpartner vor Ort", ansprechpartner, setAnsprechpartner, 0, "Name des Ansprechpartners")}
             {field("Projektname", projektname, setProjektname, 0, "Projektbezeichnung")}
             {field("Standort / Baustellenadresse", standort, setStandort, 0, "Adresse der Baustelle")}
