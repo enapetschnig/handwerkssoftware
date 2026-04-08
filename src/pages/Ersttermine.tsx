@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, Plus, Calendar, Filter, Search, FolderOpen } from "lucide-react";
+import { CalendarCheck, Plus, Calendar, MapPin, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,21 +12,23 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
 
-type ErstterminProjekt = {
+type Ersttermin = {
   id: string;
   datum: string;
   nummer: string | null;
-  project_id: string | null;
+  customer_id: string | null;
+  projektname: string | null;
+  projektart: string | null;
+  standort: string | null;
   status: string;
-  bauleiter: string | null;
   created_at: string;
-  project_name?: string;
+  customer_name?: string;
 };
 
-const ErsttermineProjekt = () => {
+const Ersttermine = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [termine, setTermine] = useState<ErstterminProjekt[]>([]);
+  const [termine, setTermine] = useState<Ersttermin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
@@ -47,7 +49,7 @@ const ErsttermineProjekt = () => {
   const fetchTermine = async () => {
     setLoading(true);
 
-    const { data, error } = await (supabase.from("ersttermin_projekt" as never) as any)
+    const { data, error } = await (supabase.from("ersttermin_interessent" as never) as any)
       .select("*")
       .order("datum", { ascending: false });
 
@@ -62,20 +64,20 @@ const ErsttermineProjekt = () => {
     }
 
     if (data && data.length > 0) {
-      const projectIds = [...new Set((data as ErstterminProjekt[]).map((t) => t.project_id).filter(Boolean))];
-      let projectMap = new Map<string, string>();
+      const customerIds = [...new Set((data as Ersttermin[]).map((t) => t.customer_id).filter(Boolean))];
+      let customerMap = new Map<string, string>();
 
-      if (projectIds.length > 0) {
-        const { data: projects } = await supabase
-          .from("projects")
+      if (customerIds.length > 0) {
+        const { data: customers } = await supabase
+          .from("customers")
           .select("id, name")
-          .in("id", projectIds as string[]);
-        projectMap = new Map(projects?.map((p) => [p.id, p.name]) || []);
+          .in("id", customerIds as string[]);
+        customerMap = new Map(customers?.map((c) => [c.id, c.name]) || []);
       }
 
-      const enriched = (data as ErstterminProjekt[]).map((t) => ({
+      const enriched = (data as Ersttermin[]).map((t) => ({
         ...t,
-        project_name: t.project_id ? projectMap.get(t.project_id) || "" : "",
+        customer_name: t.customer_id ? customerMap.get(t.customer_id) || "" : "",
       }));
       setTermine(enriched);
     } else {
@@ -90,9 +92,7 @@ const ErsttermineProjekt = () => {
       case "entwurf":
         return <Badge variant="secondary">Entwurf</Badge>;
       case "abgeschlossen":
-        return <Badge className="bg-blue-500 text-white">Abgeschlossen</Badge>;
-      case "unterschrieben":
-        return <Badge className="bg-green-500 text-white">Unterschrieben</Badge>;
+        return <Badge className="bg-green-500 text-white">Abgeschlossen</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -100,9 +100,9 @@ const ErsttermineProjekt = () => {
 
   const filteredTermine = termine.filter((t) => {
     const matchesSearch =
-      (t.project_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.customer_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.nummer || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.bauleiter || "").toLowerCase().includes(searchQuery.toLowerCase());
+      (t.projektname || "").toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === "alle" || t.status === statusFilter;
 
@@ -119,30 +119,32 @@ const ErsttermineProjekt = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageHeader title="Ersttermine - Projekte" />
+      <PageHeader title="Ersttermine" />
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
+        {/* Header with action button */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ClipboardList className="h-6 w-6 text-primary" />
-              Ersttermine - Projekte
+              <CalendarCheck className="h-6 w-6 text-primary" />
+              Ersttermine
             </h1>
-            <p className="text-muted-foreground">Ersttermine fuer bestehende Projekte verwalten</p>
+            <p className="text-muted-foreground">Ersttermine erfassen und verwalten</p>
           </div>
-          <Button onClick={() => navigate("/ersttermine-projekt/neu")} className="gap-2">
+          <Button onClick={() => navigate("/ersttermine/neu")} className="gap-2">
             <Plus className="h-4 w-4" />
             Neuer Ersttermin
           </Button>
         </div>
 
+        {/* Filter Section */}
         <Card className="mb-6">
           <CardContent className="pt-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Suche nach Projekt, Nummer, Bauleiter..."
+                  placeholder="Suche nach Kunde, Nummer, Projektname..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -157,25 +159,25 @@ const ErsttermineProjekt = () => {
                   <SelectItem value="alle">Alle Status</SelectItem>
                   <SelectItem value="entwurf">Entwurf</SelectItem>
                   <SelectItem value="abgeschlossen">Abgeschlossen</SelectItem>
-                  <SelectItem value="unterschrieben">Unterschrieben</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
+        {/* Ersttermine List */}
         {filteredTermine.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <CalendarCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">Keine Ersttermine gefunden</h3>
               <p className="text-muted-foreground mb-4">
                 {searchQuery || statusFilter !== "alle"
-                  ? "Keine Termine entsprechen Ihren Filterkriterien"
-                  : "Erstellen Sie Ihren ersten Projekt-Ersttermin"}
+                  ? "Keine Ersttermine entsprechen Ihren Filterkriterien"
+                  : "Erstellen Sie Ihren ersten Ersttermin"}
               </p>
               {!searchQuery && statusFilter === "alle" && (
-                <Button onClick={() => navigate("/ersttermine-projekt/neu")} variant="outline">
+                <Button onClick={() => navigate("/ersttermine/neu")} variant="outline">
                   <Plus className="h-4 w-4 mr-2" />
                   Ersten Ersttermin erfassen
                 </Button>
@@ -188,7 +190,7 @@ const ErsttermineProjekt = () => {
               <Card
                 key={termin.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/ersttermine-projekt/${termin.id}`)}
+                onClick={() => navigate(`/ersttermine/${termin.id}`)}
               >
                 <CardContent className="pt-4">
                   <div className="flex flex-col sm:flex-row gap-4 justify-between">
@@ -196,7 +198,7 @@ const ErsttermineProjekt = () => {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-semibold text-lg">
-                            {termin.project_name || "Kein Projekt"}
+                            {termin.customer_name || termin.projektname || "Kein Kunde"}
                           </h3>
                           {termin.nummer && (
                             <p className="text-sm text-muted-foreground">Nr. {termin.nummer}</p>
@@ -210,10 +212,13 @@ const ErsttermineProjekt = () => {
                           <Calendar className="h-4 w-4" />
                           {format(new Date(termin.datum), "dd.MM.yyyy", { locale: de })}
                         </span>
-                        {termin.bauleiter && (
+                        {termin.projektart && (
+                          <span className="text-sm">{termin.projektart}</span>
+                        )}
+                        {termin.standort && (
                           <span className="flex items-center gap-1">
-                            <FolderOpen className="h-4 w-4" />
-                            {termin.bauleiter}
+                            <MapPin className="h-4 w-4" />
+                            {termin.standort}
                           </span>
                         )}
                       </div>
@@ -229,4 +234,4 @@ const ErsttermineProjekt = () => {
   );
 };
 
-export default ErsttermineProjekt;
+export default Ersttermine;

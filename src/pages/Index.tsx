@@ -419,18 +419,13 @@ export default function Index() {
 
           {/* Ersttermine */}
           {canView('ersttermine') && (
-            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/ersttermine-interessent")}>
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/ersttermine")}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="h-12 w-12 rounded-lg bg-violet-500/10 flex items-center justify-center"><UserPlus className="h-6 w-6 text-violet-600" /></div>
                 <CardTitle className="text-lg sm:text-xl">Ersttermine</CardTitle>
-                <CardDescription className="text-sm">Interessenten & Projekt-Ersttermine</CardDescription>
+                <CardDescription className="text-sm">Ersttermine erfassen & verwalten</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Button className="flex-1 bg-violet-600 hover:bg-violet-700" size="sm" onClick={(e) => { e.stopPropagation(); navigate("/ersttermine-interessent"); }}>Interessenten</Button>
-                  <Button className="flex-1" size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); navigate("/ersttermine-projekt"); }}>Projekte</Button>
-                </div>
-              </CardContent>
+              <CardContent><Button className="bg-violet-600 hover:bg-violet-700 w-full" size="sm">Ersttermine öffnen</Button></CardContent>
             </Card>
           )}
 

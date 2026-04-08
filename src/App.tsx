@@ -36,10 +36,8 @@ import Bautagesberichte from "./pages/Bautagesberichte";
 import BautagesberichtDetail from "./pages/BautagesberichtDetail";
 import Besprechungsprotokolle from "./pages/Besprechungsprotokolle";
 import BesprechungsprotokollDetail from "./pages/BesprechungsprotokollDetail";
-import ErsttermineInteressent from "./pages/ErsttermineInteressent";
-import ErstterminInteressentDetail from "./pages/ErstterminInteressentDetail";
-import ErsttermineProjekt from "./pages/ErsttermineProjekt";
-import ErstterminProjektDetail from "./pages/ErstterminProjektDetail";
+import Ersttermine from "./pages/Ersttermine";
+import ErstterminDetail from "./pages/ErstterminDetail";
 import NotFound from "./pages/NotFound";
 
 // Wrapper that forces re-mount when id or query params change
@@ -108,10 +106,8 @@ function AppContent() {
           <Route path="/bautagesberichte/:id" element={<ProtectedRoute feature="bautagesberichte"><BautagesberichtDetail /></ProtectedRoute>} />
           <Route path="/besprechungsprotokolle" element={<ProtectedRoute feature="protokolle"><Besprechungsprotokolle /></ProtectedRoute>} />
           <Route path="/besprechungsprotokolle/:id" element={<ProtectedRoute feature="protokolle"><BesprechungsprotokollDetail /></ProtectedRoute>} />
-          <Route path="/ersttermine-interessent" element={<ProtectedRoute feature="ersttermine"><ErsttermineInteressent /></ProtectedRoute>} />
-          <Route path="/ersttermine-interessent/:id" element={<ProtectedRoute feature="ersttermine"><ErstterminInteressentDetail /></ProtectedRoute>} />
-          <Route path="/ersttermine-projekt" element={<ProtectedRoute feature="ersttermine"><ErsttermineProjekt /></ProtectedRoute>} />
-          <Route path="/ersttermine-projekt/:id" element={<ProtectedRoute feature="ersttermine"><ErstterminProjektDetail /></ProtectedRoute>} />
+          <Route path="/ersttermine" element={<ProtectedRoute feature="ersttermine"><Ersttermine /></ProtectedRoute>} />
+          <Route path="/ersttermine/:id" element={<ProtectedRoute feature="ersttermine"><ErstterminDetail /></ProtectedRoute>} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
