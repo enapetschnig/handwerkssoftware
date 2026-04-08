@@ -136,20 +136,20 @@ export default function ErstterminDetail() {
       if (data) {
         const d = data as any;
         const s = (v: any) => v || "";
-        setCustomerId(d.customer_id || null); setAnsprechpartner(s(d.ansprechpartner));
+        setCustomerId(d.customer_id || null); setAnsprechpartner(s(d.notizen));
         setProjektname(s(d.projektname)); setStandort(s(d.standort));
         setTelefon(s(d.telefon)); setEmail(s(d.email)); setDatum(s(d.datum));
         setNummer(s(d.nummer));
-        setProjektart(s(d.projektart)); setGewerk(s(d.gewerk));
-        setLeistungsumfang(s(d.leistungsumfang)); setEntscheidungsstatus(s(d.entscheidungsstatus));
+        setProjektart(s(d.projektart)); setGewerk(s(d.gewerke));
+        setLeistungsumfang(s(d.umfang)); setEntscheidungsstatus(s(d.entscheidungsstatus));
         setZeitrahmen(s(d.zeitrahmen)); setBudget(d.budget ?? "");
         setQuelle(s(d.quelle)); setPrioritaeten(s(d.prioritaeten));
-        setZufahrt(s(d.zufahrt)); setInfrastruktur(s(d.infrastruktur));
+        setZufahrt(s(d.zufahrt_parkplatz)); setInfrastruktur(s(d.infrastruktur));
         setMaterialien(s(d.materialien)); setSicherheit(s(d.sicherheit));
         setHindernisse(s(d.hindernisse)); setEntsorgung(s(d.entsorgung));
-        setGenehmigungen(s(d.genehmigungen)); setOffeneFragen(s(d.offene_fragen));
+        setGenehmigungen(s(d.genehmigungen_relevant)); setOffeneFragen(s(d.offene_technische_fragen));
         setLeistungsbeschreibung(s(d.leistungsbeschreibung)); setFirmenIntern(s(d.firmen_intern));
-        setFirmenExtern(s(d.firmen_extern)); setFlaecheAufmass(s(d.flaeche_aufmass));
+        setFirmenExtern(s(d.firmen_extern)); setFlaecheAufmass(s(d.aufmasse));
         setAnmerkungen(s(d.anmerkungen)); setAngebotErsteller(s(d.angebot_ersteller));
         setAngebotBis(s(d.angebot_bis)); setFolgeterminNoetig(!!d.folgetermin_noetig);
         setFolgeterminDatum(s(d.folgetermin_datum)); setFehlendeUnterlagen(s(d.fehlende_unterlagen));
@@ -224,12 +224,12 @@ export default function ErstterminDetail() {
     }
 
     const payload: any = {
-      customer_id: customerId, ansprechpartner, projektname, standort, telefon, email, datum,
-      nummer: docNummer, projektart: projektart || null, gewerk, leistungsumfang,
+      customer_id: customerId, notizen: ansprechpartner, projektname, standort, telefon, email, datum,
+      nummer: docNummer, projektart: projektart || null, gewerke: gewerk, umfang: leistungsumfang,
       entscheidungsstatus: entscheidungsstatus || null, zeitrahmen, budget: budget === "" ? null : budget,
-      quelle, prioritaeten, zufahrt, infrastruktur, materialien, sicherheit, hindernisse, entsorgung,
-      genehmigungen, offene_fragen: offeneFragen, leistungsbeschreibung, firmen_intern: firmenIntern,
-      firmen_extern: firmenExtern, flaeche_aufmass: flaecheAufmass, anmerkungen,
+      quelle, prioritaeten, zufahrt_parkplatz: zufahrt, infrastruktur, materialien, sicherheit, hindernisse, entsorgung,
+      genehmigungen_relevant: genehmigungen, offene_technische_fragen: offeneFragen, leistungsbeschreibung, firmen_intern: firmenIntern,
+      firmen_extern: firmenExtern, aufmasse: flaecheAufmass, anmerkungen,
       angebot_ersteller: angebotErsteller, angebot_bis: angebotBis || null,
       folgetermin_noetig: folgeterminNoetig, folgetermin_datum: folgeterminDatum || null,
       fehlende_unterlagen: fehlendeUnterlagen, zustaendigkeiten_intern: zustaendigkeitenIntern,
@@ -250,7 +250,7 @@ export default function ErstterminDetail() {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: inserted, error } = await (supabase.from("ersttermin_interessent" as never) as any)
         .insert({ ...payload, erstellt_von: user?.id }).select("id").single();
-      if (error || !inserted) { toast({ variant: "destructive", title: "Fehler", description: "Erstellen fehlgeschlagen" }); setSaving(false); return; }
+      if (error || !inserted) { console.error("Insert error:", error); toast({ variant: "destructive", title: "Fehler", description: error?.message || "Erstellen fehlgeschlagen" }); setSaving(false); return; }
       eid = (inserted as any).id;
       setSavedId(eid);
       setNummer(docNummer);
@@ -493,13 +493,16 @@ export default function ErstterminDetail() {
               <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
               <Button variant="outline" size="sm" onClick={async () => {
                 if (!savedId) {
-                  // Auto-save first to get an ID for the storage path
+                  // Auto-save first to get an ID
+                  toast({ title: "Wird gespeichert...", description: "Ersttermin wird zuerst gespeichert" });
                   await handleSave();
-                  return; // handleSave will re-render, then user can upload
+                  // After save, savedId is set via setSavedId - open file picker on next render
+                  setTimeout(() => fileInputRef.current?.click(), 500);
+                  return;
                 }
                 fileInputRef.current?.click();
               }} disabled={uploading || saving} className="gap-2">
-                <Upload className="h-4 w-4" />{!savedId ? "Erst speichern" : uploading ? "Laedt..." : "Foto hinzufuegen"}
+                <Upload className="h-4 w-4" />{uploading ? "Laedt..." : "Foto hinzufuegen"}
               </Button>
             </div>
             {savedId && <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />}

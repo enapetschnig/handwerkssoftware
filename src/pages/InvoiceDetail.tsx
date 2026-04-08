@@ -1510,89 +1510,26 @@ export default function InvoiceDetail() {
                 </p>
               )}
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label>Kundennr.</Label>
-                  <Input value={(form as any).kundennummer || ""} onChange={(e) => updateField("kundennummer" as any, e.target.value)} placeholder="z.B. 10001" />
-                </div>
-                <div>
-                  <Label>Anrede/Firma</Label>
-                  <Select value={(form as any).kunde_anrede || "none"} onValueChange={(v) => updateField("kunde_anrede" as any, v === "none" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      <SelectItem value="Herr">Herr</SelectItem>
-                      <SelectItem value="Frau">Frau</SelectItem>
-                      <SelectItem value="Firma">Firma</SelectItem>
-                      <SelectItem value="Divers">Divers</SelectItem>
-                      <SelectItem value="Familie">Familie</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Titel</Label>
-                  <Input value={(form as any).kunde_titel || ""} onChange={(e) => updateField("kunde_titel" as any, e.target.value)} placeholder="Mag., Dr., Ing." />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Firma / Name *</Label>
-                  <Input value={form.kunde_name} onChange={(e) => updateField("kunde_name", e.target.value)} placeholder="Firmenname / Name" />
-                </div>
-                <div>
-                  <Label>UID-Nummer</Label>
-                  <div className="flex gap-2">
-                    <Input value={form.kunde_uid} onChange={(e) => updateField("kunde_uid", e.target.value)} placeholder="ATU12345678" className="flex-1" />
-                    <Button
-                      type="button" variant="outline" size="sm"
-                      disabled={!form.kunde_uid || form.kunde_uid.length < 4}
-                      onClick={async () => {
-                        try {
-                          const { data, error } = await supabase.functions.invoke("check-vat", {
-                            body: { vatNumber: form.kunde_uid.replace(/\s/g, "") },
-                          });
-                          if (error) throw error;
-                          if (data.valid) {
-                            toast({ title: "UID gültig", description: data.name || "Verifiziert" });
-                            if (data.name && !form.kunde_name.trim()) updateField("kunde_name", data.name.trim());
-                          } else {
-                            toast({ variant: "destructive", title: "UID ungültig", description: data.error || "Nicht verifizierbar" });
-                          }
-                        } catch { toast({ variant: "destructive", title: "Prüfung fehlgeschlagen" }); }
-                      }}
-                    >Prüfen</Button>
+            <CardContent className="space-y-3">
+              {form.kunde_name ? (
+                <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm">
+                  <div className="font-medium text-base">
+                    {(form as any).kunde_anrede && <span className="text-muted-foreground">{(form as any).kunde_anrede} </span>}
+                    {(form as any).kunde_titel && <span className="text-muted-foreground">{(form as any).kunde_titel} </span>}
+                    {form.kunde_name}
                   </div>
+                  {form.kunde_adresse && <div className="text-muted-foreground">{form.kunde_adresse}</div>}
+                  {(form.kunde_plz || form.kunde_ort) && <div className="text-muted-foreground">{form.kunde_plz} {form.kunde_ort} {form.kunde_land && form.kunde_land !== "Österreich" ? `· ${form.kunde_land}` : ""}</div>}
+                  <div className="flex gap-4 mt-1">
+                    {form.kunde_email && <span className="text-muted-foreground">{form.kunde_email}</span>}
+                    {form.kunde_telefon && <span className="text-muted-foreground">{form.kunde_telefon}</span>}
+                  </div>
+                  {form.kunde_uid && <div className="text-muted-foreground">UID: {form.kunde_uid}</div>}
+                  {(form as any).kundennummer && <div className="text-muted-foreground">Kundennr.: {(form as any).kundennummer}</div>}
                 </div>
-              </div>
-              <div>
-                <Label>Adresse</Label>
-                <Input value={form.kunde_adresse} onChange={(e) => updateField("kunde_adresse", e.target.value)} placeholder="Straße und Hausnummer" />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <Label>PLZ</Label>
-                  <Input value={form.kunde_plz} onChange={(e) => updateField("kunde_plz", e.target.value)} />
-                </div>
-                <div>
-                  <Label>Ort</Label>
-                  <Input value={form.kunde_ort} onChange={(e) => updateField("kunde_ort", e.target.value)} />
-                </div>
-                <div>
-                  <Label>Land</Label>
-                  <Input value={form.kunde_land} onChange={(e) => updateField("kunde_land", e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>E-Mail</Label>
-                  <Input type="email" value={form.kunde_email} onChange={(e) => updateField("kunde_email", e.target.value)} />
-                </div>
-                <div>
-                  <Label>Telefon</Label>
-                  <Input value={form.kunde_telefon} onChange={(e) => updateField("kunde_telefon", e.target.value)} />
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
+              )}
               {/* Zahlungseinstellungen (vom Kunden) */}
               {form.typ === "rechnung" && (form.skonto_prozent > 0 || form.skonto_tage > 0 || (form as any).zahlungsbedingungen) && (
                 <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
