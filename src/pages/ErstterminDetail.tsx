@@ -333,8 +333,15 @@ export default function ErstterminDetail() {
           <div className="flex items-center gap-2">
             {badge}
             {status === "entwurf" && savedId && (
-              <Button variant="outline" size="sm" onClick={() => setSignDialogOpen(true)}>
-                <PenLine className="h-4 w-4 mr-1" />Unterschreiben & Abschliessen
+              <Button variant="outline" size="sm" onClick={async () => {
+                setSaving(true);
+                const { error } = await (supabase.from("ersttermin_interessent" as never) as any)
+                  .update({ status: "abgeschlossen" }).eq("id", savedId);
+                if (error) { toast({ variant: "destructive", title: "Fehler" }); }
+                else { setStatus("abgeschlossen"); toast({ title: "Abgeschlossen" }); }
+                setSaving(false);
+              }} disabled={saving}>
+                <CheckCircle className="h-4 w-4 mr-1" />Abschließen
               </Button>
             )}
             {savedId && !projectId && (
