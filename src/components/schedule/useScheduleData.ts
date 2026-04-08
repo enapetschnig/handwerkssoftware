@@ -66,7 +66,7 @@ export function useScheduleData() {
           .order("name"),
         supabase
           .from("worker_assignments")
-          .select("id, user_id, project_id, datum, notizen, start_time, end_time")
+          .select("id, user_id, project_id, datum, notizen, start_time, end_time, google_event_id")
           .gte("datum", fromDate)
           .lte("datum", toDate),
         supabase

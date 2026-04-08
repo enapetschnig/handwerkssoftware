@@ -9,6 +9,7 @@ export type Assignment = {
   notizen: string | null;
   start_time: string | null;
   end_time: string | null;
+  google_event_id: string | null;
 };
 
 export type Resource = {

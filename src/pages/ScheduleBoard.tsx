@@ -161,18 +161,18 @@ export default function ScheduleBoard() {
       }
     }
 
-    // Sync to Google Calendar (small delay to ensure DB write is committed)
+    // Sync to Google Calendar
     if (assignmentId) {
-      setTimeout(() => {
-        supabase.functions.invoke("sync-assignment-to-calendar", {
+      try {
+        const { error: syncErr } = await supabase.functions.invoke("sync-assignment-to-calendar", {
           body: { action: "sync", assignment_id: assignmentId },
-        }).then(({ data: syncData, error: syncErr }) => {
-          if (syncErr) {
-            console.error("Calendar sync error:", syncErr, syncData);
-            toast({ variant: "destructive", title: "Kalender-Sync fehlgeschlagen", description: syncErr.message?.slice(0, 200) || "" });
-          }
-        }).catch(() => {});
-      }, 500);
+        });
+        if (syncErr) {
+          console.error("Calendar sync error:", syncErr);
+        }
+      } catch (e) {
+        console.error("Calendar sync failed:", e);
+      }
     }
   };
 
@@ -180,10 +180,18 @@ export default function ScheduleBoard() {
     const existing = getAssignmentForDay(assignments, uid, date);
     if (!existing) return;
 
-    // Delete from Google Calendar first (fire and forget)
-    supabase.functions.invoke("sync-assignment-to-calendar", {
-      body: { action: "delete", assignment_id: existing.id },
-    }).catch((e) => console.error("Calendar delete failed:", e));
+    // Delete from Google Calendar first
+    if (existing.google_event_id) {
+      try {
+        await supabase.functions.invoke("sync-assignment-to-calendar", {
+          body: { action: "delete", assignment_id: existing.id },
+        });
+      } catch (e) {
+        console.error("Calendar delete failed:", e);
+      }
+      // Also clean up any imported calendar_events with same google_event_id
+      await supabase.from("calendar_events").delete().eq("google_event_id", existing.google_event_id);
+    }
 
     const { error } = await supabase
       .from("worker_assignments")
@@ -194,6 +202,7 @@ export default function ScheduleBoard() {
       return;
     }
     setAssignments((prev) => prev.filter((a) => a.id !== existing.id));
+    toast({ title: "Entfernt", description: "Zuweisung wurde entfernt" });
   };
 
   // --- Daily target handlers ---
