@@ -86,7 +86,7 @@ async function createOrUpdateEvent(
 
   const event = {
     summary: `${workerName} → ${projectName}`,
-    description: assignment.notizen || "",
+    description: (assignment.notizen || "") + "\n[montipro-plantafel]",
     start: { dateTime: startDateTime, timeZone: "Europe/Vienna" },
     end: { dateTime: endDateTime, timeZone: "Europe/Vienna" },
     transparency: "opaque",

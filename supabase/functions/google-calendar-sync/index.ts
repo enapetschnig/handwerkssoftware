@@ -531,6 +531,9 @@ Deno.serve(async (req) => {
           if (isAllDay && endDate) endDate = subtractOneDay(endDate);
           if (!startDate) continue;
 
+          // Skip events created by Plantafel (they are managed via worker_assignments)
+          if (gEvent.description?.includes("[montipro-plantafel]")) continue;
+
           const { error } = await supabase.from("calendar_events").upsert({
             google_event_id: gEvent.id,
             title: gEvent.summary || "Unbenannter Termin",
