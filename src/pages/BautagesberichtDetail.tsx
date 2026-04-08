@@ -145,7 +145,7 @@ const BautagesberichtDetail = () => {
 
   const handleSave = async () => {
     if (!projectId) {
-      toast({ variant: "destructive", title: "Fehler", description: "Bitte Projekt waehlen" });
+      toast({ variant: "destructive", title: "Fehler", description: "Bitte Projekt wählen" });
       return;
     }
 
@@ -259,9 +259,9 @@ const BautagesberichtDetail = () => {
       .eq("id", savedId);
 
     if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: "Loeschen fehlgeschlagen" });
+      toast({ variant: "destructive", title: "Fehler", description: "Löschen fehlgeschlagen" });
     } else {
-      toast({ title: "Geloescht", description: "Bericht wurde geloescht" });
+      toast({ title: "Gelöscht", description: "Bericht wurde gelöscht" });
       navigate("/bautagesberichte");
     }
     setDeleting(false);
@@ -339,19 +339,19 @@ const BautagesberichtDetail = () => {
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="sm" disabled={deleting}>
                     <Trash2 className="h-4 w-4 mr-1" />
-                    Loeschen
+                    Löschen
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Bericht loeschen?</AlertDialogTitle>
+                    <AlertDialogTitle>Bericht löschen?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Dieser Bericht wird unwiderruflich geloescht.
+                      Dieser Bericht wird unwiderruflich gelöscht.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>Loeschen</AlertDialogAction>
+                    <AlertDialogAction onClick={handleDelete}>Löschen</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -375,7 +375,7 @@ const BautagesberichtDetail = () => {
                 <Label>Projekt *</Label>
                 <Select value={projectId} onValueChange={setProjectId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Projekt waehlen" />
+                    <SelectValue placeholder="Projekt wählen" />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((p) => (
@@ -408,7 +408,7 @@ const BautagesberichtDetail = () => {
                 <Label>Wetter</Label>
                 <Select value={wetter} onValueChange={setWetter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Wetter waehlen" />
+                    <SelectValue placeholder="Wetter wählen" />
                   </SelectTrigger>
                   <SelectContent>
                     {wetterOptions.map((opt) => (

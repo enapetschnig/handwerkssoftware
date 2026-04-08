@@ -249,7 +249,7 @@ export function ConfigOptionsManager({ kategorie, title, description, icon, show
               variant={deleteConfirm === idx ? "destructive" : "ghost"}
               size="icon"
               onClick={() => removeOption(idx)}
-              title={deleteConfirm === idx ? "Nochmal klicken zum Loeschen" : "Loeschen"}
+              title={deleteConfirm === idx ? "Nochmal klicken zum Löschen" : "Löschen"}
               className="shrink-0 mt-4"
             >
               <Trash2 className="h-4 w-4" />

@@ -101,7 +101,7 @@ export function ProjectStatusSettings() {
         .eq("id", status.id)
         .then(({ error }) => {
           if (error) {
-            toast({ title: "Fehler beim Loeschen", variant: "destructive" });
+            toast({ title: "Fehler beim Löschen", variant: "destructive" });
             loadStatuses();
           }
         });
@@ -209,7 +209,7 @@ export function ProjectStatusSettings() {
               variant={deleteConfirm === idx ? "destructive" : "ghost"}
               size="icon"
               onClick={() => removeStatus(idx)}
-              title={deleteConfirm === idx ? "Nochmal klicken zum Loeschen" : "Loeschen"}
+              title={deleteConfirm === idx ? "Nochmal klicken zum Löschen" : "Löschen"}
               className="shrink-0"
             >
               <Trash2 className="h-4 w-4" />
@@ -219,7 +219,7 @@ export function ProjectStatusSettings() {
 
         <Button variant="outline" onClick={addStatus} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
-          Neuen Status hinzufuegen
+          Neuen Status hinzufügen
         </Button>
 
         <Button onClick={handleSave} disabled={saving} className="w-full">

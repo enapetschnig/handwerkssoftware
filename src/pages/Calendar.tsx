@@ -269,12 +269,12 @@ export default function Calendar() {
         body: { event_id: deletingEvent.id },
       });
       if (error) throw error;
-      toast({ title: "Termin geloescht" });
+      toast({ title: "Termin gelöscht" });
       setDeleteDialogOpen(false);
       setDeletingEvent(null);
       await loadData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Fehler beim Loeschen", description: err.message });
+      toast({ variant: "destructive", title: "Fehler beim Löschen", description: err.message });
     } finally {
       setDeleting(false);
     }
@@ -619,15 +619,15 @@ export default function Calendar() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Termin loeschen?</AlertDialogTitle>
+            <AlertDialogTitle>Termin löschen?</AlertDialogTitle>
             <AlertDialogDescription>
-              Der Termin "{deletingEvent?.title}" wird aus dem Kalender und aus Google Calendar entfernt. Diese Aktion kann nicht rueckgaengig gemacht werden.
+              Der Termin "{deletingEvent?.title}" wird aus dem Kalender und aus Google Calendar entfernt. Diese Aktion kann nicht rückgängig gemacht werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Abbrechen</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteEvent} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {deleting ? "Loeschen..." : "Loeschen"}
+              {deleting ? "Löschen..." : "Löschen"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

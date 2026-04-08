@@ -149,10 +149,10 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
       toast({
         variant: "destructive",
         title: "Fehler",
-        description: "Foto konnte nicht geloescht werden",
+        description: "Foto konnte nicht gelöscht werden",
       });
     } else {
-      toast({ title: "Erfolg", description: "Foto geloescht" });
+      toast({ title: "Erfolg", description: "Foto gelöscht" });
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
     }
   };
@@ -183,7 +183,7 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
               className="gap-2"
             >
               <Upload className="h-4 w-4" />
-              {uploading ? "Laedt..." : "Foto hinzufuegen"}
+              {uploading ? "Lädt..." : "Foto hinzufügen"}
             </Button>
           </div>
           <input
@@ -198,7 +198,7 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
         <CardContent>
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">
-              Laedt Fotos...
+              Lädt Fotos...
             </div>
           ) : photos.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

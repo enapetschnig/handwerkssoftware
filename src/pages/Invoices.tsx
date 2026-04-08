@@ -502,8 +502,8 @@ export default function Invoices() {
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
 
-  const totalRechnungen = invoices.filter(i => i.typ === "rechnung").length;
-  const totalAngebote = invoices.filter(i => i.typ === "angebot").length;
+  const totalRechnungen = invoices.filter(i => i.typ === "rechnung" && i.status !== "storniert").length;
+  const totalAngebote = invoices.filter(i => i.typ === "angebot" && i.status !== "storniert").length;
   const offeneSumme = invoices
     .filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + Number(i.brutto_summe) - i.bezahlt_betrag, 0);

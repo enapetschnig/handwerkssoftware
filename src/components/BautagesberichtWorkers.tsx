@@ -54,7 +54,7 @@ export const BautagesberichtWorkers = ({ workers, onChange, employees }: Bautage
           <CardTitle className="text-base">Arbeiter</CardTitle>
           <Button type="button" variant="outline" size="sm" onClick={addWorker} className="gap-1">
             <Plus className="h-4 w-4" />
-            Hinzufugen
+            Hinzufügen
           </Button>
         </div>
       </CardHeader>
@@ -97,11 +97,11 @@ export const BautagesberichtWorkers = ({ workers, onChange, employees }: Bautage
                   />
                 </div>
                 <div className="flex-1 w-full">
-                  <label className="text-xs text-muted-foreground">Tatigkeit</label>
+                  <label className="text-xs text-muted-foreground">Tätigkeit</label>
                   <Input
                     value={worker.taetigkeit}
                     onChange={(e) => updateWorker(worker.id, "taetigkeit", e.target.value)}
-                    placeholder="Ausgefuhrte Tatigkeit"
+                    placeholder="Ausgeführte Tätigkeit"
                   />
                 </div>
                 <Button

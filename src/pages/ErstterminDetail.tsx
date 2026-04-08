@@ -77,7 +77,7 @@ export default function ErstterminDetail() {
   const [flaecheAufmass, setFlaecheAufmass] = useState("");
   const [anmerkungen, setAnmerkungen] = useState("");
 
-  // Section 5: Naechste Schritte
+  // Section 5: Nächste Schritte
   const [angebotErsteller, setAngebotErsteller] = useState("");
   const [angebotBis, setAngebotBis] = useState("");
   const [folgeterminNoetig, setFolgeterminNoetig] = useState(false);
@@ -293,8 +293,8 @@ export default function ErstterminDetail() {
     if (!savedId) return;
     setDeleting(true);
     const { error } = await (supabase.from("ersttermin_interessent" as never) as any).delete().eq("id", savedId);
-    if (error) { toast({ variant: "destructive", title: "Fehler", description: "Loeschen fehlgeschlagen" }); }
-    else { toast({ title: "Geloescht" }); navigate("/ersttermine"); }
+    if (error) { toast({ variant: "destructive", title: "Fehler", description: "Löschen fehlgeschlagen" }); }
+    else { toast({ title: "Gelöscht" }); navigate("/ersttermine"); }
     setDeleting(false);
   };
 
@@ -354,13 +354,13 @@ export default function ErstterminDetail() {
             {savedId && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={deleting}><Trash2 className="h-4 w-4 mr-1" />Loeschen</Button>
+                  <Button variant="destructive" size="sm" disabled={deleting}><Trash2 className="h-4 w-4 mr-1" />Löschen</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
-                  <AlertDialogHeader><AlertDialogTitle>Ersttermin loeschen?</AlertDialogTitle>
-                    <AlertDialogDescription>Dieser Ersttermin wird unwiderruflich geloescht.</AlertDialogDescription>
+                  <AlertDialogHeader><AlertDialogTitle>Ersttermin löschen?</AlertDialogTitle>
+                    <AlertDialogDescription>Dieser Ersttermin wird unwiderruflich gelöscht.</AlertDialogDescription>
                   </AlertDialogHeader>
-                  <AlertDialogFooter><AlertDialogCancel>Abbrechen</AlertDialogCancel><AlertDialogAction onClick={handleDelete}>Loeschen</AlertDialogAction></AlertDialogFooter>
+                  <AlertDialogFooter><AlertDialogCancel>Abbrechen</AlertDialogCancel><AlertDialogAction onClick={handleDelete}>Löschen</AlertDialogAction></AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             )}
@@ -423,7 +423,7 @@ export default function ErstterminDetail() {
           <CardContent className="space-y-4">
             <div className="space-y-1"><Label>Projektart</Label>
               <Select value={projektart} onValueChange={setProjektart}>
-                <SelectTrigger><SelectValue placeholder="Projektart waehlen" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Projektart wählen" /></SelectTrigger>
                 <SelectContent>{projektartOptions.map((o) => <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -431,14 +431,14 @@ export default function ErstterminDetail() {
             {field("Leistungsumfang", leistungsumfang, setLeistungsumfang, 3, "Beschreibung des Leistungsumfangs")}
             <div className="space-y-1"><Label>Entscheidungsstatus</Label>
               <Select value={entscheidungsstatus} onValueChange={setEntscheidungsstatus}>
-                <SelectTrigger><SelectValue placeholder="Status waehlen" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Status wählen" /></SelectTrigger>
                 <SelectContent>{entscheidungsOptions.map((o) => <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             {field("Zeitrahmen", zeitrahmen, setZeitrahmen, 0, "z.B. Q2 2026")}
             <div className="space-y-1"><Label>Budget</Label>{numInput(budget, setBudget)}</div>
             {field("Quelle / Empfehlung", quelle, setQuelle, 0, "Wie kam der Kontakt zustande?")}
-            {field("Prioritaeten", prioritaeten, setPrioritaeten, 0, "z.B. Qualitaet, Preis, Termin")}
+            {field("Prioritäten", prioritaeten, setPrioritaeten, 0, "z.B. Qualität, Preis, Termin")}
           </CardContent>
         </Card>
 
@@ -450,7 +450,7 @@ export default function ErstterminDetail() {
             {field("Strom / Wasser / Infrastruktur", infrastruktur, setInfrastruktur, 2)}
             {field("Bestandsmaterial / Untergrund", materialien, setMaterialien, 2)}
             {field("Sicherheitsanforderungen", sicherheit, setSicherheit, 2)}
-            {field("Hindernisse / Schutzmassnahmen", hindernisse, setHindernisse, 2)}
+            {field("Hindernisse / Schutzmaßnahmen", hindernisse, setHindernisse, 2)}
             {field("Entsorgung / Demontage", entsorgung, setEntsorgung, 2)}
             {field("Genehmigungen relevant", genehmigungen, setGenehmigungen, 2)}
             {field("Offene technische Fragen", offeneFragen, setOffeneFragen, 2)}
@@ -464,14 +464,14 @@ export default function ErstterminDetail() {
             {field("Kurzbeschreibung / Kundenwunsch", leistungsbeschreibung, setLeistungsbeschreibung, 3)}
             {field("Firmen intern", firmenIntern, setFirmenIntern, 2)}
             {field("Firmen extern", firmenExtern, setFirmenExtern, 2)}
-            {field("Flaeche / Aufmass", flaecheAufmass, setFlaecheAufmass, 2)}
+            {field("Fläche / Aufmaß", flaecheAufmass, setFlaecheAufmass, 2)}
             {field("Bemerkung / Anmerkungen", anmerkungen, setAnmerkungen, 3)}
           </CardContent>
         </Card>
 
-        {/* 5. Naechste Schritte */}
+        {/* 5. Nächste Schritte */}
         <Card>
-          <CardHeader><CardTitle>Naechste Schritte</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Nächste Schritte</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {field("Wer erstellt Angebot?", angebotErsteller, setAngebotErsteller)}
             <div className="space-y-1"><Label>Angebot bis wann?</Label>
@@ -489,8 +489,8 @@ export default function ErstterminDetail() {
               )}
             </div>
             {field("Fehlende Unterlagen", fehlendeUnterlagen, setFehlendeUnterlagen, 2)}
-            {field("Zustaendigkeiten intern", zustaendigkeitenIntern, setZustaendigkeitenIntern, 2)}
-            {field("Zustaendigkeiten extern", zustaendigkeitenExtern, setZustaendigkeitenExtern, 2)}
+            {field("Zuständigkeiten intern", zustaendigkeitenIntern, setZustaendigkeitenIntern, 2)}
+            {field("Zuständigkeiten extern", zustaendigkeitenExtern, setZustaendigkeitenExtern, 2)}
           </CardContent>
         </Card>
 
@@ -509,9 +509,9 @@ export default function ErstterminDetail() {
               <CardContent className="space-y-4">
                 {field("Bauleiter", bauleiter, setBauleiter)}
                 {field("Beteiligte", beteiligte, setBeteiligte, 2)}
-                {field("Benoetigte Materialien", benoetigteMaterialien, setBenoetigteMaterialien, 2)}
+                {field("Benötigte Materialien", benoetigteMaterialien, setBenoetigteMaterialien, 2)}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="space-y-1"><Label>Stunden-Schaetzung</Label>{numInput(stundenSchaetzung, setStundenSchaetzung)}</div>
+                  <div className="space-y-1"><Label>Stunden-Schätzung</Label>{numInput(stundenSchaetzung, setStundenSchaetzung)}</div>
                   <div className="space-y-1"><Label>Materialkosten</Label>{numInput(materialkosten, setMaterialkosten)}</div>
                   <div className="space-y-1"><Label>Fremdkosten</Label>{numInput(fremdkosten, setFremdkosten)}</div>
                   <div className="space-y-1"><Label>Gesamtkosten</Label>{numInput(gesamtkosten, setGesamtkosten)}</div>
@@ -527,7 +527,7 @@ export default function ErstterminDetail() {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
               <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
-                <Upload className="h-4 w-4" />{uploading ? "Laedt..." : "Foto hinzufuegen"}
+                <Upload className="h-4 w-4" />{uploading ? "Lädt..." : "Foto hinzufügen"}
               </Button>
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
@@ -552,7 +552,7 @@ export default function ErstterminDetail() {
             )}
             {/* Saved photos */}
             {photosLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Laedt Fotos...</div>
+              <div className="text-center py-8 text-muted-foreground">Lädt Fotos...</div>
             ) : photos.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
             ) : (
