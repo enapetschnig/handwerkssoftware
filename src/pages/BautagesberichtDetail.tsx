@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
@@ -54,6 +55,9 @@ const BautagesberichtDetail = () => {
   // UI state
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [skipSignBauleiter, setSkipSignBauleiter] = useState(false);
+  const [skipSignKunde, setSkipSignKunde] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(isNew ? null : id || null);
 
@@ -234,6 +238,11 @@ const BautagesberichtDetail = () => {
     }
 
     setSaving(false);
+
+    // Open signature dialog after save (only if not already finalized)
+    if (status === "entwurf") {
+      setSignDialogOpen(true);
+    }
   };
 
   const handleDelete = async () => {
@@ -262,6 +271,35 @@ const BautagesberichtDetail = () => {
     setStatus(newStatus);
   };
 
+  const handleFinalize = async () => {
+    if (!savedId) return;
+    setSaving(true);
+
+    const finalPayload: any = {
+      status: "abgeschlossen",
+      unterschrift_bauleiter: skipSignBauleiter ? null : signaturBauleiter,
+      unterschrift_kunde: skipSignKunde ? null : signaturKunde,
+    };
+
+    // Set unterschrift_am if at least one signature exists
+    if (signaturBauleiter || signaturKunde) {
+      finalPayload.unterschrift_am = new Date().toISOString();
+    }
+
+    const { error } = await (supabase.from("bautagesberichte" as never) as any)
+      .update(finalPayload)
+      .eq("id", savedId);
+
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: "Abschließen fehlgeschlagen" });
+    } else {
+      setStatus("abgeschlossen");
+      setSignDialogOpen(false);
+      toast({ title: "Abgeschlossen", description: "Bautagesbericht wurde erfolgreich abgeschlossen" });
+    }
+    setSaving(false);
+  };
+
   const getStatusBadge = (s: string) => {
     switch (s) {
       case "entwurf": return <Badge variant="secondary">Entwurf</Badge>;
@@ -288,16 +326,10 @@ const BautagesberichtDetail = () => {
         <div className="flex flex-wrap gap-2 justify-between items-center">
           <div className="flex items-center gap-2">
             {getStatusBadge(status)}
-            {status === "entwurf" && (
-              <Button variant="outline" size="sm" onClick={() => handleStatusChange("abgeschlossen")}>
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Abschliessen
-              </Button>
-            )}
-            {status === "abgeschlossen" && (
-              <Button variant="outline" size="sm" onClick={() => handleStatusChange("unterschrieben")}>
+            {status === "entwurf" && savedId && (
+              <Button variant="outline" size="sm" onClick={() => setSignDialogOpen(true)}>
                 <PenLine className="h-4 w-4 mr-1" />
-                Als unterschrieben markieren
+                Unterschreiben & Abschließen
               </Button>
             )}
           </div>
@@ -463,49 +495,121 @@ const BautagesberichtDetail = () => {
         {/* Photos - only after first save */}
         {savedId && <BautagesberichtPhotos berichtId={savedId} />}
 
-        {/* Signatures */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Unterschriften</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <Label className="mb-2 block">Unterschrift Bauleiter</Label>
-              {signaturBauleiter ? (
-                <div className="space-y-2">
-                  <img src={signaturBauleiter} alt="Unterschrift Bauleiter" className="border rounded-lg max-h-32" />
-                  <Button variant="outline" size="sm" onClick={() => setSignaturBauleiter(null)}>
-                    Neu unterschreiben
-                  </Button>
+        {/* Signatures summary (read-only, shown only if already signed) */}
+        {savedId && (signaturBauleiter || signaturKunde) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Unterschriften</CardTitle>
+            </CardHeader>
+            <CardContent className="flex gap-6">
+              {signaturBauleiter && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Bauleiter</Label>
+                  <img src={signaturBauleiter} alt="Unterschrift Bauleiter" className="border rounded-lg max-h-20 mt-1" />
                 </div>
-              ) : (
-                <SignaturePad onSignatureChange={setSignaturBauleiter} />
               )}
-            </div>
-            <Separator />
-            <div>
-              <Label className="mb-2 block">Unterschrift Kunde</Label>
-              {signaturKunde ? (
-                <div className="space-y-2">
-                  <img src={signaturKunde} alt="Unterschrift Kunde" className="border rounded-lg max-h-32" />
-                  <Button variant="outline" size="sm" onClick={() => setSignaturKunde(null)}>
-                    Neu unterschreiben
-                  </Button>
+              {signaturKunde && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Kunde</Label>
+                  <img src={signaturKunde} alt="Unterschrift Kunde" className="border rounded-lg max-h-20 mt-1" />
                 </div>
-              ) : (
-                <SignaturePad onSignatureChange={setSignaturKunde} />
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Bottom save */}
-        <div className="flex justify-end">
+        {/* Bottom actions */}
+        <div className="flex justify-end gap-2">
           <Button onClick={handleSave} disabled={saving} className="gap-2">
             <Save className="h-4 w-4" />
             {saving ? "Speichert..." : "Speichern"}
           </Button>
         </div>
+
+        {/* Signature & Finalize Dialog - opens after save */}
+        <Dialog open={signDialogOpen} onOpenChange={setSignDialogOpen}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Unterschriften & Abschluss</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6 py-2">
+              {/* Bauleiter Signature */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="font-medium">Unterschrift Bauleiter</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => { setSignaturBauleiter(null); setSkipSignBauleiter(prev => !prev); }}
+                  >
+                    {skipSignBauleiter ? "Unterschrift hinzufügen" : "Keine Unterschrift erforderlich"}
+                  </Button>
+                </div>
+                {skipSignBauleiter ? (
+                  <div className="border rounded-lg p-3 bg-muted/50 text-sm text-muted-foreground text-center">
+                    Keine Unterschrift erforderlich
+                  </div>
+                ) : signaturBauleiter ? (
+                  <div className="space-y-2">
+                    <img src={signaturBauleiter} alt="Unterschrift Bauleiter" className="border rounded-lg max-h-32" />
+                    <Button variant="outline" size="sm" onClick={() => setSignaturBauleiter(null)}>
+                      Neu unterschreiben
+                    </Button>
+                  </div>
+                ) : (
+                  <SignaturePad onSignatureChange={setSignaturBauleiter} />
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Kunde Signature */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="font-medium">Unterschrift Kunde / Auftraggeber</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => { setSignaturKunde(null); setSkipSignKunde(prev => !prev); }}
+                  >
+                    {skipSignKunde ? "Unterschrift hinzufügen" : "Keine Unterschrift erforderlich"}
+                  </Button>
+                </div>
+                {skipSignKunde ? (
+                  <div className="border rounded-lg p-3 bg-muted/50 text-sm text-muted-foreground text-center">
+                    Keine Unterschrift erforderlich
+                  </div>
+                ) : signaturKunde ? (
+                  <div className="space-y-2">
+                    <img src={signaturKunde} alt="Unterschrift Kunde" className="border rounded-lg max-h-32" />
+                    <Button variant="outline" size="sm" onClick={() => setSignaturKunde(null)}>
+                      Neu unterschreiben
+                    </Button>
+                  </div>
+                ) : (
+                  <SignaturePad onSignatureChange={setSignaturKunde} />
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+              <Button variant="outline" onClick={() => setSignDialogOpen(false)}>
+                Später abschließen
+              </Button>
+              <Button
+                onClick={handleFinalize}
+                disabled={saving}
+                className="bg-green-600 hover:bg-green-700 gap-2"
+              >
+                <CheckCircle className="h-4 w-4" />
+                {saving ? "Wird abgeschlossen..." : "Bautagesbericht abschließen"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
