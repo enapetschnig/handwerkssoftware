@@ -95,8 +95,10 @@ export default function ErstterminDetail() {
   const [fremdkosten, setFremdkosten] = useState<number | "">("");
   const [gesamtkosten, setGesamtkosten] = useState<number | "">("");
 
-  // Section 8: Checkliste
+  // Section 8: Checkliste (config items + custom items)
   const [checkliste, setCheckliste] = useState<Record<string, boolean>>({});
+  const [customCheckItems, setCustomCheckItems] = useState<string[]>([]);
+  const [newCheckItem, setNewCheckItem] = useState("");
 
   // Signatures & status
   const [status, setStatus] = useState("entwurf");
@@ -157,7 +159,13 @@ export default function ErstterminDetail() {
         setBenoetigteMaterialien(s(d.benoetigte_materialien));
         setStundenSchaetzung(d.stunden_schaetzung ?? ""); setMaterialkosten(d.materialkosten ?? "");
         setFremdkosten(d.fremdkosten ?? ""); setGesamtkosten(d.gesamtkosten ?? "");
-        setCheckliste(d.checkliste || {}); setStatus(d.status || "entwurf");
+        const loadedChecklist = d.checkliste || {};
+        setCheckliste(loadedChecklist);
+        // Extract custom check items (keys that are not in config options)
+        const configKeys = checklistenItems.map(ci => ci.wert);
+        const customs = Object.keys(loadedChecklist).filter(k => !configKeys.includes(k) && k.startsWith("custom_"));
+        setCustomCheckItems(customs.map(k => k.replace("custom_", "")));
+        setStatus(d.status || "entwurf");
         setSignaturBerater(d.unterschrift_berater || null);
         setSignaturInteressent(d.unterschrift_interessent || null);
         setProjectId(d.project_id || null);
@@ -470,58 +478,109 @@ export default function ErstterminDetail() {
           </Collapsible>
         </Card>
 
-        {/* 7. Fotos (only after save) */}
-        {savedId && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
-                  <Upload className="h-4 w-4" />{uploading ? "Laedt..." : "Foto hinzufuegen"}
-                </Button>
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
-            </CardHeader>
-            <CardContent>
-              {photosLoading ? <div className="text-center py-8 text-muted-foreground">Laedt Fotos...</div>
-                : photos.length === 0 ? <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
-                : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {photos.map((photo) => (
-                      <div key={photo.id} className="space-y-1">
-                        <div className="relative group aspect-square">
-                          <img src={getPhotoUrl(photo.file_path)} alt={photo.file_name} className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))} />
-                          <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))}><ZoomIn className="h-4 w-4" /></Button>
-                          <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handlePhotoDelete(photo)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 8. Checkliste */}
+        {/* 7. Fotos */}
         <Card>
-          <CardHeader><CardTitle>Checkliste</CardTitle></CardHeader>
-          <CardContent>
-            {checklistenItems.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Keine Checklisten-Eintraege konfiguriert.</div>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
+              <Button variant="outline" size="sm" onClick={async () => {
+                if (!savedId) {
+                  // Auto-save first to get an ID for the storage path
+                  await handleSave();
+                  return; // handleSave will re-render, then user can upload
+                }
+                fileInputRef.current?.click();
+              }} disabled={uploading || saving} className="gap-2">
+                <Upload className="h-4 w-4" />{!savedId ? "Erst speichern" : uploading ? "Laedt..." : "Foto hinzufuegen"}
+              </Button>
+            </div>
+            {savedId && <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />}
+          </CardHeader>
+            <CardContent>
+              {!savedId ? (
+              <div className="text-center py-8 text-muted-foreground">Bitte zuerst speichern, um Fotos hochladen zu können.</div>
+            ) : photosLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Laedt Fotos...</div>
+            ) : photos.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
             ) : (
-              <div className="space-y-3">
-                {checklistenItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3">
-                    <Checkbox
-                      id={`cl-${item.wert}`}
-                      checked={!!checkliste[item.wert]}
-                      onCheckedChange={(checked) => setCheckliste((prev) => ({ ...prev, [item.wert]: !!checked }))}
-                    />
-                    <Label htmlFor={`cl-${item.wert}`} className="cursor-pointer">{item.label}</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {photos.map((photo) => (
+                  <div key={photo.id} className="space-y-1">
+                    <div className="relative group aspect-square">
+                      <img src={getPhotoUrl(photo.file_path)} alt={photo.file_name} className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))} />
+                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))}><ZoomIn className="h-4 w-4" /></Button>
+                      <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handlePhotoDelete(photo)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+            </CardContent>
+          </Card>
+
+        {/* 8. Checkliste */}
+        <Card>
+          <CardHeader><CardTitle>Checkliste</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {/* Config-basierte Punkte */}
+            <div className="space-y-3">
+              {checklistenItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <Checkbox
+                    id={`cl-${item.wert}`}
+                    checked={!!checkliste[item.wert]}
+                    onCheckedChange={(checked) => setCheckliste((prev) => ({ ...prev, [item.wert]: !!checked }))}
+                  />
+                  <Label htmlFor={`cl-${item.wert}`} className="cursor-pointer">{item.label}</Label>
+                </div>
+              ))}
+            </div>
+
+            {/* Eigene Punkte */}
+            {customCheckItems.length > 0 && (
+              <div className="space-y-3 border-t pt-3">
+                <p className="text-xs text-muted-foreground font-medium">Eigene Punkte</p>
+                {customCheckItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <Checkbox
+                      id={`custom-${idx}`}
+                      checked={!!checkliste[`custom_${item}`]}
+                      onCheckedChange={(checked) => setCheckliste((prev) => ({ ...prev, [`custom_${item}`]: !!checked }))}
+                    />
+                    <Label htmlFor={`custom-${idx}`} className="cursor-pointer flex-1">{item}</Label>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => {
+                      setCustomCheckItems(prev => prev.filter((_, i) => i !== idx));
+                      setCheckliste(prev => { const n = { ...prev }; delete n[`custom_${item}`]; return n; });
+                    }}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Neuen Punkt hinzufügen */}
+            <div className="flex gap-2 border-t pt-3">
+              <Input
+                placeholder="Eigenen Checkpunkt hinzufügen..."
+                value={newCheckItem}
+                onChange={(e) => setNewCheckItem(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newCheckItem.trim()) {
+                    setCustomCheckItems(prev => [...prev, newCheckItem.trim()]);
+                    setCheckliste(prev => ({ ...prev, [`custom_${newCheckItem.trim()}`]: false }));
+                    setNewCheckItem("");
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button variant="outline" size="sm" disabled={!newCheckItem.trim()} onClick={() => {
+                if (newCheckItem.trim()) {
+                  setCustomCheckItems(prev => [...prev, newCheckItem.trim()]);
+                  setCheckliste(prev => ({ ...prev, [`custom_${newCheckItem.trim()}`]: false }));
+                  setNewCheckItem("");
+                }
+              }}>Hinzufügen</Button>
+            </div>
           </CardContent>
         </Card>
 
