@@ -47,7 +47,7 @@ export default function ErstterminDetail() {
   const [telefon, setTelefon] = useState("");
   const [email, setEmail] = useState("");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
-  const [berater, setBerater] = useState("");
+  // berater field removed per user request
   const [nummer, setNummer] = useState("");
 
   // Section 2: Projekt & Bedarf
@@ -139,7 +139,7 @@ export default function ErstterminDetail() {
         setCustomerId(d.customer_id || null); setAnsprechpartner(s(d.ansprechpartner));
         setProjektname(s(d.projektname)); setStandort(s(d.standort));
         setTelefon(s(d.telefon)); setEmail(s(d.email)); setDatum(s(d.datum));
-        setBerater(s(d.berater)); setNummer(s(d.nummer));
+        setNummer(s(d.nummer));
         setProjektart(s(d.projektart)); setGewerk(s(d.gewerk));
         setLeistungsumfang(s(d.leistungsumfang)); setEntscheidungsstatus(s(d.entscheidungsstatus));
         setZeitrahmen(s(d.zeitrahmen)); setBudget(d.budget ?? "");
@@ -225,7 +225,7 @@ export default function ErstterminDetail() {
 
     const payload: any = {
       customer_id: customerId, ansprechpartner, projektname, standort, telefon, email, datum,
-      berater, nummer: docNummer, projektart: projektart || null, gewerk, leistungsumfang,
+      nummer: docNummer, projektart: projektart || null, gewerk, leistungsumfang,
       entscheidungsstatus: entscheidungsstatus || null, zeitrahmen, budget: budget === "" ? null : budget,
       quelle, prioritaeten, zufahrt, infrastruktur, materialien, sicherheit, hindernisse, entsorgung,
       genehmigungen, offene_fragen: offeneFragen, leistungsbeschreibung, firmen_intern: firmenIntern,
@@ -356,7 +356,16 @@ export default function ErstterminDetail() {
           <CardHeader><CardTitle>Allgemeine Daten</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1"><Label>Kunde</Label>
-              <CustomerSelect value={customerId} onChange={(cid) => setCustomerId(cid)} />
+              <CustomerSelect value={customerId} onChange={(cid, customer) => {
+                setCustomerId(cid);
+                if (customer) {
+                  if (customer.adresse || customer.plz || customer.ort) {
+                    setStandort([customer.adresse, [customer.plz, customer.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "));
+                  }
+                  if (customer.telefon && !telefon) setTelefon(customer.telefon);
+                  if (customer.email && !email) setEmail(customer.email);
+                }
+              }} />
             </div>
             {field("Ansprechpartner vor Ort", ansprechpartner, setAnsprechpartner, 0, "Name des Ansprechpartners")}
             {field("Projektname", projektname, setProjektname, 0, "Projektbezeichnung")}
@@ -368,9 +377,8 @@ export default function ErstterminDetail() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Datum</Label><Input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} /></div>
-              {field("Berater", berater, setBerater, 0, "Name des Beraters")}
+              <div className="space-y-1"><Label>Nummer</Label><Input value={nummer} readOnly placeholder="Wird automatisch vergeben" className="bg-muted" /></div>
             </div>
-            <div className="space-y-1"><Label>Nummer</Label><Input value={nummer} readOnly placeholder="Wird automatisch vergeben" className="bg-muted" /></div>
           </CardContent>
         </Card>
 
