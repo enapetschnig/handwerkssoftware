@@ -108,6 +108,10 @@ export default function Admin() {
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<'stammdaten' | 'dokumente' | 'stunden'>('stammdaten');
   
+  // Default Betreff
+  const [defaultBetreffRechnung, setDefaultBetreffRechnung] = useState("");
+  const [defaultBetreffAngebot, setDefaultBetreffAngebot] = useState("");
+
   // Sick notes states
   const [sickNotes, setSickNotes] = useState<SickNote[]>([]);
 
@@ -135,7 +139,7 @@ export default function Admin() {
       const { data, error } = await supabase
         .from("app_settings")
         .select("key, value")
-        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid", "einheiten"]);
+        .in("key", ["disturbance_report_email", "bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid", "einheiten", "default_betreff_rechnung", "default_betreff_angebot"]);
 
       if (error) {
         console.error("Error fetching app settings:", error);
@@ -147,6 +151,8 @@ export default function Admin() {
           if (row.key === "bank_bic") setBankBic(row.value);
           if (row.key === "firmen_uid") setFirmenUid(row.value);
           if (row.key === "einheiten") setEinheitenStr(row.value);
+          if (row.key === "default_betreff_rechnung") setDefaultBetreffRechnung(row.value);
+          if (row.key === "default_betreff_angebot") setDefaultBetreffAngebot(row.value);
         });
       }
     } catch (err) {
@@ -321,7 +327,7 @@ export default function Admin() {
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setEmployees(data || []);
+      setEmployees((data || []) as Employee[]);
     }
   };
 
@@ -1006,6 +1012,45 @@ export default function Admin() {
                       Speichern
                     </Button>
                   </div>
+                </div>
+
+                {/* Default Betreff */}
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium text-sm">Standard-Betreff</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Wird automatisch in jede neue Rechnung bzw. jedes neue Angebot als Betreff eingetragen.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-1">
+                      <Label>Betreff für Rechnungen</Label>
+                      <Input value={defaultBetreffRechnung} onChange={(e) => setDefaultBetreffRechnung(e.target.value)} disabled={loadingSettings} placeholder="z.B. Montagearbeiten laut Auftrag" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Betreff für Angebote</Label>
+                      <Input value={defaultBetreffAngebot} onChange={(e) => setDefaultBetreffAngebot(e.target.value)} disabled={loadingSettings} placeholder="z.B. Angebot für Montagearbeiten" />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      setSavingSettings(true);
+                      try {
+                        await supabase.from("app_settings").upsert([
+                          { key: "default_betreff_rechnung", value: defaultBetreffRechnung, updated_at: new Date().toISOString() },
+                          { key: "default_betreff_angebot", value: defaultBetreffAngebot, updated_at: new Date().toISOString() },
+                        ]);
+                        toast({ title: "Standard-Betreff gespeichert" });
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Fehler", description: err.message });
+                      } finally {
+                        setSavingSettings(false);
+                      }
+                    }}
+                    disabled={savingSettings || loadingSettings}
+                    size="sm"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Speichern
+                  </Button>
                 </div>
 
                 {/* Bankverbindung */}

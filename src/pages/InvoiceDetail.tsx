@@ -223,9 +223,19 @@ export default function InvoiceDetail() {
   useEffect(() => {
     fetchProjects();
     fetchTemplates();
-    // Load invoice layout settings
-    supabase.from("app_settings").select("value").eq("key", "invoice_layout").single().then(({ data }) => {
-      if (data) setInvoiceLayout(parseLayoutSettings(data.value));
+    // Load invoice layout settings + default betreff
+    supabase.from("app_settings").select("key, value").in("key", ["invoice_layout", "default_betreff_rechnung", "default_betreff_angebot"]).then(({ data }) => {
+      if (data) {
+        for (const row of data) {
+          if (row.key === "invoice_layout") setInvoiceLayout(parseLayoutSettings(row.value));
+          if (isNew && row.key === "default_betreff_rechnung" && defaultTyp === "rechnung" && row.value) {
+            setForm(prev => prev.betreff ? prev : { ...prev, betreff: row.value });
+          }
+          if (isNew && row.key === "default_betreff_angebot" && defaultTyp === "angebot" && row.value) {
+            setForm(prev => prev.betreff ? prev : { ...prev, betreff: row.value });
+          }
+        }
+      }
     });
     if (!isNew && id) {
       loadInvoice(id);

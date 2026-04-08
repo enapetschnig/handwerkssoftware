@@ -7,6 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   startOfISOWeek,
   addDays,
+  addWeeks,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isWeekend,
   format,
 } from "date-fns";
 
@@ -61,8 +66,27 @@ export default function ScheduleBoard() {
 
   const isExternView = isExtern && !isAdmin && !isVorarbeiter;
 
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
-  const weekEnd = addDays(weekStart, 4);
+  // Calculate visible days based on mode
+  const weekDays = (() => {
+    if (mode === "2weeks") {
+      // 2 weeks: all weekdays (Mon-Fri) over 2 weeks
+      const days: Date[] = [];
+      for (let i = 0; i < 14; i++) {
+        const d = addDays(weekStart, i);
+        if (!isWeekend(d)) days.push(d);
+      }
+      return days;
+    }
+    if (mode === "month") {
+      // Month: all weekdays of the month containing weekStart
+      const mStart = startOfMonth(weekStart);
+      const mEnd = endOfMonth(weekStart);
+      return eachDayOfInterval({ start: mStart, end: mEnd }).filter(d => !isWeekend(d));
+    }
+    // Default: 1 week (Mon-Fri)
+    return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  })();
+  const weekEnd = weekDays.length > 0 ? weekDays[weekDays.length - 1] : addDays(weekStart, 4);
 
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
 

@@ -51,4 +51,4 @@ export type EmployeeColor = {
   text_color: string;
 };
 
-export type ScheduleMode = "week" | "year";
+export type ScheduleMode = "week" | "2weeks" | "month" | "year";

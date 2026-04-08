@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { format, startOfYear, endOfYear } from "date-fns";
+import { format, startOfYear, endOfYear, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import type {
   Profile,
@@ -36,6 +36,9 @@ export function useScheduleData() {
         const yearEnd = endOfYear(weekStart);
         fromDate = format(yearStart, "yyyy-MM-dd");
         toDate = format(yearEnd, "yyyy-MM-dd");
+      } else if (mode === "month") {
+        fromDate = format(startOfMonth(weekStart), "yyyy-MM-dd");
+        toDate = format(endOfMonth(weekStart), "yyyy-MM-dd");
       } else {
         fromDate = format(weekStart, "yyyy-MM-dd");
         toDate = format(weekEnd, "yyyy-MM-dd");
