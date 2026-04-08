@@ -13,7 +13,7 @@ export function GanttTimeline({ days, holidays }: Props) {
     <div
       className="grid border-b sticky top-0 z-20 bg-card"
       style={{
-        gridTemplateColumns: `minmax(140px, 200px) repeat(${days.length}, minmax(40px, 1fr))`,
+        gridTemplateColumns: `minmax(120px, 180px) repeat(${days.length}, minmax(${days.length > 10 ? "32px" : "40px"}, 1fr))`,
       }}
     >
       <div className="p-2 border-r font-medium text-sm sticky left-0 bg-card z-30" />

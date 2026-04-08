@@ -421,7 +421,7 @@ export default function ScheduleBoard() {
           )}
         </ScheduleHeader>
 
-        {mode === "week" ? (
+        {mode !== "year" ? (
           <>
             {/* Legend */}
             {projects.length > 0 && (

@@ -53,7 +53,7 @@ export function ProjectGanttSection({
               key={project.id}
               className="grid border-t"
               style={{
-                gridTemplateColumns: `minmax(140px, 200px) repeat(${days.length}, minmax(40px, 1fr))`,
+                gridTemplateColumns: `minmax(120px, 180px) repeat(${days.length}, minmax(${days.length > 10 ? "32px" : "40px"}, 1fr))`,
               }}
             >
               {/* Label */}
