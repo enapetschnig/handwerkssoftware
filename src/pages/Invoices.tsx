@@ -142,17 +142,13 @@ export default function Invoices() {
     if (!inv) return;
 
     // Prevent invalid backward status transitions
-    const invalidTransitions: Record<string, string[]> = {
-      "bezahlt": [], // bezahlt is final — no changes allowed
-      "storniert": [], // storniert is final
-      "verrechnet": [], // verrechnet is final
-      "teilbezahlt": ["offen", "entwurf"], // can't go back to offen
-    };
-    if (invalidTransitions[inv.status]?.length === 0 && newStatus !== inv.status) {
-      toast({ variant: "destructive", title: "Nicht möglich", description: `Status "${statusLabels[inv.status]}" kann nicht geändert werden` });
+    const terminalStatuses = ["storniert", "bezahlt", "verrechnet"];
+    if (terminalStatuses.includes(inv.status)) {
+      toast({ variant: "destructive", title: "Status kann nicht geändert werden", description: `Status "${statusLabels[inv.status]}" ist endgültig` });
       return;
     }
-    if (invalidTransitions[inv.status]?.includes(newStatus)) {
+    // Prevent backward transitions from teilbezahlt
+    if (inv.status === "teilbezahlt" && (newStatus === "offen" || newStatus === "entwurf")) {
       toast({ variant: "destructive", title: "Nicht möglich", description: `Status kann nicht von "${statusLabels[inv.status]}" auf "${statusLabels[newStatus]}" zurückgesetzt werden` });
       return;
     }
@@ -925,6 +921,13 @@ export default function Invoices() {
                   return;
                 }
 
+                const inv = invoices.find(i => i.id === paymentInvoiceId);
+                const maxBetrag = Math.round(((inv?.brutto_summe || 0) - (inv?.bezahlt_betrag || 0)) * 100) / 100;
+                if (betrag > maxBetrag) {
+                  toast({ variant: "destructive", title: "Betrag zu hoch", description: `Maximaler Betrag: €${maxBetrag.toFixed(2)}` });
+                  return;
+                }
+
                 await supabase.from("invoice_payments").insert({
                   invoice_id: paymentInvoiceId,
                   betrag,
@@ -932,7 +935,6 @@ export default function Invoices() {
                   notiz: paymentNotiz.trim() || null,
                 });
 
-                const inv = invoices.find(i => i.id === paymentInvoiceId);
                 const newBezahlt = (inv?.bezahlt_betrag || 0) + betrag;
                 const newStatus = newBezahlt >= (inv?.brutto_summe || 0) ? "bezahlt" : "teilbezahlt";
 

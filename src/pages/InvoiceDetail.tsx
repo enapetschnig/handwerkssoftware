@@ -509,6 +509,16 @@ export default function InvoiceDetail() {
       return false;
     }
 
+    // Rechnungsbetrag muss > 0 sein (außer bei Entwürfen)
+    const saveBrutto = validItems.reduce((sum, item) => {
+      const netto = item.menge * item.einzelpreis * (1 - (item.rabatt || 0) / 100);
+      return sum + netto * (1 + (form.mwst_satz / 100));
+    }, 0);
+    if (saveBrutto <= 0 && form.status !== "entwurf") {
+      toast({ variant: "destructive", title: "Fehler", description: "Rechnungsbetrag muss größer als €0,00 sein" });
+      return false;
+    }
+
     // Reverse Charge: UID-Nummer des Kunden ist Pflicht (§ 19 UStG)
     if ((form as any).reverse_charge && !form.kunde_uid?.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Bei Reverse Charge ist die UID-Nummer des Kunden Pflicht" });
@@ -992,10 +1002,17 @@ export default function InvoiceDetail() {
           const blob = await resp.blob();
           logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
         } catch {}
+        const { data: bankSettings1 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+        const bank1 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+        bankSettings1?.forEach((s: any) => {
+          if (s.key === "bank_kontoinhaber") bank1.kontoinhaber = s.value;
+          if (s.key === "bank_iban") bank1.iban = s.value;
+          if (s.key === "bank_bic") bank1.bic = s.value;
+        });
         const pdfBlob = generateStornoPdf(
           { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
           stornoNummer, stornoDatum, "Storniert durch Benutzer",
-          undefined, logoUri, invoiceLayout
+          bank1, logoUri, invoiceLayout
         );
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement("a"); a.href = url; a.download = `Storno_${stornoNummer}.pdf`; a.click();
@@ -1012,6 +1029,10 @@ export default function InvoiceDetail() {
 
   const handleMahnstufeUp = async () => {
     if (!invoiceId) return;
+    if (bruttoSumme <= 0) {
+      toast({ variant: "destructive", title: "Nicht möglich", description: "Mahnung kann nicht für Rechnungen mit €0,00 erstellt werden" });
+      return;
+    }
     if (form.mahnstufe >= 3) {
       toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 (Letzte Mahnung) ist das Maximum" });
       return;
@@ -1076,10 +1097,17 @@ export default function InvoiceDetail() {
                         const blob = await resp.blob();
                         logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
                       } catch {}
+                      const { data: bankSettings2 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+                      const bank2 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                      bankSettings2?.forEach((s: any) => {
+                        if (s.key === "bank_kontoinhaber") bank2.kontoinhaber = s.value;
+                        if (s.key === "bank_iban") bank2.iban = s.value;
+                        if (s.key === "bank_bic") bank2.bic = s.value;
+                      });
                       const pdfBlob = generateStornoPdf(
                         { nummer: freshInv.nummer, kunde_name: freshInv.kunde_name, brutto_summe: Number(freshInv.brutto_summe), datum: freshInv.datum },
                         freshInv.storno_nummer, freshInv.storno_datum || freshInv.datum, freshInv.storno_grund || "",
-                        undefined, logoUri, invoiceLayout
+                        bank2, logoUri, invoiceLayout
                       );
                       const url = URL.createObjectURL(pdfBlob);
                       const a = document.createElement("a"); a.href = url; a.download = `Storno_${freshInv.storno_nummer}.pdf`; a.click();
@@ -1124,7 +1152,7 @@ export default function InvoiceDetail() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {form.typ === "rechnung" && (form.status === "offen" || form.status === "teilbezahlt") && (
+                    {form.typ === "rechnung" && (form.status === "offen" || form.status === "teilbezahlt") && bruttoSumme > 0 && (
                       <Select onValueChange={async (stufe) => {
                         const mahnstufe = parseInt(stufe);
                         try {
@@ -2031,10 +2059,17 @@ export default function InvoiceDetail() {
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
                   const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
                   if (!inv?.storno_nummer) return;
+                  const { data: bankSettings3 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+                  const bank3 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                  bankSettings3?.forEach((s: any) => {
+                    if (s.key === "bank_kontoinhaber") bank3.kontoinhaber = s.value;
+                    if (s.key === "bank_iban") bank3.iban = s.value;
+                    if (s.key === "bank_bic") bank3.bic = s.value;
+                  });
                   const blob = generateStornoPdf(
                     { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
                     inv.storno_nummer, inv.storno_datum || form.datum, inv.storno_grund || "",
-                    undefined, logoUri, invoiceLayout
+                    bank3, logoUri, invoiceLayout
                   );
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `Storno_${inv.storno_nummer}.pdf`; a.click(); URL.revokeObjectURL(url);
@@ -2537,10 +2572,17 @@ export default function InvoiceDetail() {
                   const logoBlob = await logoResp.blob();
                   const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
 
+                  const { data: bankSettings4 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
+                  const bank4 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                  bankSettings4?.forEach((s: any) => {
+                    if (s.key === "bank_kontoinhaber") bank4.kontoinhaber = s.value;
+                    if (s.key === "bank_iban") bank4.iban = s.value;
+                    if (s.key === "bank_bic") bank4.bic = s.value;
+                  });
                   const stornoBlob = generateStornoPdf(
                     { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
                     stornoNummer, stornoDatum, stornoGrund.trim(),
-                    undefined, logoUri, invoiceLayout
+                    bank4, logoUri, invoiceLayout
                   );
                   const url = URL.createObjectURL(stornoBlob);
                   const a = document.createElement("a");
