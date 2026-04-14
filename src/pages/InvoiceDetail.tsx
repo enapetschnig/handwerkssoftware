@@ -2078,6 +2078,9 @@ export default function InvoiceDetail() {
                     </Button>
                   </>
                 )}
+                <Button variant="outline" onClick={async () => { const ok = await handleSave(); if (ok) toast({ title: "Gespeichert" }); }} disabled={saving} className="gap-2">
+                  {saving ? "Speichert..." : "Speichern"}
+                </Button>
                 <Button onClick={handlePreview} className="gap-2">
                   <Eye className="w-4 h-4" />
                   Vorschau
