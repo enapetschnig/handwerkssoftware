@@ -387,6 +387,11 @@ export default function Invoices() {
 
   const handleDelete = async (invoiceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const inv = invoices.find(i => i.id === invoiceId);
+    if (inv && inv.status !== "entwurf") {
+      toast({ variant: "destructive", title: "Löschen nicht möglich", description: "Ausgestellte Rechnungen/Angebote können aus rechtlichen Gründen nicht gelöscht werden. Verwenden Sie stattdessen die Storno-Funktion." });
+      return;
+    }
     if (!confirm("Wirklich endgültig löschen?")) return;
     const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
     if (error) {
@@ -473,12 +478,13 @@ export default function Invoices() {
       i.kunde_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(i.brutto_summe).includes(searchQuery) ||
       i.brutto_summe.toFixed(2).includes(searchQuery);
+    const matchArchive = showArchive ? true : !i.archiviert;
     if (filterStatus === "storniert") {
-      return matchTyp && matchSearch && i.status === "storniert";
+      return matchTyp && matchSearch && matchArchive && i.status === "storniert";
     }
     // Normal filters exclude storniert
     const matchStatus = filterStatus === "alle" ? i.status !== "storniert" : i.status === filterStatus;
-    return matchTyp && matchStatus && matchSearch;
+    return matchTyp && matchStatus && matchSearch && matchArchive;
   });
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
@@ -572,6 +578,16 @@ export default function Invoices() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="max-w-sm"
                 />
+                <Button
+                  variant={showArchive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowArchive(!showArchive)}
+                  className="gap-1"
+                  title={showArchive ? "Archivierte ausblenden" : "Archivierte anzeigen"}
+                >
+                  <Archive className="w-4 h-4" />
+                  Archiv
+                </Button>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button onClick={() => navigate("/admin")} variant="outline" size="sm" className="gap-1" title="Nummernkreise im Admin-Bereich konfigurieren">

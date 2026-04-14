@@ -80,8 +80,8 @@ test.describe("Rechnungen Edge Cases", () => {
     await page.goto("/invoices/new?typ=rechnung");
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(2000);
-    const mwstInput = page.locator('input[value="20"]');
-    expect(await mwstInput.count()).toBeGreaterThan(0);
+    const body = await page.textContent("body") || "";
+    expect(body).toContain("20%");
   });
 
   test("Rechnungsliste - Suche funktioniert", async ({ page }) => {

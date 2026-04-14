@@ -525,6 +525,28 @@ export default function InvoiceDetail() {
       return false;
     }
 
+    // Leistungsdatum ist bei Rechnungen Pflicht (§ 11 UStG)
+    if (form.typ === "rechnung" && !form.leistungsdatum) {
+      toast({ variant: "destructive", title: "Leistungsdatum fehlt", description: "Bei Rechnungen ist das Leistungsdatum/Lieferdatum gesetzlich vorgeschrieben." });
+      setSaving(false);
+      return false;
+    }
+
+    // Austrian UID requirements
+    if (form.typ === "rechnung" && saveBrutto > 400) {
+      const { data: uidSetting } = await supabase.from("app_settings").select("value").eq("key", "firmen_uid").maybeSingle();
+      if (!uidSetting?.value) {
+        toast({ variant: "destructive", title: "UID-Nummer fehlt", description: "Bei Rechnungen über €400 ist die UID-Nummer des Ausstellers gesetzlich vorgeschrieben. Bitte im Admin-Bereich konfigurieren." });
+        setSaving(false);
+        return false;
+      }
+    }
+    if (form.typ === "rechnung" && saveBrutto > 10000 && !form.kunde_uid?.trim()) {
+      toast({ variant: "destructive", title: "Kunden-UID fehlt", description: "Bei Rechnungen über €10.000 ist die UID-Nummer des Empfängers gesetzlich vorgeschrieben." });
+      setSaving(false);
+      return false;
+    }
+
     setSaving(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -1726,7 +1748,15 @@ export default function InvoiceDetail() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>MwSt-Satz (%)</Label>
-                  <Input type="number" value={form.mwst_satz} onChange={(e) => updateField("mwst_satz", Number(e.target.value))} className="w-32" disabled={(form as any).reverse_charge} />
+                  <Select value={String(form.mwst_satz)} onValueChange={(v) => updateField("mwst_satz", Number(v))} disabled={(form as any).reverse_charge}>
+                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20">20% (Normalsteuersatz)</SelectItem>
+                      <SelectItem value="13">13% (ermäßigt)</SelectItem>
+                      <SelectItem value="10">10% (ermäßigt)</SelectItem>
+                      <SelectItem value="0">0% (steuerfrei)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Rabatt (%)</Label>
