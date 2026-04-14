@@ -63,6 +63,8 @@ interface InvoiceData {
   jahr: number;
   status: string;
   kunde_name: string;
+  kunde_anrede: string;
+  kunde_titel: string;
   kunde_adresse: string;
   kunde_plz: string;
   kunde_ort: string;
@@ -70,6 +72,8 @@ interface InvoiceData {
   kunde_email: string;
   kunde_telefon: string;
   kunde_uid: string;
+  kundennummer: string;
+  reverse_charge: boolean;
   datum: string;
   faellig_am: string;
   leistungsdatum: string;
@@ -183,6 +187,8 @@ export default function InvoiceDetail() {
     jahr: new Date().getFullYear(),
     status: defaultTyp === "rechnung" ? "offen" : "entwurf",
     kunde_name: "",
+    kunde_anrede: "",
+    kunde_titel: "",
     kunde_adresse: "",
     kunde_plz: "",
     kunde_ort: "",
@@ -190,6 +196,8 @@ export default function InvoiceDetail() {
     kunde_email: "",
     kunde_telefon: "",
     kunde_uid: "",
+    kundennummer: "",
+    reverse_charge: false,
     datum: format(new Date(), "yyyy-MM-dd"),
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
@@ -1094,7 +1102,7 @@ export default function InvoiceDetail() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-[1600px]">
         <PageHeader
-          title={isNew ? `Neue ${typLabel} erstellen` : `${typLabel} ${form.nummer}`}
+          title={isNew ? `${form.typ === "angebot" ? "Neues" : "Neue"} ${typLabel} erstellen` : `${typLabel} ${form.nummer}`}
           backPath="/invoices"
         />
 
@@ -2414,15 +2422,15 @@ export default function InvoiceDetail() {
             if (kundeData && !form.kunde_name) {
               setForm(prev => ({
                 ...prev,
-                kunde_name: kundeData.kunde_name || prev.kunde_name,
-                kunde_adresse: kundeData.kunde_adresse || prev.kunde_adresse,
-                kunde_plz: kundeData.kunde_plz || prev.kunde_plz,
-                kunde_ort: kundeData.kunde_ort || prev.kunde_ort,
-                kunde_land: kundeData.kunde_land || prev.kunde_land,
-                kunde_email: kundeData.kunde_email || prev.kunde_email,
-                kunde_telefon: kundeData.kunde_telefon || prev.kunde_telefon,
-                kunde_uid: kundeData.kunde_uid || prev.kunde_uid,
-                customer_id: kundeData.customer_id || prev.customer_id,
+                kunde_name: (kundeData as any).kunde_name || prev.kunde_name,
+                kunde_adresse: (kundeData as any).kunde_adresse || prev.kunde_adresse,
+                kunde_plz: (kundeData as any).kunde_plz || prev.kunde_plz,
+                kunde_ort: (kundeData as any).kunde_ort || prev.kunde_ort,
+                kunde_land: (kundeData as any).kunde_land || prev.kunde_land,
+                kunde_email: (kundeData as any).kunde_email || prev.kunde_email,
+                kunde_telefon: (kundeData as any).kunde_telefon || prev.kunde_telefon,
+                kunde_uid: (kundeData as any).kunde_uid || prev.kunde_uid,
+                customer_id: (kundeData as any).customer_id || prev.customer_id,
               }));
             }
             setImportRegieOpen(false);
@@ -2449,15 +2457,15 @@ export default function InvoiceDetail() {
             if (!form.kunde_name && offer.kunde_name) {
               setForm(prev => ({
                 ...prev,
-                kunde_name: offer.kunde_name || prev.kunde_name,
-                kunde_adresse: offer.kunde_adresse || prev.kunde_adresse,
-                kunde_plz: offer.kunde_plz || prev.kunde_plz,
-                kunde_ort: offer.kunde_ort || prev.kunde_ort,
-                kunde_land: offer.kunde_land || prev.kunde_land,
-                kunde_email: offer.kunde_email || prev.kunde_email,
-                kunde_telefon: offer.kunde_telefon || prev.kunde_telefon,
-                kunde_uid: offer.kunde_uid || prev.kunde_uid,
-                customer_id: offer.customer_id || prev.customer_id,
+                kunde_name: (offer as any).kunde_name || prev.kunde_name,
+                kunde_adresse: (offer as any).kunde_adresse || prev.kunde_adresse,
+                kunde_plz: (offer as any).kunde_plz || prev.kunde_plz,
+                kunde_ort: (offer as any).kunde_ort || prev.kunde_ort,
+                kunde_land: (offer as any).kunde_land || prev.kunde_land,
+                kunde_email: (offer as any).kunde_email || prev.kunde_email,
+                kunde_telefon: (offer as any).kunde_telefon || prev.kunde_telefon,
+                kunde_uid: (offer as any).kunde_uid || prev.kunde_uid,
+                customer_id: (offer as any).customer_id || prev.customer_id,
               }));
             }
             setImportOfferOpen(false);
