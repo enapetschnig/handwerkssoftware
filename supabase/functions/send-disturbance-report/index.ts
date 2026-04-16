@@ -497,6 +497,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     console.log("Email sent successfully:", JSON.stringify(emailResponse));
 
+    // Store PDF in Supabase Storage for project access
+    try {
+      const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+      const storagePath = `${disturbance.id}/${pdfFilename}`;
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("regiebericht-pdfs")
+        .upload(storagePath, pdfBytes, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("PDF upload error:", uploadError);
+      } else {
+        // Save PDF path on the disturbance record
+        await supabaseAdmin
+          .from("disturbances")
+          .update({ pdf_path: storagePath, pdf_gesendet_am: new Date().toISOString() })
+          .eq("id", disturbance.id);
+        console.log("PDF stored at:", storagePath);
+      }
+    } catch (storageErr) {
+      console.error("PDF storage failed (non-critical):", storageErr);
+    }
+
     return new Response(
       JSON.stringify({ success: true, emailResponse }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }

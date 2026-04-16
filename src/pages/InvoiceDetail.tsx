@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -1514,7 +1514,21 @@ export default function InvoiceDetail() {
                   value={form.customer_id || null}
                   onChange={async (id, customer) => {
                     if (!customer) {
-                      updateField("customer_id", null);
+                      setForm(prev => ({
+                        ...prev,
+                        customer_id: null,
+                        kunde_name: "",
+                        kunde_adresse: "",
+                        kunde_plz: "",
+                        kunde_ort: "",
+                        kunde_land: "Österreich",
+                        kunde_email: "",
+                        kunde_telefon: "",
+                        kunde_uid: "",
+                        kunde_anrede: "",
+                        kunde_titel: "",
+                        kundennummer: "",
+                      } as any));
                       return;
                     }
                     const updates: any = {
@@ -1564,14 +1578,56 @@ export default function InvoiceDetail() {
               </div>
               {form.customer_id && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Verknüpft mit bestehendem Kunden • <button className="underline" onClick={() => updateField("customer_id", null)}>Verknüpfung lösen</button>
+                  Verknüpft mit bestehendem Kunden • <button className="underline" onClick={() => {
+                    setForm(prev => ({
+                      ...prev,
+                      customer_id: null,
+                      kunde_name: "",
+                      kunde_adresse: "",
+                      kunde_plz: "",
+                      kunde_ort: "",
+                      kunde_land: "Österreich",
+                      kunde_email: "",
+                      kunde_telefon: "",
+                      kunde_uid: "",
+                      kunde_anrede: "",
+                      kunde_titel: "",
+                      kundennummer: "",
+                    } as any));
+                  }}>Verknüpfung lösen</button>
                 </p>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
               {form.kunde_name ? (
-                <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm">
-                  <div className="font-medium text-base">
+                <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm relative">
+                  {!isKundeLocked && (
+                    <button
+                      type="button"
+                      className="absolute top-2 right-2 rounded-full p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Kunde entfernen"
+                      onClick={() => {
+                        setForm(prev => ({
+                          ...prev,
+                          customer_id: null,
+                          kunde_name: "",
+                          kunde_adresse: "",
+                          kunde_plz: "",
+                          kunde_ort: "",
+                          kunde_land: "Österreich",
+                          kunde_email: "",
+                          kunde_telefon: "",
+                          kunde_uid: "",
+                          kunde_anrede: "",
+                          kunde_titel: "",
+                          kundennummer: "",
+                        } as any));
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  <div className="font-medium text-base pr-6">
                     {(form as any).kunde_anrede && <span className="text-muted-foreground">{(form as any).kunde_anrede} </span>}
                     {(form as any).kunde_titel && <span className="text-muted-foreground">{(form as any).kunde_titel} </span>}
                     {form.kunde_name}

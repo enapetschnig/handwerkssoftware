@@ -49,8 +49,8 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   logo: {
     enabled: true,
     position: "left",
-    width_mm: 45,
-    height_mm: 18,
+    width_mm: 30,
+    height_mm: 12,
   },
   footer: {
     line1: "",

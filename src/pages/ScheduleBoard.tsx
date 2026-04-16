@@ -241,9 +241,15 @@ export default function ScheduleBoard() {
 
     if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
     debounceTimers.current[key] = setTimeout(async () => {
-      const current = dailyTargets.find(
-        (t) => t.project_id === projectId && t.datum === datum
-      );
+      // Use functional state access to avoid stale closure
+      let targetToSave: DailyTarget | undefined;
+      setDailyTargets((prev) => {
+        targetToSave = prev.find(
+          (t) => t.project_id === projectId && t.datum === datum
+        );
+        return prev; // no mutation, just reading
+      });
+
       const payload: Record<string, unknown> = {
         project_id: projectId,
         datum,
@@ -251,19 +257,16 @@ export default function ScheduleBoard() {
         [field]: value,
       };
 
-      if (current && !current.id.startsWith("temp-")) {
+      if (targetToSave && !targetToSave.id.startsWith("temp-")) {
         await supabase
           .from("project_daily_targets")
           .update({ [field]: value })
-          .eq("id", current.id);
+          .eq("id", targetToSave.id);
       } else {
-        const tempTarget = dailyTargets.find(
-          (t) => t.project_id === projectId && t.datum === datum
-        );
-        if (tempTarget) {
-          payload.tagesziel = tempTarget.tagesziel;
-          payload.nachkalkulation_stunden = tempTarget.nachkalkulation_stunden;
-          payload.notizen = tempTarget.notizen;
+        if (targetToSave) {
+          payload.tagesziel = targetToSave.tagesziel;
+          payload.nachkalkulation_stunden = targetToSave.nachkalkulation_stunden;
+          payload.notizen = targetToSave.notizen;
           payload[field] = value;
         }
         const { data } = await supabase
@@ -501,12 +504,7 @@ export default function ScheduleBoard() {
         days={popoverDays.length > 1 ? popoverDays : undefined}
         assignment={popoverAssignment || null}
         projects={projects}
-        onAssign={async (uid, date, projectId, notizen) => {
-          const daysToAssign = popoverDays.length > 1 ? popoverDays : [date];
-          for (const d of daysToAssign) {
-            await handleAssign(uid, d, projectId, notizen);
-          }
-        }}
+        onAssign={handleAssign}
         onRemove={handleRemove}
       />
 

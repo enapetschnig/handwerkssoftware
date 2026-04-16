@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
@@ -52,6 +52,7 @@ const ProjectOverview = () => {
   const [btbCount, setBtbCount] = useState(0);
   const [regieCount, setRegieCount] = useState(0);
   const [protokollCount, setProtokollCount] = useState(0);
+  const [regiePdfs, setRegiePdfs] = useState<{id: string; datum: string; kunde_name: string; pdf_path: string}[]>([]);
   const [projectData, setProjectData] = useState<any>(null);
   const [projectHours, setProjectHours] = useState<{user_id: string, name: string, total: number}[]>([]);
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
@@ -298,10 +299,19 @@ const ProjectOverview = () => {
       .eq("project_id", projectId)
       .then(({ count }: any) => setBtbCount(count || 0));
 
-    // Fetch Regie count
+    // Fetch Regie count (filtered by project)
     (supabase.from("disturbances" as never) as any)
       .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
       .then(({ count }: any) => setRegieCount(count || 0));
+
+    // Fetch Regiebericht PDFs for this project
+    (supabase.from("disturbances" as never) as any)
+      .select("id, datum, kunde_name, pdf_path")
+      .eq("project_id", projectId)
+      .not("pdf_path", "is", null)
+      .order("datum", { ascending: false })
+      .then(({ data: pdfData }: any) => setRegiePdfs(pdfData || []));
 
     // Fetch Protokoll count
     (supabase.from("besprechungsprotokolle" as never) as any)
@@ -536,6 +546,33 @@ const ProjectOverview = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Regiebericht PDFs */}
+          {regiePdfs.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <p className="font-medium text-sm flex items-center gap-2">
+                  <Download className="h-4 w-4 text-yellow-600" />
+                  Regiebericht-PDFs
+                </p>
+                <div className="space-y-1">
+                  {regiePdfs.map(pdf => (
+                    <button
+                      key={pdf.id}
+                      className="flex items-center gap-2 text-sm w-full text-left hover:bg-muted rounded px-2 py-1.5 transition-colors"
+                      onClick={async () => {
+                        const { data } = await supabase.storage.from("regiebericht-pdfs").createSignedUrl(pdf.pdf_path, 300);
+                        if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                      }}
+                    >
+                      <FileText className="h-4 w-4 text-red-500 shrink-0" />
+                      <span className="truncate">{pdf.kunde_name} - {new Date(pdf.datum).toLocaleDateString("de-AT")}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Protokolle */}
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/besprechungsprotokolle?project=${projectId}`)}>

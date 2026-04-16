@@ -104,7 +104,7 @@ export default function Calendar() {
     // Fetch assignments for the month
     const { data: assignData } = await supabase
       .from("worker_assignments")
-      .select("id, datum, start_time, end_time, notizen, user_id, projects(name)")
+      .select("id, datum, start_time, end_time, notizen, user_id, google_event_id, projects(name)")
       .gte("datum", monthStart)
       .lte("datum", monthEnd)
       .order("datum");

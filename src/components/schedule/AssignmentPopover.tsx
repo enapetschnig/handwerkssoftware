@@ -30,7 +30,7 @@ interface Props {
   days?: Date[];
   assignment: Assignment | null;
   projects: Project[];
-  onAssign: (userId: string, date: Date, projectId: string, notizen?: string, startTime?: string, endTime?: string) => void;
+  onAssign: (userId: string, date: Date, projectId: string, notizen?: string, startTime?: string, endTime?: string) => void | Promise<void>;
   onRemove: (userId: string, date: Date) => void;
 }
 
@@ -64,15 +64,15 @@ export function AssignmentPopover({
 
   if (!profile || !date) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedProject) return;
     if (isRangeMode) {
       for (const d of days) {
         const fri = d.getDay() === 5;
-        onAssign(profile.id, d, selectedProject, notizen || undefined, startTime, fri ? "12:30" : endTime);
+        await onAssign(profile.id, d, selectedProject, notizen || undefined, startTime, fri ? "12:30" : endTime);
       }
     } else {
-      onAssign(profile.id, date, selectedProject, notizen || undefined, startTime, endTime);
+      await onAssign(profile.id, date, selectedProject, notizen || undefined, startTime, endTime);
     }
     onOpenChange(false);
   };

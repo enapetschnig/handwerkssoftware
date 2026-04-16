@@ -178,7 +178,7 @@ export function InvoicePdfPreview({
           <div className="flex gap-2 flex-wrap items-center">
             {mustSaveFirst && (
               <>
-                <Button size="sm" onClick={onSave} disabled={saving} className="gap-2 bg-green-600 hover:bg-green-700">
+                <Button size="sm" onClick={onSave} disabled={saving} className="gap-2 bg-orange-600 hover:bg-orange-700">
                   <Save className="h-4 w-4" />
                   {saving ? "Speichert..." : "Speichern"}
                 </Button>
@@ -227,7 +227,19 @@ export function InvoicePdfPreview({
               </div>
             </div>
           ) : pdfUrl ? (
-            <iframe src={pdfUrl} className="w-full h-full border-0" title="PDF Preview" />
+            <div className="relative w-full h-full">
+              <iframe src={pdfUrl} className="w-full h-full border-0" title="PDF Preview" />
+              {!saved && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center" aria-hidden="true">
+                  <span
+                    className="text-[120px] font-bold text-black/[0.08] select-none whitespace-nowrap"
+                    style={{ transform: "rotate(-35deg)" }}
+                  >
+                    VORSCHAU
+                  </span>
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
       </DialogContent>

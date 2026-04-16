@@ -768,6 +768,9 @@ Deno.serve(async (req) => {
 
           if (!startDate) continue;
 
+          // Skip events created by Plantafel (managed via worker_assignments)
+          if (gEvent.description?.includes("[montipro-plantafel]")) continue;
+
           const { error } = await supabase
             .from("calendar_events")
             .upsert({

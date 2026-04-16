@@ -64,10 +64,20 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [materials, setMaterials] = useState<MaterialEntry[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<{id: string; name: string; customer_id: string | null}[]>([]);
 
   useEffect(() => {
     if (!open) {
       setSelectedCustomerId(null);
+      setSelectedProjectId(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name")
+        .then(({ data }) => { if (data) setProjects(data); });
     }
   }, [open]);
 
@@ -208,6 +218,8 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
       kunde_telefon: formData.kundeTelefon.trim() || null,
       beschreibung: formData.beschreibung.trim(),
       notizen: formData.notizen.trim() || null,
+      project_id: selectedProjectId || null,
+      customer_id: selectedCustomerId || null,
     };
 
     if (editData) {
@@ -461,6 +473,43 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             </div>
           </div>
 
+          {/* Projekt-Zuordnung */}
+          <div className="space-y-2">
+            <Label>Projekt (optional)</Label>
+            <Select value={selectedProjectId || "none"} onValueChange={async (v) => {
+              const projId = v === "none" ? null : v;
+              setSelectedProjectId(projId);
+              if (projId) {
+                const project = projects.find(p => p.id === projId);
+                if (project?.customer_id) {
+                  const { data: cust } = await supabase.from("customers")
+                    .select("id, name, adresse, plz, ort, email, telefon")
+                    .eq("id", project.customer_id).single();
+                  if (cust) {
+                    setSelectedCustomerId(cust.id);
+                    setFormData(prev => ({
+                      ...prev,
+                      kundeName: cust.name,
+                      kundeEmail: cust.email || "",
+                      kundeAdresse: cust.adresse || "",
+                      kundePlz: cust.plz || "",
+                      kundeOrt: cust.ort || "",
+                      kundeTelefon: cust.telefon || "",
+                    }));
+                  }
+                }
+              }
+            }}>
+              <SelectTrigger><SelectValue placeholder="Kein Projekt" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Kein Projekt</SelectItem>
+                {projects.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Customer Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -482,6 +531,16 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                         kundePlz: customer.plz || "",
                         kundeOrt: customer.ort || "",
                         kundeTelefon: customer.telefon || "",
+                      }));
+                    } else {
+                      setFormData(prev => ({
+                        ...prev,
+                        kundeName: "",
+                        kundeEmail: "",
+                        kundeAdresse: "",
+                        kundePlz: "",
+                        kundeOrt: "",
+                        kundeTelefon: "",
                       }));
                     }
                   }}
