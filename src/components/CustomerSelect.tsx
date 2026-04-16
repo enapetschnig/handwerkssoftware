@@ -131,7 +131,11 @@ export function CustomerSelect({
 
     setSaving(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast({ title: "Fehler", description: "Nicht eingeloggt", variant: "destructive" }); setSaving(false); return; }
+
       const insertData: Record<string, any> = {
+        user_id: user.id,
         name: displayName,
         kundentyp: isFirma ? "geschaeftskunde" : "privatkunde",
         land: newCustomer.land || "Österreich",
@@ -154,7 +158,7 @@ export function CustomerSelect({
 
       const { data, error } = await supabase
         .from("customers")
-        .insert(insertData)
+        .insert(insertData as any)
         .select(
           "id, name, anrede, titel, adresse, plz, ort, land, email, telefon, uid_nummer, kundennummer"
         )
