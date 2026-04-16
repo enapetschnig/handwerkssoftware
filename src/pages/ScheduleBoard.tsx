@@ -89,6 +89,7 @@ export default function ScheduleBoard() {
   const weekEnd = weekDays.length > 0 ? weekDays[weekDays.length - 1] : addDays(weekStart, 4);
 
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const assigningRef = useRef<Set<string>>(new Set());
 
   // Assignment popover state
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -116,6 +117,11 @@ export default function ScheduleBoard() {
   // --- Assignment handlers ---
   const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string, startTime?: string, endTime?: string) => {
     const datum = format(date, "yyyy-MM-dd");
+    const lockKey = `${uid}_${datum}`;
+    if (assigningRef.current.has(lockKey)) return;
+    assigningRef.current.add(lockKey);
+
+    try {
     const existing = getAssignmentForDay(assignments, uid, date);
 
     const payload = {
@@ -173,6 +179,9 @@ export default function ScheduleBoard() {
       } catch (e) {
         console.error("Calendar sync failed:", e);
       }
+    }
+    } finally {
+      assigningRef.current.delete(lockKey);
     }
   };
 

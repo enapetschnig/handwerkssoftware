@@ -49,6 +49,7 @@ export function AssignmentPopover({
   const [notizen, setNotizen] = useState(assignment?.notizen || "");
   const [startTime, setStartTime] = useState(assignment?.start_time || "07:00");
   const [endTime, setEndTime] = useState(assignment?.end_time || "16:00");
+  const [saving, setSaving] = useState(false);
 
   const isRangeMode = days && days.length > 1;
 
@@ -65,16 +66,21 @@ export function AssignmentPopover({
   if (!profile || !date) return null;
 
   const handleSave = async () => {
-    if (!selectedProject) return;
-    if (isRangeMode) {
-      for (const d of days) {
-        const fri = d.getDay() === 5;
-        await onAssign(profile.id, d, selectedProject, notizen || undefined, startTime, fri ? "12:30" : endTime);
+    if (!selectedProject || saving) return;
+    setSaving(true);
+    try {
+      if (isRangeMode) {
+        for (const d of days) {
+          const fri = d.getDay() === 5;
+          await onAssign(profile.id, d, selectedProject, notizen || undefined, startTime, fri ? "12:30" : endTime);
+        }
+      } else {
+        await onAssign(profile.id, date, selectedProject, notizen || undefined, startTime, endTime);
       }
-    } else {
-      await onAssign(profile.id, date, selectedProject, notizen || undefined, startTime, endTime);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
   };
 
   // Calculate hours from times
@@ -166,9 +172,9 @@ export function AssignmentPopover({
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={!selectedProject}
+            disabled={!selectedProject || saving}
           >
-            {isRangeMode ? `${days.length} Tage zuweisen` : "Speichern"}
+            {saving ? "Speichert..." : isRangeMode ? `${days.length} Tage zuweisen` : "Speichern"}
           </Button>
         </DialogFooter>
       </DialogContent>
