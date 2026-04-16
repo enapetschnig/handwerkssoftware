@@ -23,6 +23,7 @@ import TimeAccountManagement from "@/components/TimeAccountManagement";
 import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
+import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
@@ -1161,6 +1162,7 @@ export default function Admin() {
 
           {/* ===== TAB 3: RECHNUNGS-LAYOUT ===== */}
           <TabsContent value="rechnung" className="space-y-6">
+            <InvoiceNumberSettings />
             <InvoiceLayoutEditor />
           </TabsContent>
 

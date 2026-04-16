@@ -636,7 +636,7 @@ export default function InvoiceDetail() {
 
         if (numError) throw numError;
         const nummer = numData as string;
-        const laufnummer = parseInt(nummer.replace(/^AN/, '').slice(2)) || 1;
+        const laufnummer = parseInt((nummer.match(/(\d+)$/) || ["", "1"])[1]) || 1;
 
         const { data: insertData, error: insertError } = await supabase
           .from("invoices")
