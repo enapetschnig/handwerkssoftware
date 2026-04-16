@@ -21,8 +21,13 @@ export default function Auth() {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
+    let email = (formData.get("email") as string).trim();
     const password = formData.get("password") as string;
+
+    // Support username login: if no @ sign, append internal domain
+    if (!email.includes("@")) {
+      email = `${email.toLowerCase()}@app.monti.pro`;
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -39,9 +44,23 @@ export default function Auth() {
       return;
     }
 
-    toast({
-      title: "Erfolgreich angemeldet",
-    });
+    // Check if user must change password
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profile?.must_change_password) {
+        toast({ title: "Bitte Passwort ändern", description: "Sie müssen Ihr Passwort beim ersten Login ändern." });
+        navigate("/?changePassword=true");
+        setLoading(false);
+        return;
+      }
+    }
+
+    toast({ title: "Erfolgreich angemeldet" });
     navigate("/");
     setLoading(false);
   };
@@ -195,13 +214,13 @@ export default function Auth() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">E-Mail</Label>
+                  <Label htmlFor="email">{isLogin ? "Benutzername oder E-Mail" : "E-Mail"}</Label>
                   <Input
                     id="email"
                     name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="ihre@email.at"
+                    type={isLogin ? "text" : "email"}
+                    autoComplete={isLogin ? "username" : "email"}
+                    placeholder={isLogin ? "benutzername oder email@..." : "ihre@email.at"}
                     required
                   />
                 </div>

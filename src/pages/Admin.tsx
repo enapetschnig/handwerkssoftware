@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Shield, User as UserIcon, Send, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar } from "lucide-react";
+import { ArrowLeft, Shield, User as UserIcon, UserPlus, Send, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -24,6 +24,7 @@ import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
+import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
@@ -97,6 +98,7 @@ export default function Admin() {
   const [userRoles, setUserRoles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [inviteTelefon, setInviteTelefon] = useState("");
+  const [createUserOpen, setCreateUserOpen] = useState(false);
   const [sendingInvite, setSendingInvite] = useState(false);
   
   // Config options
@@ -650,6 +652,19 @@ export default function Admin() {
 
           {/* ===== TAB 1: BENUTZER & MITARBEITER ===== */}
           <TabsContent value="benutzer" className="space-y-6">
+            {/* Neuen Benutzer anlegen */}
+            <div className="flex justify-end">
+              <Button onClick={() => setCreateUserOpen(true)} className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Neuen Benutzer anlegen
+              </Button>
+            </div>
+            <CreateUserDialog
+              open={createUserOpen}
+              onOpenChange={setCreateUserOpen}
+              onCreated={fetchProfiles}
+            />
+
             {/* ===== WARTENDE AKTIVIERUNGEN ===== */}
             {profiles.filter(p => !p.is_active).length > 0 && (
               <section>
