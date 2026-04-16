@@ -71,19 +71,45 @@ export function MaterialFileImport({ open, onClose, onImported }: MaterialFileIm
         return;
       }
 
-      // Limit content size
-      if (fileContent.length > 10000) {
-        fileContent = fileContent.slice(0, 10000);
+      // Chunking: große Dateien in 50KB-Blöcke aufteilen und nacheinander verarbeiten
+      const CHUNK_SIZE = 50000;
+      const MAX_TOTAL = 500000; // Hard-Cap bei 500KB — darüber sollte manuell importiert werden
+      if (fileContent.length > MAX_TOTAL) {
+        toast({
+          variant: "destructive",
+          title: "Datei zu groß",
+          description: `Datei hat ${Math.round(fileContent.length / 1024)}KB. Max. ${Math.round(MAX_TOTAL / 1024)}KB. Bitte Datei splitten oder manuell importieren.`,
+        });
+        return;
       }
 
-      const { data, error } = await supabase.functions.invoke("parse-material-file", {
-        body: { fileContent, fileType },
-      });
+      const allMaterials: any[] = [];
+      const chunks: string[] = [];
+      for (let i = 0; i < fileContent.length; i += CHUNK_SIZE) {
+        chunks.push(fileContent.slice(i, i + CHUNK_SIZE));
+      }
 
-      if (error) throw error;
+      for (let idx = 0; idx < chunks.length; idx++) {
+        const { data, error } = await supabase.functions.invoke("parse-material-file", {
+          body: { fileContent: chunks[idx], fileType },
+        });
+        if (error) {
+          console.error(`Chunk ${idx + 1} error:`, error);
+          continue; // Einzelne Chunks dürfen fehlschlagen
+        }
+        if (data?.materials) allMaterials.push(...data.materials);
+      }
 
-      if (data.materials && data.materials.length > 0) {
-        setMaterials(data.materials.map((m: any) => ({ ...m, selected: true })));
+      if (allMaterials.length > 0) {
+        // Duplikate innerhalb des Imports entfernen (case-insensitive)
+        const seen = new Set<string>();
+        const deduped = allMaterials.filter(m => {
+          const key = (m.name || "").trim().toLowerCase();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setMaterials(deduped.map((m: any) => ({ ...m, selected: true })));
       } else {
         toast({ variant: "destructive", title: "Keine Materialien erkannt", description: "Die KI konnte keine Materialien aus der Datei extrahieren." });
       }
@@ -109,8 +135,37 @@ export function MaterialFileImport({ open, onClose, onImported }: MaterialFileIm
 
     setSaving(true);
     try {
+      // Duplikat-Check: bestehende Materialien laden und nach Name (case-insensitive, trimmed) vergleichen
+      const { data: existing } = await supabase
+        .from("invoice_templates")
+        .select("id, name");
+      const existingNames = new Set(
+        (existing || []).map((e: any) => (e.name || "").trim().toLowerCase())
+      );
+
+      const toInsert: typeof selected = [];
+      const skipped: string[] = [];
+      for (const m of selected) {
+        const key = m.name.trim().toLowerCase();
+        if (existingNames.has(key)) {
+          skipped.push(m.name.trim());
+        } else {
+          existingNames.add(key); // auch Duplikate innerhalb des Imports filtern
+          toInsert.push(m);
+        }
+      }
+
+      if (toInsert.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "Nichts zu importieren",
+          description: `Alle ${selected.length} Materialien existieren bereits.`,
+        });
+        return;
+      }
+
       const { error } = await supabase.from("invoice_templates").insert(
-        selected.map(m => ({
+        toInsert.map(m => ({
           name: m.name.trim(),
           beschreibung: m.beschreibung?.trim() || null,
           einheit: m.einheit || "Stk.",
@@ -118,7 +173,14 @@ export function MaterialFileImport({ open, onClose, onImported }: MaterialFileIm
         }))
       );
       if (error) throw error;
-      toast({ title: "Materialien importiert", description: `${selected.length} Materialien angelegt` });
+
+      const skipMsg = skipped.length > 0
+        ? ` (${skipped.length} bereits vorhanden, übersprungen)`
+        : "";
+      toast({
+        title: "Materialien importiert",
+        description: `${toInsert.length} Materialien angelegt${skipMsg}`,
+      });
       onImported();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Fehler", description: err.message });

@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2 } from "lucide-react";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
+import { loadInvoiceLogo } from "@/lib/logoLoader";
 // JSZip loaded dynamically in handleExport
 
 interface ExportInvoicesDialogProps {
@@ -68,17 +69,16 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
         return;
       }
 
-      // Load logo
-      let logoUri: string | undefined;
-      try {
-        const resp = await fetch("/newmontilogo.png");
-        const blob = await resp.blob();
-        logoUri = await new Promise<string>((resolve) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result as string);
-          r.readAsDataURL(blob);
-        });
-      } catch {}
+      // Warnung bei sehr großen Exporten (>200) — verhindert Browser-Absturz
+      if (invoices.length > 200) {
+        const ok = window.confirm(
+          `⚠️ ${invoices.length} Rechnungen werden exportiert. Das kann mehrere Minuten dauern und viel Speicher verbrauchen.\n\nEmpfehlung: Exportiere monatsweise statt alles auf einmal.\n\nTrotzdem fortfahren?`
+        );
+        if (!ok) { setExporting(false); return; }
+      }
+
+      // Load logo (Custom oder Default)
+      const logoUri = await loadInvoiceLogo();
 
       // Load firmen UID + layout settings
       let firmenUid = "";

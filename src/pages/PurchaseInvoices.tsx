@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { matchesSearch } from "@/lib/searchUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PurchaseInvoiceUploadDialog } from "@/components/PurchaseInvoiceUploadDialog";
@@ -95,12 +96,11 @@ export default function PurchaseInvoices() {
       if (statusFilter !== "alle" && inv.status !== statusFilter) return false;
       if (kategorieFilter !== "alle" && inv.kategorie !== kategorieFilter) return false;
       if (search) {
-        const q = search.toLowerCase();
         const match =
-          inv.lieferant?.toLowerCase().includes(q) ||
-          inv.rechnungsnummer?.toLowerCase().includes(q) ||
-          inv.projects?.name.toLowerCase().includes(q) ||
-          inv.notizen?.toLowerCase().includes(q);
+          matchesSearch(inv.lieferant, search) ||
+          matchesSearch(inv.rechnungsnummer, search) ||
+          matchesSearch(inv.projects?.name, search) ||
+          matchesSearch(inv.notizen, search);
         if (!match) return false;
       }
       return true;

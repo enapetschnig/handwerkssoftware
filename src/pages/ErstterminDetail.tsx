@@ -108,6 +108,17 @@ export default function ErstterminDetail() {
   // UI state
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedChanges]);
+
+  // Dirty-Flag setzen sobald User etwas ändert (nach Initial-Load, siehe init())
+  const markDirty = () => { if (!loading) setHasUnsavedChanges(true); };
   const [deleting, setDeleting] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(isNew ? null : id || null);
   const [ressourcenOpen, setRessourcenOpen] = useState(false);
@@ -168,6 +179,8 @@ export default function ErstterminDetail() {
       fetchPhotos(id);
     }
     setLoading(false);
+    // nach Initial-Load kurz warten, dann Dirty-Tracking aktivieren
+    setTimeout(() => setHasUnsavedChanges(false), 300);
   };
 
   // Photos
@@ -286,6 +299,7 @@ export default function ErstterminDetail() {
     // Upload pending photos after first save
     if (eid && pendingPhotos.length > 0) await uploadPendingPhotos(eid);
 
+    setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Ersttermin wurde gespeichert" });
     if (isNew && eid) navigate(`/ersttermine/${eid}`, { replace: true });
     setSaving(false);

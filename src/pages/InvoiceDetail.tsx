@@ -22,6 +22,7 @@ import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
 import { format, addMonths, parseISO } from "date-fns";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
+import { loadInvoiceLogo } from "@/lib/logoLoader";
 import { PageHeader } from "@/components/PageHeader";
 import { CustomerSelect, type CustomerData } from "@/components/CustomerSelect";
 import {
@@ -143,6 +144,14 @@ export default function InvoiceDetail() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+
+  // Warnung bei Schließen/Reload mit ungespeicherten Änderungen
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
   const [invoiceId, setInvoiceId] = useState<string | null>(isNew ? null : id || null);
   const [items, setItems] = useState<InvoiceItem[]>([
     { position: 1, beschreibung: "", menge: 1, einheit: "Stk.", einzelpreis: 0, gesamtpreis: 0 },
@@ -407,6 +416,7 @@ export default function InvoiceDetail() {
 
   const updateField = (field: keyof InvoiceData, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }));
+    if (!loading) setIsDirty(true);
   };
 
   // Helper: merge imported items into existing list, replacing empty first row
@@ -557,6 +567,14 @@ export default function InvoiceDetail() {
     if ((form as any).reverse_charge && !form.kunde_uid?.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Bei Reverse Charge ist die UID-Nummer des Kunden Pflicht" });
       return false;
+    }
+    // Reverse Charge: eigene Firmen-UID ist Pflicht (§ 19 UStG)
+    if ((form as any).reverse_charge) {
+      const { data: firmenUidSetting } = await supabase.from("app_settings").select("value").eq("key", "firmen_uid").maybeSingle();
+      if (!firmenUidSetting?.value?.trim()) {
+        toast({ variant: "destructive", title: "Eigene UID fehlt", description: "Bei Reverse Charge ist die UID-Nummer des Ausstellers Pflicht. Bitte im Admin-Bereich konfigurieren." });
+        return false;
+      }
     }
 
     // Leistungsdatum ist bei Rechnungen Pflicht (§ 11 UStG)
@@ -730,6 +748,7 @@ export default function InvoiceDetail() {
         setFromAngebotId(null);
       }
 
+      setIsDirty(false);
       toast({ title: "Gespeichert", description: `${form.typ === "rechnung" ? "Rechnung" : "Angebot"} wurde gespeichert` });
 
       if (isNew && !previewOpen) {
@@ -1052,12 +1071,7 @@ export default function InvoiceDetail() {
       // Stornobeleg sofort erstellen und herunterladen
       try {
         const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-        let logoUri: string | undefined;
-        try {
-          const resp = await fetch("/newmontilogo.png");
-          const blob = await resp.blob();
-          logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
-        } catch {}
+        const logoUri = await loadInvoiceLogo();
         const { data: bankSettings1 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
         const bank1 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
         bankSettings1?.forEach((s: any) => {
@@ -1147,12 +1161,7 @@ export default function InvoiceDetail() {
                         return;
                       }
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                      let logoUri: string | undefined;
-                      try {
-                        const resp = await fetch("/newmontilogo.png");
-                        const blob = await resp.blob();
-                        logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
-                      } catch {}
+                      const logoUri = await loadInvoiceLogo();
                       const { data: bankSettings2 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
                       const bank2 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
                       bankSettings2?.forEach((s: any) => {
@@ -1230,12 +1239,7 @@ export default function InvoiceDetail() {
                           updateField("mahnstufe", mahnstufe);
                           loadMahnungen();
                           // Generate Mahnung PDF
-                          let logoUri: string | undefined;
-                          try {
-                            const resp = await fetch("/newmontilogo.png");
-                            const blob = await resp.blob();
-                            logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
-                          } catch {}
+                          const logoUri = await loadInvoiceLogo();
                           const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
                           const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
                           bankSettings?.forEach((s: any) => {
@@ -1439,12 +1443,7 @@ export default function InvoiceDetail() {
                         </div>
                         <Button variant="ghost" size="sm" className="gap-1" onClick={async () => {
                           try {
-                            let logoUri: string | undefined;
-                            try {
-                              const resp = await fetch("/newmontilogo.png");
-                              const blob = await resp.blob();
-                              logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
-                            } catch {}
+                            const logoUri = await loadInvoiceLogo();
                             const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
                             const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
                             bankSettings?.forEach((s: any) => {
@@ -2186,9 +2185,7 @@ export default function InvoiceDetail() {
               <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => {
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/newmontilogo.png");
-                  const logoBlob = await logoResp.blob();
-                  const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+                  const logoUri = await loadInvoiceLogo();
                   const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
                   if (!inv?.storno_nummer) return;
                   const { data: bankSettings3 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
@@ -2717,9 +2714,7 @@ export default function InvoiceDetail() {
                 // Generate and download Storno-PDF
                 try {
                   const { generateStornoPdf } = await import("@/lib/pdfGenerator");
-                  const logoResp = await fetch("/newmontilogo.png");
-                  const logoBlob = await logoResp.blob();
-                  const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+                  const logoUri = await loadInvoiceLogo();
 
                   const { data: bankSettings4 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
                   const bank4 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };

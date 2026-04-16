@@ -14,26 +14,10 @@ import {
 import { generateInvoicePdf } from "@/lib/pdfGenerator";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 
-// Logo as base64 for jsPDF (loaded once)
-let cachedLogoDataUri: string | null = null;
+import { loadInvoiceLogo } from "@/lib/logoLoader";
 
 async function getLogoDataUri(): Promise<string | undefined> {
-  if (cachedLogoDataUri) return cachedLogoDataUri;
-  try {
-    const response = await fetch("/newmontilogo.png");
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        cachedLogoDataUri = reader.result as string;
-        resolve(cachedLogoDataUri!);
-      };
-      reader.onerror = () => resolve(undefined);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return undefined;
-  }
+  return loadInvoiceLogo();
 }
 
 interface InvoicePdfPreviewProps {

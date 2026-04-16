@@ -57,21 +57,40 @@ export function InvoiceLayoutEditor() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Format prüfen
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Falsches Format", description: "Bitte PNG, JPG oder WebP verwenden.", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
+    // Größe prüfen (max. 2 MB — mehr braucht ein Logo nicht)
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({ title: "Datei zu groß", description: `Logo darf max. 2 MB groß sein (aktuell ${(file.size / 1024 / 1024).toFixed(1)} MB). Bitte komprimieren.`, variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const filePath = `logo.${ext}`;
+      const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const filePath = `logo.${ext || "png"}`;
 
       const { error } = await supabase.storage
         .from("logos")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, { upsert: true, contentType: file.type });
 
       if (error) throw error;
 
       const { data } = supabase.storage.from("logos").getPublicUrl(filePath);
       setLogoUrl(data.publicUrl + "?t=" + Date.now());
 
-      toast({ title: "Logo hochgeladen", description: "Das Logo wurde erfolgreich gespeichert." });
+      // Cache invalidieren damit das neue Logo sofort in allen PDFs verwendet wird
+      const { clearLogoCache } = await import("@/lib/logoLoader");
+      clearLogoCache();
+
+      toast({ title: "Logo hochgeladen", description: "Das Logo wurde erfolgreich gespeichert und wird ab sofort in allen PDFs verwendet." });
     } catch (err: any) {
       toast({ title: "Fehler beim Upload", description: err.message, variant: "destructive" });
     } finally {

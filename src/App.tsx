@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useSessionKeepalive } from "@/hooks/useSessionKeepalive";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -58,6 +59,9 @@ function AppContent() {
     showInstallDialog,
     handleInstallDialogClose,
   } = useOnboarding();
+
+  // Session Keepalive — verhindert Ausloggen nach 24h bei aktiver Nutzung
+  useSessionKeepalive();
 
   // Ensure user profile exists (for users created via Cloud dashboard)
   useEffect(() => {

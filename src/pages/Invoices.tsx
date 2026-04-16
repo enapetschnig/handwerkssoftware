@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { matchesSearch } from "@/lib/searchUtils";
+import { loadInvoiceLogo } from "@/lib/logoLoader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format, parseISO, isBefore } from "date-fns";
@@ -237,17 +239,8 @@ export default function Invoices() {
         });
       }
 
-      // Load logo
-      let logoUri: string | undefined;
-      try {
-        const resp = await fetch("/newmontilogo.png");
-        const blob = await resp.blob();
-        logoUri = await new Promise<string>((resolve) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result as string);
-          r.readAsDataURL(blob);
-        });
-      } catch {}
+      // Load logo (prüft Custom-Logo aus Admin, fällt zurück auf Default)
+      const logoUri = await loadInvoiceLogo();
 
       // QR code for invoices
       let qrUri: string | undefined;
@@ -319,14 +312,7 @@ export default function Invoices() {
         if (s.key === "firmen_uid") firmenUid = s.value;
       });
 
-      let logoUri: string | undefined;
-      try {
-        const resp = await fetch("/newmontilogo.png");
-        const blob = await resp.blob();
-        logoUri = await new Promise<string>((resolve) => {
-          const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(blob);
-        });
-      } catch {}
+      const logoUri = await loadInvoiceLogo();
 
       let qrUri: string | undefined;
       if (inv.typ === "rechnung" && Number(inv.brutto_summe) > 0) {
@@ -474,9 +460,9 @@ export default function Invoices() {
 
   const filtered = invoices.filter(i => {
     const matchSearch = !searchQuery.trim() ||
-      i.nummer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (i as any).storno_nummer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      i.kunde_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      matchesSearch(i.nummer, searchQuery) ||
+      matchesSearch((i as any).storno_nummer, searchQuery) ||
+      matchesSearch(i.kunde_name, searchQuery) ||
       String(i.brutto_summe).includes(searchQuery) ||
       i.brutto_summe.toFixed(2).includes(searchQuery);
     const matchArchive = showArchive ? true : !i.archiviert;
@@ -712,9 +698,7 @@ export default function Invoices() {
                               e.stopPropagation();
                               // Download Storno-PDF
                               try {
-                                const logoResp = await fetch("/newmontilogo.png");
-                                const logoBlob = await logoResp.blob();
-                                const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+                                const logoUri = await loadInvoiceLogo();
                                 const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
                                 const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                                 const pdfBlob = generateStornoPdf(
@@ -858,16 +842,7 @@ export default function Invoices() {
                                     onClick={async (e) => {
                                       e.stopPropagation();
                                       try {
-                                        let logoUri: string | undefined;
-                                        try {
-                                          const resp = await fetch("/newmontilogo.png");
-                                          const blob = await resp.blob();
-                                          logoUri = await new Promise<string>((resolve) => {
-                                            const r = new FileReader();
-                                            r.onload = () => resolve(r.result as string);
-                                            r.readAsDataURL(blob);
-                                          });
-                                        } catch {}
+                                        const logoUri = await loadInvoiceLogo();
                                         const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
                                         const stufe = Number(inv.mahnstufe || 0) + 1;
                                         if (stufe > 3) { toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 ist das Maximum" }); return; }

@@ -855,7 +855,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    console.log("WEBHOOK:", JSON.stringify(payload).slice(0, 1500));
+    // Payload-Log: Phone-Nummern anonymisieren (GDPR)
+    const payloadStr = JSON.stringify(payload).slice(0, 1500);
+    console.log("WEBHOOK:", payloadStr.replace(/"(from|phone|wa_id|to)":\s*"(\+?\d{4,})"/g, (_, k, v) => `"${k}":"${v.slice(0, 5)}****${v.slice(-3)}"`));
     const incoming = parseWapiPayload(payload);
 
     if (incoming.length === 0) {
@@ -864,9 +866,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
+    // Phone-Maskierung für Logs (GDPR): +436701234567 → +4367****567
+    const maskPhone = (p: string): string => {
+      if (!p || p.length < 6) return "***";
+      return p.slice(0, 5) + "****" + p.slice(-3);
+    };
+
     for (const msg of incoming) {
       const phone = msg.from;
-      console.log(`WhatsApp von ${phone}: ${msg.body || msg.caption || `[${msg.type}]`} (id: ${msg.messageId})`);
+      console.log(`WhatsApp von ${maskPhone(phone)} (id: ${msg.messageId})`);
 
       // Skip if this exact message was already processed (cross-request dedup)
       if (msg.messageId) {
@@ -886,7 +894,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const emp = await findEmployeeByPhone(phone);
 
       if (!emp || !emp.user_id) {
-        console.log(`Unbekannte Nummer ${phone}`);
+        console.log(`Unbekannte Nummer ${maskPhone(phone)}`);
         continue;
       }
 

@@ -9,6 +9,16 @@ const DEFAULT_BANK: BankData = {
   bic: "",
 };
 
+// Sanitize Text für jsPDF Helvetica (WinAnsi): ersetzt Sonderzeichen die nicht im Zeichensatz sind
+// Deutsche Umlaute ä/ö/ü/ß/€ sind in cp1252 vorhanden und funktionieren
+// Fallback für exotische Zeichen: auf ASCII-Äquivalent reduzieren
+function safePdfText(input: string | null | undefined): string {
+  if (!input) return "";
+  // jsPDF Helvetica unterstützt WinAnsi (cp1252). Problem-Zeichen:
+  // - Emojis/Unicode > U+00FF → entfernen oder ?
+  return String(input).replace(/[^\u0000-\u00FF€]/g, "?");
+}
+
 function fmt(val: number): string {
   if (!isFinite(val)) return "0,00";
   const parts = val.toFixed(2).split(".");

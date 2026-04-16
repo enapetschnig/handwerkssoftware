@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { matchesSearch } from "@/lib/searchUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,9 +166,9 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.ort && c.ort.toLowerCase().includes(search.toLowerCase())) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase()))
+    matchesSearch(c.name, search) ||
+    matchesSearch(c.ort, search) ||
+    matchesSearch(c.email, search)
   );
 
   const openNew = async () => {
