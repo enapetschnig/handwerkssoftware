@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings } from "lucide-react";
+import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format, parseISO, isBefore } from "date-fns";
@@ -510,102 +511,120 @@ export default function Invoices() {
       <div className="container mx-auto px-4 py-8 max-w-[1600px]">
         <PageHeader title="Rechnungen & Angebote" backPath="/" />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Rechnungen</CardDescription>
-              <CardTitle className="text-2xl">{totalRechnungen}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Angebote</CardDescription>
-              <CardTitle className="text-2xl">{totalAngebote}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Offene Rechnungen</CardDescription>
-              <CardTitle className="text-2xl">€ {offeneSumme.toFixed(2)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Bezahlt</CardDescription>
-              <CardTitle className="text-2xl text-green-600">€ {bezahlteSumme.toFixed(2)}</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
+        {/* Kompakte Stats — kontextuell gefiltert */}
+        {(() => {
+          const visibleInvoices = invoices.filter(i =>
+            filterTyp === "rechnung" ? i.typ === "rechnung" : filterTyp === "angebot" ? i.typ === "angebot" : true
+          );
+          const count = visibleInvoices.length;
+          const openBrutto = visibleInvoices.filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
+          const overdue = visibleInvoices.filter(i => isOverdue(i)).length;
+          return (
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{filterTyp === "rechnung" ? "Rechnungen" : "Angebote"}</p>
+                  <p className="text-xl font-bold">{count}</p>
+                </CardContent>
+              </Card>
+              {filterTyp === "rechnung" ? (
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Offener Betrag</p>
+                    <p className="text-xl font-bold text-orange-600">€ {openBrutto.toFixed(2)}</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Summe</p>
+                    <p className="text-xl font-bold">€ {visibleInvoices.reduce((s, i) => s + Number(i.brutto_summe), 0).toFixed(2)}</p>
+                  </CardContent>
+                </Card>
+              )}
+              <Card className={overdue > 0 ? "border-red-300" : ""}>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Überfällig</p>
+                  <p className={`text-xl font-bold ${overdue > 0 ? "text-red-600" : ""}`}>{overdue}</p>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
 
         <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center flex-wrap gap-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* Typ-Buttons */}
-                <div className="flex rounded-lg border overflow-hidden">
-                  <button
-                    onClick={() => setFilterTyp("rechnung")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${filterTyp === "rechnung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                  >
-                    Rechnungen
-                  </button>
-                  <button
-                    onClick={() => setFilterTyp("angebot")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${filterTyp === "angebot" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                  >
-                    Angebote
-                  </button>
-                </div>
+          <CardHeader className="pb-3 space-y-3">
+            {/* Titel + Tabs + primäre Aktion */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex rounded-md border overflow-hidden">
+                <button
+                  onClick={() => setFilterTyp("rechnung")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${filterTyp === "rechnung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                >
+                  Rechnungen
+                </button>
+                <button
+                  onClick={() => setFilterTyp("angebot")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "angebot" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                >
+                  Angebote
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")}
+                  variant="default"
+                  className="gap-2"
+                >
+                  {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
+                  {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" title="Mehr Aktionen">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
+                      <FileDown className="h-4 w-4 mr-2" /> Export
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowArchive(!showArchive)}>
+                      <Archive className="h-4 w-4 mr-2" />
+                      {showArchive ? "Archiv ausblenden" : "Archiv anzeigen"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/admin")}>
+                      <Settings className="h-4 w-4 mr-2" /> Nummernkreise
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
 
-                {/* Status-Filter — passt sich dem Typ an */}
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alle">Alle Status</SelectItem>
-                    {statusFilterOptions.map(s => (
-                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                    ))}
-                    {storniertCount > 0 && (
-                      <SelectItem value="storniert">Storniert ({storniertCount})</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+            {/* Schlanke Filter-Zeile */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
                 <Input
-                  placeholder="Suche nach Nummer, Kunde, Betrag..."
+                  placeholder="Nummer, Kunde oder Betrag suchen..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="max-w-sm"
+                  className="h-9"
                 />
-                <Button
-                  variant={showArchive ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setShowArchive(!showArchive)}
-                  className="gap-1"
-                  title={showArchive ? "Archivierte ausblenden" : "Archivierte anzeigen"}
-                >
-                  <Archive className="w-4 h-4" />
-                  Archiv
-                </Button>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button onClick={() => navigate("/admin")} variant="outline" size="sm" className="gap-1" title="Nummernkreise im Admin-Bereich konfigurieren">
-                  <Settings className="w-4 h-4" />
-                </Button>
-                <Button onClick={() => setExportDialogOpen(true)} variant="outline" size="sm" className="gap-1">
-                  <FileDown className="w-4 h-4" />
-                  Export
-                </Button>
-                <Button onClick={() => navigate("/invoices/new?typ=angebot")} variant="outline" className="gap-2">
-                  <FileText className="w-4 h-4" />
-                  Neues Angebot
-                </Button>
-                <Button onClick={() => navigate("/invoices/new?typ=rechnung")} variant="default" className="gap-2">
-                  <Receipt className="w-4 h-4" />
-                  Neue Rechnung
-                </Button>
-              </div>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[150px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alle">Alle Status</SelectItem>
+                  {statusFilterOptions.map(s => (
+                    <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                  ))}
+                  {storniertCount > 0 && (
+                    <SelectItem value="storniert">Storniert ({storniertCount})</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
           <CardContent>
@@ -625,7 +644,6 @@ export default function Invoices() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nummer</TableHead>
-                      <TableHead>Typ</TableHead>
                       <TableHead>Kunde</TableHead>
                       <TableHead>Datum</TableHead>
                       <TableHead className="text-right">Brutto</TableHead>
@@ -649,11 +667,6 @@ export default function Invoices() {
                           onClick={() => navigate(`/invoices/${inv.id}`)}
                         >
                           <TableCell className="font-mono font-medium">{inv.nummer}</TableCell>
-                          <TableCell>
-                            <Badge variant={inv.typ === "rechnung" ? "default" : "secondary"}>
-                              {inv.typ === "rechnung" ? "Rechnung" : "Angebot"}
-                            </Badge>
-                          </TableCell>
                           <TableCell>{inv.kunde_name}</TableCell>
                           <TableCell>{format(parseISO(inv.datum), "dd.MM.yyyy", { locale: de })}</TableCell>
                           <TableCell className="text-right font-medium">€ {brutto.toFixed(2)}</TableCell>
@@ -678,118 +691,109 @@ export default function Invoices() {
                             </TableCell>
                           )}
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {inv.status === "storniert" ? (
-                                <Badge className="bg-red-100 text-red-800 text-xs">
-                                  Storniert{(inv as any).storno_nummer ? ` (${(inv as any).storno_nummer})` : ""}
-                                </Badge>
-                              ) : (
-                              <Select
-                                value={inv.status}
-                                onValueChange={(val) => {
-                                  const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
-                                  handleStatusChange(inv.id, val, fakeEvent);
-                                }}
-                              >
-                                <SelectTrigger className={`h-7 text-xs font-medium border-0 w-auto min-w-[100px] ${statusColors[inv.status] || ""}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availableStatuses.map(s => (
-                                    <SelectItem key={s} value={s}>
-                                      {statusLabels[s]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              )}
-                              {overdue && (
-                                <Badge variant="destructive" className="gap-1 text-xs">
-                                  <AlertTriangle className="w-3 h-3" />
-                                  Überfällig
-                                </Badge>
-                              )}
-                              {expired && (
-                                <Badge variant="outline" className="text-xs text-muted-foreground">
-                                  Abgelaufen
-                                </Badge>
-                              )}
-                              {inv.mahnstufe > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  Mahnung {inv.mahnstufe}
-                                </Badge>
-                              )}
-                            </div>
+                            {(() => {
+                              // Status-Dot Farbe
+                              const dotColor =
+                                inv.status === "bezahlt" || inv.status === "angenommen" ? "bg-green-500" :
+                                inv.status === "storniert" || inv.status === "abgelehnt" ? "bg-red-500" :
+                                overdue ? "bg-red-500" :
+                                inv.status === "teilbezahlt" ? "bg-yellow-500" :
+                                inv.status === "verrechnet" ? "bg-blue-500" :
+                                "bg-orange-500";
+                              // Warnungen als subtiler Sub-Text
+                              const warn = overdue ? "überfällig" : expired ? "abgelaufen" : inv.mahnstufe > 0 ? `Mahnung ${inv.mahnstufe}` : "";
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                  {inv.status === "storniert" ? (
+                                    <span className="text-xs font-medium text-red-700">
+                                      Storniert{(inv as any).storno_nummer ? ` (${(inv as any).storno_nummer})` : ""}
+                                    </span>
+                                  ) : (
+                                    <Select
+                                      value={inv.status}
+                                      onValueChange={(val) => {
+                                        const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
+                                        handleStatusChange(inv.id, val, fakeEvent);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs font-medium border-0 shadow-none bg-transparent px-1 hover:bg-muted w-auto min-w-[90px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {availableStatuses.map(s => (
+                                          <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                  {warn && (
+                                    <span className="text-[10px] text-red-600 font-medium">{warn}</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-0.5">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => handleDownloadPdf(inv.id, inv.nummer, e)}
-                                disabled={downloadingId === inv.id}
-                                title="PDF herunterladen"
-                              >
-                                <Download className={`h-4 w-4 ${downloadingId === inv.id ? "animate-spin" : ""}`} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => handlePrintPdf(inv.id, e)}
-                                title="Drucken"
-                              >
-                                <Printer className="h-4 w-4" />
-                              </Button>
-                              {inv.typ === "rechnung" && isOverdue(inv) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      let logoUri: string | undefined;
-                                      try {
-                                        const resp = await fetch("/newmontilogo.png");
-                                        const blob = await resp.blob();
-                                        logoUri = await new Promise<string>((resolve) => {
-                                          const r = new FileReader();
-                                          r.onload = () => resolve(r.result as string);
-                                          r.readAsDataURL(blob);
-                                        });
-                                      } catch {}
-                                      const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
-                                      const stufe = Number(inv.mahnstufe || 0) + 1;
-                                      if (stufe > 3) { toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 ist das Maximum" }); return; }
-                                      const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
-                                      const pdfBlob = generateMahnungPdf(
-                                        {
-                                          nummer: inv.nummer, datum: inv.datum, faellig_am: inv.faellig_am || "",
-                                          kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
-                                          kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
-                                          brutto_summe: Number(inv.brutto_summe), bezahlt_betrag: Number(inv.bezahlt_betrag || 0),
-                                        },
-                                        stufe, 0, bank, logoUri, invoiceLayout
-                                      );
-                                      // Update mahnstufe
-                                      await supabase.from("invoices").update({ mahnstufe: stufe }).eq("id", inv.id);
-                                      // Download
-                                      const url = URL.createObjectURL(pdfBlob);
-                                      const a = document.createElement("a"); a.href = url;
-                                      a.download = `Mahnung_${stufe}_${inv.nummer}.pdf`; a.click();
-                                      URL.revokeObjectURL(url);
-                                      toast({ title: `Mahnung ${stufe} erstellt` });
-                                      fetchInvoices();
-                                    } catch (err: any) {
-                                      toast({ variant: "destructive", title: "Fehler", description: err.message });
-                                    }
-                                  }}
-                                  title={`Mahnung erstellen (Stufe ${Number(inv.mahnstufe || 0) + 1})`}
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <AlertTriangle className="h-4 w-4" />
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Aktionen">
+                                  <MoreHorizontal className="h-4 w-4" />
                                 </Button>
-                              )}
-                            </div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => handleDownloadPdf(inv.id, inv.nummer, e as any)} disabled={downloadingId === inv.id}>
+                                  <Download className="h-4 w-4 mr-2" /> PDF herunterladen
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => handlePrintPdf(inv.id, e as any)}>
+                                  <Printer className="h-4 w-4 mr-2" /> Drucken
+                                </DropdownMenuItem>
+                                {inv.typ === "rechnung" && isOverdue(inv) && (
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-700"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        let logoUri: string | undefined;
+                                        try {
+                                          const resp = await fetch("/newmontilogo.png");
+                                          const blob = await resp.blob();
+                                          logoUri = await new Promise<string>((resolve) => {
+                                            const r = new FileReader();
+                                            r.onload = () => resolve(r.result as string);
+                                            r.readAsDataURL(blob);
+                                          });
+                                        } catch {}
+                                        const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
+                                        const stufe = Number(inv.mahnstufe || 0) + 1;
+                                        if (stufe > 3) { toast({ variant: "destructive", title: "Maximum erreicht", description: "Mahnstufe 3 ist das Maximum" }); return; }
+                                        const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                                        const pdfBlob = generateMahnungPdf(
+                                          {
+                                            nummer: inv.nummer, datum: inv.datum, faellig_am: inv.faellig_am || "",
+                                            kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
+                                            kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
+                                            brutto_summe: Number(inv.brutto_summe), bezahlt_betrag: Number(inv.bezahlt_betrag || 0),
+                                          },
+                                          stufe, 0, bank, logoUri, invoiceLayout
+                                        );
+                                        await supabase.from("invoices").update({ mahnstufe: stufe }).eq("id", inv.id);
+                                        const url = URL.createObjectURL(pdfBlob);
+                                        const a = document.createElement("a"); a.href = url;
+                                        a.download = `Mahnung_${stufe}_${inv.nummer}.pdf`; a.click();
+                                        URL.revokeObjectURL(url);
+                                        toast({ title: `Mahnung ${stufe} erstellt` });
+                                        fetchInvoices();
+                                      } catch (err: any) {
+                                        toast({ variant: "destructive", title: "Fehler", description: err.message });
+                                      }
+                                    }}
+                                  >
+                                    <AlertTriangle className="h-4 w-4 mr-2" /> Mahnung {Number(inv.mahnstufe || 0) + 1} erstellen
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
