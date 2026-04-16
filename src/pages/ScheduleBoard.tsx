@@ -77,9 +77,11 @@ export default function ScheduleBoard() {
   // Dialog states
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<{ id: string; name: string } | null>(null);
   const [einsatzDialogOpen, setEinsatzDialogOpen] = useState(false);
   const [editEinsatz, setEditEinsatz] = useState<Einsatz | null>(null);
   const [prefillUserId, setPrefillUserId] = useState<string | undefined>();
+  const [prefillUserIds, setPrefillUserIds] = useState<string[]>([]);
   const [prefillStartDate, setPrefillStartDate] = useState<string | undefined>();
   const [prefillEndDate, setPrefillEndDate] = useState<string | undefined>();
 
@@ -152,6 +154,73 @@ export default function ScheduleBoard() {
     setCreateTeamOpen(false);
   };
 
+  const handleEditTeam = (team: { id: string; name: string }) => {
+    setEditingTeam(team);
+    setCreateTeamOpen(true);
+  };
+
+  const handleDeleteTeam = async (teamId: string) => {
+    // Get all team member user_ids
+    const memberUserIds = teamMembers.filter(tm => tm.team_id === teamId).map(tm => tm.user_id);
+
+    // Delete all einsaetze for these members and clean up Google Calendar
+    for (const uid of memberUserIds) {
+      const userEinsaetze = einsaetze.filter(e => e.user_id === uid);
+      for (const e of userEinsaetze) {
+        if (e.google_event_id) {
+          try {
+            await supabase.functions.invoke("sync-assignment-to-calendar", {
+              body: { action: "delete_einsatz", einsatz_id: e.id },
+            });
+          } catch {}
+        }
+        await supabase.from("einsaetze").delete().eq("id", e.id);
+      }
+    }
+
+    // Delete team (cascades to team_members)
+    await supabase.from("teams").delete().eq("id", teamId);
+    setTeams(prev => prev.filter(t => t.id !== teamId));
+    setTeamMembers(prev => prev.filter(tm => tm.team_id !== teamId));
+    setEinsaetze(prev => prev.filter(e => !memberUserIds.includes(e.user_id)));
+    setCreateTeamOpen(false);
+    setEditingTeam(null);
+    toast({ title: "Team gelöscht" });
+  };
+
+  const handleUpdateTeam = async (name: string, memberIds: string[]) => {
+    if (!editingTeam) {
+      // Create new team
+      await handleCreateTeam(name, memberIds);
+      return;
+    }
+    // Update team name
+    await supabase.from("teams").update({ name }).eq("id", editingTeam.id);
+    setTeams(prev => prev.map(t => t.id === editingTeam.id ? { ...t, name } : t));
+
+    // Sync members: find added/removed
+    const currentMemberIds = teamMembers.filter(tm => tm.team_id === editingTeam.id).map(tm => tm.user_id);
+    const toAdd = memberIds.filter(id => !currentMemberIds.includes(id));
+    const toRemove = currentMemberIds.filter(id => !memberIds.includes(id));
+
+    for (const uid of toRemove) {
+      await supabase.from("team_members").delete().eq("team_id", editingTeam.id).eq("user_id", uid);
+    }
+    setTeamMembers(prev => prev.filter(tm => !(tm.team_id === editingTeam.id && toRemove.includes(tm.user_id))));
+
+    if (toAdd.length > 0) {
+      const { data: newMembers } = await supabase
+        .from("team_members")
+        .insert(toAdd.map(uid => ({ team_id: editingTeam.id, user_id: uid })))
+        .select();
+      if (newMembers) setTeamMembers(prev => [...prev, ...(newMembers as any[])]);
+    }
+
+    setCreateTeamOpen(false);
+    setEditingTeam(null);
+    toast({ title: "Team aktualisiert" });
+  };
+
   const handleSaveEinsatz = async (data: {
     name: string; project_id: string; adresse: string;
     start_date: string; end_date: string; ganztaegig: boolean;
@@ -186,21 +255,23 @@ export default function ScheduleBoard() {
         });
       } catch {}
     } else {
-      // Create
-      const { data: created, error } = await supabase
-        .from("einsaetze")
-        .insert({ ...payload, created_by: user.id })
-        .select()
-        .single();
-      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
-      if (created) {
-        setEinsaetze((prev) => [...prev, created as Einsatz]);
-        // Sync to Google Calendar
-        try {
-          await supabase.functions.invoke("sync-assignment-to-calendar", {
-            body: { action: "sync_einsatz", einsatz_id: created.id },
-          });
-        } catch {}
+      // Create — for multiple users if multi-select
+      const usersToCreate = prefillUserIds.length > 1 ? prefillUserIds : [payload.user_id];
+      for (const uid of usersToCreate) {
+        const { data: created, error } = await supabase
+          .from("einsaetze")
+          .insert({ ...payload, user_id: uid, created_by: user.id })
+          .select()
+          .single();
+        if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); continue; }
+        if (created) {
+          setEinsaetze((prev) => [...prev, created as Einsatz]);
+          try {
+            await supabase.functions.invoke("sync-assignment-to-calendar", {
+              body: { action: "sync_einsatz", einsatz_id: created.id },
+            });
+          } catch {}
+        }
       }
     }
 
@@ -226,8 +297,18 @@ export default function ScheduleBoard() {
     setEditEinsatz(null);
   };
 
-  const handleCellClick = (uid: string, startDate: string, endDate: string) => {
-    setPrefillUserId(uid);
+  const handleCellClick = (userId: string, startDate: string, endDate: string) => {
+    setPrefillUserId(userId);
+    setPrefillUserIds([userId]);
+    setPrefillStartDate(startDate);
+    setPrefillEndDate(endDate);
+    setEditEinsatz(null);
+    setEinsatzDialogOpen(true);
+  };
+
+  const handleMultiUserCellClick = (userIds: string[], startDate: string, endDate: string) => {
+    setPrefillUserId(userIds[0]);
+    setPrefillUserIds(userIds);
     setPrefillStartDate(startDate);
     setPrefillEndDate(endDate);
     setEditEinsatz(null);
@@ -308,9 +389,10 @@ export default function ScheduleBoard() {
               days={weekDays}
               leaveRequests={leaveRequests}
               holidays={companyHolidays}
-              onAddTeam={canEdit ? () => setCreateTeamOpen(true) : undefined}
-              onEditTeam={() => {}}
+              onAddTeam={canEdit ? () => { setEditingTeam(null); setCreateTeamOpen(true); } : undefined}
+              onEditTeam={canEdit ? handleEditTeam : (() => {})}
               onCellClick={canEdit ? handleCellClick : undefined}
+              onMultiUserCellClick={canEdit ? handleMultiUserCellClick : undefined}
               onEinsatzClick={handleEinsatzClick}
             />
 
@@ -349,10 +431,13 @@ export default function ScheduleBoard() {
 
       <CreateTeamDialog
         open={createTeamOpen}
-        onOpenChange={setCreateTeamOpen}
+        onOpenChange={(open) => { setCreateTeamOpen(open); if (!open) setEditingTeam(null); }}
         profiles={profiles}
-        existingTeamMemberIds={teamMembers.map((tm) => tm.user_id)}
-        onSave={handleCreateTeam}
+        existingTeamMemberIds={teamMembers.filter(tm => tm.team_id !== editingTeam?.id).map(tm => tm.user_id)}
+        onSave={handleUpdateTeam}
+        editTeam={editingTeam}
+        editMemberIds={editingTeam ? teamMembers.filter(tm => tm.team_id === editingTeam.id).map(tm => tm.user_id) : undefined}
+        onDelete={editingTeam ? () => handleDeleteTeam(editingTeam.id) : undefined}
       />
 
       <EinsatzDialog

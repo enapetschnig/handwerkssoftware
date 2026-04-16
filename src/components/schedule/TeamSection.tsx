@@ -37,19 +37,23 @@ interface Props {
   onAddTeam?: () => void;
   onEditTeam: (team: Team) => void;
   onCellClick?: (userId: string, startDate: string, endDate: string) => void;
+  onMultiUserCellClick?: (userIds: string[], startDate: string, endDate: string) => void;
   onEinsatzClick: (einsatz: Einsatz) => void;
 }
 
 export function TeamSection({
   teams, teamMembers, profiles, einsaetze, boardProjects, projects, days,
-  leaveRequests, holidays, onAddTeam, onEditTeam, onCellClick, onEinsatzClick,
+  leaveRequests, holidays, onAddTeam, onEditTeam, onCellClick, onMultiUserCellClick, onEinsatzClick,
 }: Props) {
   const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
-  // Drag state
+  // Drag state — supports multi-row selection within a team
   const [dragUserId, setDragUserId] = useState<string | null>(null);
   const [dragStartIdx, setDragStartIdx] = useState<number | null>(null);
   const [dragEndIdx, setDragEndIdx] = useState<number | null>(null);
+  const [dragTeamId, setDragTeamId] = useState<string | null>(null);
+  const [dragStartRowIdx, setDragStartRowIdx] = useState<number | null>(null);
+  const [dragEndRowIdx, setDragEndRowIdx] = useState<number | null>(null);
 
   const projectMap = new Map(projects.map((p) => [p.id, p]));
   const boardColorMap = new Map(boardProjects.map((bp) => [bp.project_id, bp]));
@@ -68,24 +72,49 @@ export function TeamSection({
     return getProjectColor(projectId).fill;
   }
 
-  // Mouse up for drag selection
+  // Mouse up for drag selection (supports multi-row within a team)
   useEffect(() => {
     const onMouseUp = () => {
-      if (dragUserId && dragStartIdx !== null && dragEndIdx !== null && onCellClick) {
+      if (dragStartIdx !== null && dragEndIdx !== null) {
         const lo = Math.min(dragStartIdx, dragEndIdx);
         const hi = Math.max(dragStartIdx, dragEndIdx);
-        onCellClick(dragUserId, format(days[lo], "yyyy-MM-dd"), format(days[hi], "yyyy-MM-dd"));
+        const startDate = format(days[lo], "yyyy-MM-dd");
+        const endDate = format(days[hi], "yyyy-MM-dd");
+
+        // Multi-row: if drag spans multiple rows within a team
+        if (dragTeamId && dragStartRowIdx !== null && dragEndRowIdx !== null) {
+          const teamProfiles = getTeamProfiles(profiles, teamMembers, dragTeamId);
+          const rLo = Math.min(dragStartRowIdx, dragEndRowIdx);
+          const rHi = Math.max(dragStartRowIdx, dragEndRowIdx);
+          const selectedUsers = teamProfiles.slice(rLo, rHi + 1).map(p => p.id);
+          if (selectedUsers.length > 1 && onMultiUserCellClick) {
+            onMultiUserCellClick(selectedUsers, startDate, endDate);
+          } else if (selectedUsers.length === 1 && onCellClick) {
+            onCellClick(selectedUsers[0], startDate, endDate);
+          }
+        } else if (dragUserId && onCellClick) {
+          onCellClick(dragUserId, startDate, endDate);
+        }
       }
       setDragUserId(null);
       setDragStartIdx(null);
       setDragEndIdx(null);
+      setDragTeamId(null);
+      setDragStartRowIdx(null);
+      setDragEndRowIdx(null);
     };
     window.addEventListener("mouseup", onMouseUp);
     return () => window.removeEventListener("mouseup", onMouseUp);
-  }, [dragUserId, dragStartIdx, dragEndIdx, days, onCellClick]);
+  }, [dragUserId, dragStartIdx, dragEndIdx, dragTeamId, dragStartRowIdx, dragEndRowIdx, days, onCellClick, onMultiUserCellClick, profiles, teamMembers]);
 
-  function renderMemberRow(profile: Profile) {
+  function renderMemberRow(profile: Profile, teamId: string, rowIdx: number) {
     const userEinsaetze = getEinsaetzeForUser(einsaetze, profile.id);
+
+    // Check if this row is part of a multi-row drag selection
+    const isInMultiRowDrag = dragTeamId === teamId &&
+      dragStartRowIdx !== null && dragEndRowIdx !== null &&
+      rowIdx >= Math.min(dragStartRowIdx, dragEndRowIdx) &&
+      rowIdx <= Math.max(dragStartRowIdx, dragEndRowIdx);
 
     return (
       <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
@@ -103,12 +132,20 @@ export function TeamSection({
               const holiday = isCompanyHoliday(holidays, day);
               const leave = isOnLeave(leaveRequests, profile.id, day);
               const weekend = isWeekendDay(day);
-              const isDragSelected =
+
+              const isDragSelectedSingle =
                 dragUserId === profile.id &&
                 dragStartIdx !== null &&
                 dragEndIdx !== null &&
                 dayIdx >= Math.min(dragStartIdx, dragEndIdx) &&
                 dayIdx <= Math.max(dragStartIdx, dragEndIdx);
+
+              const isDragSelectedMulti = isInMultiRowDrag &&
+                dragStartIdx !== null && dragEndIdx !== null &&
+                dayIdx >= Math.min(dragStartIdx, dragEndIdx) &&
+                dayIdx <= Math.max(dragStartIdx, dragEndIdx);
+
+              const isDragSelected = isDragSelectedSingle || isDragSelectedMulti;
 
               let cellStyle: React.CSSProperties = {};
               if (weekend && !holiday && !leave) cellStyle.background = WEEKEND_BG;
@@ -127,10 +164,16 @@ export function TeamSection({
                       setDragUserId(profile.id);
                       setDragStartIdx(dayIdx);
                       setDragEndIdx(dayIdx);
+                      setDragTeamId(teamId);
+                      setDragStartRowIdx(rowIdx);
+                      setDragEndRowIdx(rowIdx);
                     }
                   }}
                   onMouseEnter={() => {
-                    if (dragUserId === profile.id) setDragEndIdx(dayIdx);
+                    if (dragTeamId === teamId && dragStartIdx !== null) {
+                      setDragEndIdx(dayIdx);
+                      setDragEndRowIdx(rowIdx);
+                    }
                   }}
                 />
               );
@@ -197,7 +240,7 @@ export function TeamSection({
                 </button>
               </button>
             </div>
-            {!isTeamCollapsed && teamProfiles.map(renderMemberRow)}
+            {!isTeamCollapsed && teamProfiles.map((p, idx) => renderMemberRow(p, team.id, idx))}
             {!isTeamCollapsed && teamProfiles.length === 0 && (
               <div className="px-3 py-3 text-xs text-muted-foreground text-center border-t">Keine Mitarbeiter in diesem Team</div>
             )}
