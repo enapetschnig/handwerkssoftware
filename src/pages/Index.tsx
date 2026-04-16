@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { MeineEinteilung } from "@/components/MeineEinteilung";
 
 type Project = {
   id: string;
@@ -345,6 +346,9 @@ export default function Index() {
               : "Zeiterfassung und Projektdokumentation"}
           </p>
         </div>
+
+        {/* Meine Einteilung — für Mitarbeiter und Vorarbeiter */}
+        {user && !isAdmin && <MeineEinteilung userId={user.id} />}
 
         {/* Main Actions Grid — Admin: R&A, Projekte, Material, Materialien, Kunden, Admin, Zeit, Stunden */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
