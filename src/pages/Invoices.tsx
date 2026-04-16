@@ -473,18 +473,22 @@ export default function Invoices() {
     isBefore(parseISO(inv.gueltig_bis), today);
 
   const filtered = invoices.filter(i => {
-    const matchTyp = filterTyp === "alle" || i.typ === filterTyp;
     const matchSearch = !searchQuery.trim() ||
       i.nummer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (i as any).storno_nummer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       i.kunde_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(i.brutto_summe).includes(searchQuery) ||
       i.brutto_summe.toFixed(2).includes(searchQuery);
     const matchArchive = showArchive ? true : !i.archiviert;
-    if (filterStatus === "storniert") {
-      return matchTyp && matchSearch && matchArchive && i.status === "storniert";
+
+    // Tab "storno" → NUR stornierte Rechnungen
+    if (filterTyp === "storno") {
+      return matchSearch && matchArchive && i.status === "storniert";
     }
-    // Normal filters exclude storniert
-    const matchStatus = filterStatus === "alle" ? i.status !== "storniert" : i.status === filterStatus;
+    // Sonst nach Typ filtern, Stornierte ausschließen
+    const matchTyp = i.typ === filterTyp;
+    if (i.status === "storniert") return false;
+    const matchStatus = filterStatus === "alle" ? true : i.status === filterStatus;
     return matchTyp && matchStatus && matchSearch && matchArchive;
   });
 
@@ -513,9 +517,27 @@ export default function Invoices() {
 
         {/* Kompakte Stats — kontextuell gefiltert */}
         {(() => {
-          const visibleInvoices = invoices.filter(i =>
-            filterTyp === "rechnung" ? i.typ === "rechnung" : filterTyp === "angebot" ? i.typ === "angebot" : true
-          );
+          if (filterTyp === "storno") {
+            const stornoDocs = invoices.filter(i => i.status === "storniert");
+            const summe = stornoDocs.reduce((s, i) => s + Number(i.brutto_summe), 0);
+            return (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Storno-Belege</p>
+                    <p className="text-xl font-bold">{stornoDocs.length}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Stornierte Summe</p>
+                    <p className="text-xl font-bold text-red-600">€ {summe.toFixed(2)}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          }
+          const visibleInvoices = invoices.filter(i => i.typ === filterTyp && i.status !== "storniert");
           const count = visibleInvoices.length;
           const openBrutto = visibleInvoices.filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
           const overdue = visibleInvoices.filter(i => isOverdue(i)).length;
@@ -569,15 +591,33 @@ export default function Invoices() {
                 >
                   Angebote
                 </button>
+                <button
+                  onClick={() => setFilterTyp("storno")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "storno" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                  title="Stornierte Rechnungen / Storno-Belege"
+                >
+                  Storno-Belege
+                  {storniertCount > 0 && (
+                    <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] ${filterTyp === "storno" ? "bg-primary-foreground/20" : "bg-muted"}`}>
+                      {storniertCount}
+                    </span>
+                  )}
+                </button>
               </div>
               <div className="flex gap-2">
-                <Button
-                  onClick={() => navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")}
-                  variant="default"
-                  className="gap-2"
-                >
-                  {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                  {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
+                {filterTyp !== "storno" && (
+                  <Button
+                    onClick={() => navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")}
+                    variant="default"
+                    className="gap-2"
+                  >
+                    {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
+                    {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
+                  </Button>
+                )}
+                <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="gap-2">
+                  <FileDown className="w-4 h-4" />
+                  Export
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -586,9 +626,6 @@ export default function Invoices() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
-                      <FileDown className="h-4 w-4 mr-2" /> Export
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setShowArchive(!showArchive)}>
                       <Archive className="h-4 w-4 mr-2" />
                       {showArchive ? "Archiv ausblenden" : "Archiv anzeigen"}
@@ -605,26 +642,25 @@ export default function Invoices() {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
                 <Input
-                  placeholder="Nummer, Kunde oder Betrag suchen..."
+                  placeholder={filterTyp === "storno" ? "Storno-Nr., Rechnungsnr., Kunde..." : "Nummer, Kunde oder Betrag suchen..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-9"
                 />
               </div>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-[150px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="alle">Alle Status</SelectItem>
-                  {statusFilterOptions.map(s => (
-                    <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                  ))}
-                  {storniertCount > 0 && (
-                    <SelectItem value="storniert">Storniert ({storniertCount})</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              {filterTyp !== "storno" && (
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-[150px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="alle">Alle Status</SelectItem>
+                    {statusFilterOptions.map(s => (
+                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -633,10 +669,78 @@ export default function Invoices() {
             ) : filtered.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Receipt className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Noch keine Rechnungen oder Angebote erstellt</p>
-                <Button className="mt-4" onClick={() => navigate("/invoices/new?typ=rechnung")}>
-                  Erste Rechnung erstellen
-                </Button>
+                {filterTyp === "storno" ? (
+                  <p>Noch keine Storno-Belege vorhanden</p>
+                ) : (
+                  <>
+                    <p>Noch keine {filterTyp === "angebot" ? "Angebote" : "Rechnungen"} erstellt</p>
+                    <Button className="mt-4" onClick={() => navigate(`/invoices/new?typ=${filterTyp}`)}>
+                      {filterTyp === "angebot" ? "Erstes Angebot erstellen" : "Erste Rechnung erstellen"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : filterTyp === "storno" ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Storno-Nr.</TableHead>
+                      <TableHead>Original Rechnung</TableHead>
+                      <TableHead>Kunde</TableHead>
+                      <TableHead>Storno-Datum</TableHead>
+                      <TableHead>Grund</TableHead>
+                      <TableHead className="text-right">Betrag</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((inv) => (
+                      <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/invoices/${inv.id}`)}>
+                        <TableCell className="font-mono font-medium">{(inv as any).storno_nummer || "—"}</TableCell>
+                        <TableCell className="font-mono text-muted-foreground">{inv.nummer}</TableCell>
+                        <TableCell>{inv.kunde_name}</TableCell>
+                        <TableCell>{(inv as any).storno_datum ? format(parseISO((inv as any).storno_datum), "dd.MM.yyyy", { locale: de }) : "—"}</TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{(inv as any).storno_grund || "—"}</TableCell>
+                        <TableCell className="text-right font-medium">€ {Number(inv.brutto_summe).toFixed(2)}</TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              // Download Storno-PDF
+                              try {
+                                const logoResp = await fetch("/newmontilogo.png");
+                                const logoBlob = await logoResp.blob();
+                                const logoUri = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(logoBlob); });
+                                const bank = { kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic };
+                                const { generateStornoPdf } = await import("@/lib/pdfGenerator");
+                                const pdfBlob = generateStornoPdf(
+                                  { nummer: inv.nummer, kunde_name: inv.kunde_name, brutto_summe: Number(inv.brutto_summe), datum: inv.datum },
+                                  (inv as any).storno_nummer || "",
+                                  (inv as any).storno_datum || new Date().toISOString().split("T")[0],
+                                  (inv as any).storno_grund || "",
+                                  bank, logoUri, invoiceLayout
+                                );
+                                const url = URL.createObjectURL(pdfBlob);
+                                const a = document.createElement("a"); a.href = url;
+                                a.download = `Storno_${(inv as any).storno_nummer || inv.nummer}.pdf`; a.click();
+                                URL.revokeObjectURL(url);
+                              } catch (err: any) {
+                                toast({ variant: "destructive", title: "Fehler", description: err.message });
+                              }
+                            }}
+                            title="Storno-Beleg herunterladen"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <div className="overflow-x-auto">

@@ -28,7 +28,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
 
   const [year, setYear] = useState(currentYear.toString());
   const [month, setMonth] = useState(currentMonth.toString());
-  const [includeStorno, setIncludeStorno] = useState(false);
+  const [includeStorno, setIncludeStorno] = useState(true);
   const [exportAll, setExportAll] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState("");

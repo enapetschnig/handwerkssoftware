@@ -2618,29 +2618,46 @@ export default function InvoiceDetail() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setStornoDialogOpen(false)}>Abbrechen</Button>
               <Button variant="destructive" disabled={!stornoGrund.trim()} onClick={async () => {
-                const year = form.jahr || new Date().getFullYear();
-                const { data: maxStorno } = await supabase
-                  .from("invoices")
-                  .select("storno_nummer")
-                  .like("storno_nummer", `ST-${year}-%`)
-                  .order("storno_nummer", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-
-                let nextNum = 1;
-                if (maxStorno?.storno_nummer) {
-                  const match = maxStorno.storno_nummer.match(/ST-\d+-(\d+)/);
-                  if (match) nextNum = parseInt(match[1]) + 1;
+                // Guard: bereits storniert
+                if (form.status === "storniert") {
+                  toast({ variant: "destructive", title: "Bereits storniert", description: "Diese Rechnung wurde bereits storniert." });
+                  setStornoDialogOpen(false);
+                  return;
                 }
-                const stornoNummer = `ST-${year}-${String(nextNum).padStart(3, "0")}`;
+
+                // Warnung wenn bereits bezahlt
+                if (form.bezahlt_betrag > 0) {
+                  const ok = window.confirm(
+                    `⚠️ Achtung: Diese Rechnung hat bereits Zahlungen (€ ${form.bezahlt_betrag.toFixed(2)}).\n\n` +
+                    `Beim Stornieren wird der Bezahlt-Betrag NICHT zurückgesetzt. ` +
+                    `Bitte vorab mit der Buchhaltung klären und ggf. eine Rückzahlung dokumentieren.\n\n` +
+                    `Trotzdem fortfahren?`
+                  );
+                  if (!ok) return;
+                }
+
+                const year = form.jahr || new Date().getFullYear();
+
+                // Atomare Storno-Nummer-Generierung via DB-Funktion (race-safe)
+                const { data: stornoNummer, error: numErr } = await supabase.rpc("next_storno_nummer" as any, { p_jahr: year });
+                if (numErr || !stornoNummer) {
+                  toast({ variant: "destructive", title: "Fehler", description: "Storno-Nummer konnte nicht generiert werden: " + (numErr?.message || "unbekannt") });
+                  return;
+                }
+
                 const stornoDatum = new Date().toISOString().split("T")[0];
 
-                await supabase.from("invoices").update({
+                const { error: updErr } = await supabase.from("invoices").update({
                   status: "storniert",
                   storno_nummer: stornoNummer,
                   storno_datum: stornoDatum,
                   storno_grund: stornoGrund.trim(),
                 }).eq("id", invoiceId);
+
+                if (updErr) {
+                  toast({ variant: "destructive", title: "Fehler", description: updErr.message });
+                  return;
+                }
 
                 // Update local form state with storno data
                 setForm(prev => ({
