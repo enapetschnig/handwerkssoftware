@@ -242,6 +242,7 @@ export default function ErstterminDetail() {
   };
   // Save
   const handleSave = async () => {
+    if (saving) return; // Doppelklick-Schutz
     setSaving(true);
     let docNummer = nummer;
     if (!docNummer) {

@@ -144,6 +144,7 @@ const BautagesberichtDetail = () => {
   };
 
   const handleSave = async () => {
+    if (saving) return; // Doppelklick-Schutz
     if (!projectId) {
       toast({ variant: "destructive", title: "Fehler", description: "Bitte Projekt wählen" });
       return;

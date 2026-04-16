@@ -73,11 +73,14 @@ export function useScheduleData() {
           .select("id, name, status, geplanter_start, geplantes_ende")
           .order("name"),
         // Einsaetze that overlap with the visible date range
-        supabase
-          .from("einsaetze")
-          .select("id, user_id, project_id, name, adresse, beschreibung, start_date, end_date, ganztaegig, start_time, end_time, google_event_id")
-          .lte("start_date", toDate)
-          .gte("end_date", fromDate),
+        // Im Year-Modus werden Einsätze nicht dargestellt → nicht laden (Performance)
+        mode === "year"
+          ? Promise.resolve({ data: [] } as any)
+          : supabase
+              .from("einsaetze")
+              .select("id, user_id, project_id, name, adresse, beschreibung, start_date, end_date, ganztaegig, start_time, end_time, google_event_id")
+              .lte("start_date", toDate)
+              .gte("end_date", fromDate),
         supabase
           .from("teams")
           .select("id, name, sort_order")

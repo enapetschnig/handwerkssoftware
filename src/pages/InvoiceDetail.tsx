@@ -519,6 +519,32 @@ export default function InvoiceDetail() {
       return false;
     }
 
+    // Skonto-Prozent muss zwischen 0 und 100 sein
+    if (form.skonto_prozent < 0 || form.skonto_prozent > 100) {
+      toast({ variant: "destructive", title: "Ungültiger Skonto", description: "Skonto muss zwischen 0% und 100% liegen" });
+      return false;
+    }
+
+    // Rabatt-Prozent muss zwischen 0 und 100 sein
+    if ((form.rabatt_prozent ?? 0) < 0 || (form.rabatt_prozent ?? 0) > 100) {
+      toast({ variant: "destructive", title: "Ungültiger Rabatt", description: "Rabatt muss zwischen 0% und 100% liegen" });
+      return false;
+    }
+
+    // Rabatt-Betrag darf den Netto-Summe nicht überschreiten
+    const positionenNetto = validItems.reduce((sum, item) => sum + item.menge * item.einzelpreis * (1 - (item.rabatt || 0) / 100), 0);
+    if (form.rabatt_betrag > positionenNetto) {
+      toast({ variant: "destructive", title: "Ungültiger Rabatt", description: `Rabatt-Betrag (€${form.rabatt_betrag.toFixed(2)}) darf die Netto-Summe (€${positionenNetto.toFixed(2)}) nicht überschreiten` });
+      return false;
+    }
+
+    // Pro-Position Rabatt prüfen
+    const invalidRabatt = items.find(i => (i.rabatt ?? 0) < 0 || (i.rabatt ?? 0) > 100);
+    if (invalidRabatt) {
+      toast({ variant: "destructive", title: "Ungültiger Positions-Rabatt", description: "Rabatt pro Position muss zwischen 0% und 100% liegen" });
+      return false;
+    }
+
     // Reverse Charge: UID-Nummer des Kunden ist Pflicht (§ 19 UStG)
     if ((form as any).reverse_charge && !form.kunde_uid?.trim()) {
       toast({ variant: "destructive", title: "Fehler", description: "Bei Reverse Charge ist die UID-Nummer des Kunden Pflicht" });
@@ -1177,6 +1203,18 @@ export default function InvoiceDetail() {
                     {form.typ === "rechnung" && (form.status === "offen" || form.status === "teilbezahlt") && bruttoSumme > 0 && (
                       <Select onValueChange={async (stufe) => {
                         const mahnstufe = parseInt(stufe);
+                        // Warnung bei teilbezahlten Rechnungen — offener Restbetrag wird gemahnt
+                        if (form.bezahlt_betrag > 0 && form.bezahlt_betrag < bruttoSumme) {
+                          const offen = bruttoSumme - form.bezahlt_betrag;
+                          const ok = window.confirm(
+                            `⚠️ Diese Rechnung ist bereits teilbezahlt.\n\n` +
+                            `Brutto: € ${bruttoSumme.toFixed(2)}\n` +
+                            `Bezahlt: € ${form.bezahlt_betrag.toFixed(2)}\n` +
+                            `Offen: € ${offen.toFixed(2)}\n\n` +
+                            `Die Mahnung wird den OFFENEN Betrag (€ ${offen.toFixed(2)}) mahnen. Fortfahren?`
+                          );
+                          if (!ok) return;
+                        }
                         try {
                           // Update mahnstufe in DB + save history
                           await supabase.from("invoices").update({ mahnstufe }).eq("id", invoiceId);

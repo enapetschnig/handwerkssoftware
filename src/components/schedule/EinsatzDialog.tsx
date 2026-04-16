@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 interface EinsatzData {
   id: string;
@@ -79,6 +80,7 @@ export function EinsatzDialog({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [projectSearch, setProjectSearch] = useState("");
+  const { toast } = useToast();
 
   const isEditing = !!editEinsatz;
 
@@ -116,7 +118,21 @@ export function EinsatzDialog({
   }, [projects, projectSearch]);
 
   async function handleSave() {
+    if (saving) return; // Doppelklick-Schutz
     if (!projectId || !startDate || !endDate) return;
+
+    // Datum-Validierung
+    if (endDate < startDate) {
+      toast({ variant: "destructive", title: "Ungültiges Datum", description: "Das Ende-Datum muss gleich oder nach dem Start-Datum liegen." });
+      return;
+    }
+
+    // Zeit-Validierung bei nicht-ganztägig
+    if (!ganztaegig && startDate === endDate && endTime <= startTime) {
+      toast({ variant: "destructive", title: "Ungültige Zeit", description: "Die Endzeit muss nach der Startzeit liegen." });
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave({
