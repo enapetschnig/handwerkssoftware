@@ -101,13 +101,13 @@ export default function Calendar() {
     const monthStart = format(startOfMonth(currentMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
-    // Fetch assignments for the month
-    const { data: assignData } = await supabase
-      .from("worker_assignments")
-      .select("id, datum, start_time, end_time, notizen, user_id, google_event_id, projects(name)")
-      .gte("datum", monthStart)
-      .lte("datum", monthEnd)
-      .order("datum");
+    // Fetch Einsätze (Plantafel-Einsätze) overlapping with month
+    const { data: einsatzData } = await supabase
+      .from("einsaetze")
+      .select("id, user_id, project_id, start_date, end_date, ganztaegig, start_time, end_time, beschreibung, google_event_id, projects(name)")
+      .lte("start_date", monthEnd)
+      .gte("end_date", monthStart)
+      .order("start_date");
 
     // Fetch calendar events
     const { data: eventData } = await supabase
@@ -117,8 +117,8 @@ export default function Calendar() {
       .lte("start_date", monthEnd)
       .order("start_date");
 
-    // Fetch profile names for assignments
-    const userIds = [...new Set((assignData || []).map((a: any) => a.user_id))];
+    // Fetch profile names for einsaetze
+    const userIds = [...new Set((einsatzData || []).map((e: any) => e.user_id))];
     let profileMap: Record<string, { vorname: string; nachname: string }> = {};
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
@@ -130,16 +130,34 @@ export default function Calendar() {
       });
     }
 
-    const mappedAssignments = (assignData || []).map((a: any) => ({
-      ...a,
-      profiles: profileMap[a.user_id] || null,
-    }));
-    setAssignments(mappedAssignments);
+    // Expand einsaetze to one Assignment per day for existing UI
+    const expandedAssignments: any[] = [];
+    for (const e of einsatzData || []) {
+      const s = new Date((e as any).start_date + "T12:00:00");
+      const end = new Date((e as any).end_date + "T12:00:00");
+      for (let d = new Date(s); d <= end; d.setDate(d.getDate() + 1)) {
+        const datum = d.toISOString().split("T")[0];
+        if (datum >= monthStart && datum <= monthEnd) {
+          expandedAssignments.push({
+            id: `${(e as any).id}_${datum}`,
+            datum,
+            start_time: (e as any).start_time,
+            end_time: (e as any).end_time,
+            notizen: (e as any).beschreibung,
+            user_id: (e as any).user_id,
+            google_event_id: (e as any).google_event_id,
+            projects: (e as any).projects,
+            profiles: profileMap[(e as any).user_id] || null,
+          });
+        }
+      }
+    }
+    setAssignments(expandedAssignments);
 
-    // Filter out calendar_events that are already shown as worker_assignments
+    // Filter out calendar_events that are already shown as einsaetze
     // (to avoid duplicates when Plantafel syncs to Google and bidirectional sync imports them back)
     const assignmentGoogleIds = new Set(
-      (assignData || []).map((a: any) => a.google_event_id).filter(Boolean)
+      (einsatzData || []).map((e: any) => e.google_event_id).filter(Boolean)
     );
     setCalendarEvents(
       ((eventData || []) as CalendarEvent[]).filter(
