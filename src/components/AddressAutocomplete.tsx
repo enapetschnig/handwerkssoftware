@@ -79,15 +79,16 @@ export function AddressAutocomplete({
     }
     setLoading(true);
     try {
-      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lang=de&limit=7${countryCode ? `&osm_tag=place:!&osm_tag=highway:!&bbox=9.5,46.3,17.2,49.1` : ""}`;
+      // bbox for Austria; no osm_tag filters (those would exclude valid results)
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lang=de&limit=10${countryCode ? `&bbox=9.5,46.3,17.2,49.1` : ""}`;
       const res = await fetch(url);
       const data = await res.json();
       const features: PhotonFeature[] = data.features || [];
-      // Filter to Austrian addresses with at least a street or place
+      // Filter: AT only + must have a usable name
       const filtered = features.filter((f) => {
         const cc = (f.properties.countrycode || "").toLowerCase();
-        if (countryCode && cc !== countryCode) return false;
-        return f.properties.street || f.properties.name || f.properties.city || f.properties.town;
+        if (countryCode && cc !== countryCode.toLowerCase()) return false;
+        return !!(f.properties.street || f.properties.name || f.properties.city || f.properties.town || f.properties.village);
       });
       setSuggestions(filtered);
     } catch (err) {
@@ -155,7 +156,7 @@ export function AddressAutocomplete({
       </div>
 
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full bg-white border rounded-md shadow-lg max-h-[280px] overflow-y-auto">
+        <div className="absolute mt-1 w-full bg-white border rounded-md shadow-lg max-h-[280px] overflow-y-auto" style={{ zIndex: 9999 }}>
           {suggestions.map((f, idx) => (
             <button
               key={idx}
