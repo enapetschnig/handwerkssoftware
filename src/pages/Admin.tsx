@@ -662,7 +662,7 @@ export default function Admin() {
             <CreateUserDialog
               open={createUserOpen}
               onOpenChange={setCreateUserOpen}
-              onCreated={fetchProfiles}
+              onCreated={() => fetchUsers()}
             />
 
             {/* ===== WARTENDE AKTIVIERUNGEN ===== */}

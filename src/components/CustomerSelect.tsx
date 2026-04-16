@@ -33,6 +33,7 @@ import { Search, Plus, X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 export interface CustomerData {
   id: string;
@@ -394,14 +395,20 @@ export function CustomerSelect({
 
             {/* Gemeinsame Felder */}
             <div className="border-t pt-3 space-y-3">
-              <div>
-                <Label>Adresse</Label>
-                <Input
-                  value={newCustomer.adresse}
-                  onChange={(e) => updateNew("adresse", e.target.value)}
-                  placeholder="Straße und Hausnummer"
-                />
-              </div>
+              <AddressAutocomplete
+                label="Adresse"
+                value={newCustomer.adresse}
+                onChange={(v) => updateNew("adresse", v)}
+                onSelect={(addr) => {
+                  setNewCustomer((prev) => ({
+                    ...prev,
+                    adresse: addr.street,
+                    plz: addr.plz,
+                    ort: addr.ort,
+                  }));
+                }}
+                placeholder="Straße und Hausnummer"
+              />
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label>PLZ</Label>

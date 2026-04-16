@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { UserPlus, Eye, EyeOff, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 interface Props {
   open: boolean;
@@ -194,10 +195,19 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           {/* Adresse */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adresse</h3>
-            <div>
-              <Label>Straße & Nr.</Label>
-              <Input value={form.adresse} onChange={e => update("adresse", e.target.value)} />
-            </div>
+            <AddressAutocomplete
+              label="Straße & Nr."
+              value={form.adresse}
+              onChange={(v) => update("adresse", v)}
+              onSelect={(addr) => {
+                setForm((prev) => ({
+                  ...prev,
+                  adresse: addr.street,
+                  plz: addr.plz,
+                  ort: addr.ort,
+                }));
+              }}
+            />
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>PLZ</Label>

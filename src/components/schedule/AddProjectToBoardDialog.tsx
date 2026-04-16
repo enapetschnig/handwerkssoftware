@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { BOARD_COLORS } from "./scheduleTypes";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 interface Props {
   open: boolean;
@@ -175,10 +176,17 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
               <Label>Projektname *</Label>
               <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Neues Projekt" />
             </div>
-            <div>
-              <Label>Adresse</Label>
-              <Input value={newAdresse} onChange={e => setNewAdresse(e.target.value)} placeholder="Straße und Nr." />
-            </div>
+            <AddressAutocomplete
+              label="Adresse"
+              value={newAdresse}
+              onChange={setNewAdresse}
+              onSelect={(addr) => {
+                setNewAdresse(addr.street);
+                setNewPlz(addr.plz);
+                setNewOrt(addr.ort);
+              }}
+              placeholder="Straße und Nr."
+            />
             <div className="grid grid-cols-3 gap-3">
               <div><Label>PLZ</Label><Input value={newPlz} onChange={e => setNewPlz(e.target.value)} placeholder="PLZ" /></div>
               <div className="col-span-2"><Label>Ort</Label><Input value={newOrt} onChange={e => setNewOrt(e.target.value)} placeholder="Ort" /></div>
