@@ -320,13 +320,17 @@ const ProjectOverview = () => {
       .then(({ count }: any) => setProtokollCount(count || 0));
   };
 
+  const [projectInvoices, setProjectInvoices] = useState<{id: string; nummer: string; typ: string; datum: string; brutto_summe: number; kunde_name: string; status: string}[]>([]);
+
   const fetchInvoiceCount = async () => {
     if (!projectId) return;
-    const { count } = await supabase
+    const { data, count } = await supabase
       .from("invoices")
-      .select("*", { count: "exact", head: true })
-      .eq("project_id", projectId);
+      .select("id, nummer, typ, datum, brutto_summe, kunde_name, status", { count: "exact" })
+      .eq("project_id", projectId)
+      .order("datum", { ascending: false });
     setInvoiceCount(count || 0);
+    if (data) setProjectInvoices(data);
   };
 
   const fetchFileCounts = async () => {
@@ -585,24 +589,51 @@ const ProjectOverview = () => {
             </CardContent>
           </Card>
 
-          {/* Angebote & Rechnungen */}
-          {isAdmin && (
-            <Card
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => navigate(`/invoices?project=${projectId}`)}
-            >
-              <CardHeader>
+          {/* Angebote & Rechnungen — Liste mit PDF-Links */}
+          {isAdmin && projectInvoices.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-primary"><FileText className="h-8 w-8" /></div>
-                  <div className="text-2xl font-bold">{invoiceCount}</div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Angebote & Rechnungen
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/invoices?project=${projectId}`)}>
+                    Alle anzeigen
+                  </Button>
                 </div>
-                <CardTitle className="text-xl">Angebote & Rechnungen</CardTitle>
-                <CardDescription>Zugeordnete Angebote und Rechnungen</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full">
-                  Öffnen
-                </Button>
+              <CardContent className="space-y-1">
+                {projectInvoices.map(inv => (
+                  <button
+                    key={inv.id}
+                    className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
+                    onClick={() => navigate(`/invoices/${inv.id}`)}
+                  >
+                    <FileText className={`h-4 w-4 shrink-0 ${inv.typ === "angebot" ? "text-blue-500" : "text-green-600"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{inv.nummer}</span>
+                        <span className="text-xs text-muted-foreground">{inv.typ === "angebot" ? "Angebot" : "Rechnung"}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {inv.kunde_name} · {new Date(inv.datum).toLocaleDateString("de-AT")}
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium whitespace-nowrap">€ {Number(inv.brutto_summe).toFixed(2)}</span>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {isAdmin && projectInvoices.length === 0 && (
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/invoices?project=${projectId}`)}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <FileText className="h-5 w-5 text-primary" />
+                <div className="flex-1">
+                  <p className="font-medium">Angebote & Rechnungen</p>
+                  <p className="text-xs text-muted-foreground">Keine zugeordneten Dokumente</p>
+                </div>
               </CardContent>
             </Card>
           )}
