@@ -67,7 +67,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
         notizen: "",
       });
       // Load projects
-      supabase.from("projects").select("id, name").order("name").then(({ data }) => {
+      supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name").then(({ data }) => {
         if (data) setProjects(data);
       });
     }
@@ -155,16 +155,27 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
 
         if (error) throw new Error(error.message);
 
-        // 2. Upload file
-        const path = `${inv.id}/${file.name}`;
+        // 2. Upload file — sanitize filename (keep extension, replace special chars)
+        const safeName = file.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")           // remove diacritics
+          .replace(/[^a-zA-Z0-9._-]/g, "_")          // replace anything else with _
+          .replace(/_+/g, "_")                        // collapse multiple _
+          .replace(/^_+|_+$/g, "");                   // trim leading/trailing _
+        const finalName = safeName || `file_${Date.now()}.pdf`;
+        const path = `${inv.id}/${finalName}`;
         const { error: upErr } = await supabase.storage
           .from("purchase-invoices")
           .upload(path, file, { upsert: true });
 
-        if (upErr) throw new Error(upErr.message);
+        if (upErr) {
+          // Rollback: lösche leeres DB-Record bei Upload-Fehler
+          await supabase.from("purchase_invoices").delete().eq("id", inv.id);
+          throw new Error(upErr.message);
+        }
 
-        // 3. Update pdf_path
-        await supabase.from("purchase_invoices").update({ pdf_path: path }).eq("id", inv.id);
+        // 3. Update pdf_path + original filename
+        await supabase.from("purchase_invoices").update({ pdf_path: path, file_name: file.name }).eq("id", inv.id);
       }
 
       toast({ title: "Gespeichert", description: `${files.length} ${files.length === 1 ? "Rechnung" : "Rechnungen"} hochgeladen` });

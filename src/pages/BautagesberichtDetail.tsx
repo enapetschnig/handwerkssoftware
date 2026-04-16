@@ -55,6 +55,18 @@ const BautagesberichtDetail = () => {
   // UI state
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Warnung bei Navigation mit ungespeicherten Änderungen
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Ungespeicherte Änderungen gehen verloren.";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedChanges]);
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [skipSignBauleiter, setSkipSignBauleiter] = useState(false);
   const [skipSignKunde, setSkipSignKunde] = useState(false);
@@ -64,6 +76,12 @@ const BautagesberichtDetail = () => {
   useEffect(() => {
     init();
   }, [id]);
+
+  // Dirty-Flag: nach Initial-Load jede Feld-Änderung markiert das Formular als "geändert"
+  useEffect(() => {
+    if (loading) return;
+    setHasUnsavedChanges(true);
+  }, [projectId, datum]); // Reference-Werte, die User aktiv ändert
 
   const init = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -231,6 +249,7 @@ const BautagesberichtDetail = () => {
       }
     }
 
+    setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Bautagesbericht wurde gespeichert" });
 
     // Navigate to detail view if was new

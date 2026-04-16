@@ -109,7 +109,7 @@ const Besprechungsprotokolle = () => {
       (p.project_name || "").toLowerCase().includes(q) ||
       (p.nummer || "").toLowerCase().includes(q) ||
       (p.ort || "").toLowerCase().includes(q);
-    const matchesStatus = true;
+    const matchesStatus = statusFilter === "alle" || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 

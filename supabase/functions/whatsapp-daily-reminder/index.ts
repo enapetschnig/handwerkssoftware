@@ -110,6 +110,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Auth: entweder Service-Role-Key (Cron-Trigger) oder CRON_SECRET
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const isAuthorized = (serviceKey && token === serviceKey) || (cronSecret && token === cronSecret);
+  if (!isAuthorized) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   try {
     let reminderType = "auto";
     try {

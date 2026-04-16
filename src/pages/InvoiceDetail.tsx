@@ -142,6 +142,7 @@ export default function InvoiceDetail() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [invoiceId, setInvoiceId] = useState<string | null>(isNew ? null : id || null);
   const [items, setItems] = useState<InvoiceItem[]>([
     { position: 1, beschreibung: "", menge: 1, einheit: "Stk.", einzelpreis: 0, gesamtpreis: 0 },
@@ -466,15 +467,22 @@ export default function InvoiceDetail() {
   const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
     setItems(prev => {
       const updated = [...prev];
-      // Prevent negative menge/einzelpreis
-      if ((field === "menge" || field === "einzelpreis") && Number(value) < 0) value = 0;
-      if (field === "rabatt_prozent") value = Math.max(0, Math.min(100, Number(value) || 0));
+      // Sanitize numeric fields: NaN, Infinity, negative → 0
+      if (field === "menge" || field === "einzelpreis") {
+        const n = Number(value);
+        value = isFinite(n) && n >= 0 ? n : 0;
+      }
+      if (field === "rabatt_prozent") {
+        const n = Number(value);
+        value = isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+      }
       (updated[index] as any)[field] = value;
       if (field === "menge" || field === "einzelpreis" || field === "rabatt_prozent") {
-        const m = Number(updated[index].menge);
-        const p = Number(updated[index].einzelpreis);
+        const m = Number(updated[index].menge) || 0;
+        const p = Number(updated[index].einzelpreis) || 0;
         const r = Number(updated[index].rabatt_prozent) || 0;
-        updated[index].gesamtpreis = Math.round(m * p * (1 - r / 100) * 100) / 100;
+        const total = m * p * (1 - r / 100);
+        updated[index].gesamtpreis = isFinite(total) ? Math.round(total * 100) / 100 : 0;
       }
       return updated;
     });

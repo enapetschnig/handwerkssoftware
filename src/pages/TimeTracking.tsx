@@ -324,12 +324,16 @@ const TimeTracking = () => {
   // Calculate hours for a single block
   const calculateBlockHours = (block: TimeBlock): number => {
     if (!block.startTime || !block.endTime) return 0;
-    
+
     const [startH, startM] = block.startTime.split(':').map(Number);
     const [endH, endM] = block.endTime.split(':').map(Number);
     const pauseMinutes = calculateBlockPauseMinutes(block);
-    
-    const totalMinutes = (endH * 60 + endM) - (startH * 60 + startM) - pauseMinutes;
+
+    let totalMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    // Overnight shift: Endzeit vor Startzeit → über Mitternacht
+    if (totalMinutes < 0) totalMinutes += 24 * 60;
+    totalMinutes -= pauseMinutes;
+    // Pause darf Arbeitszeit nicht übersteigen
     return Math.max(0, totalMinutes / 60);
   };
 
@@ -417,7 +421,9 @@ const TimeTracking = () => {
     let entryPauseMinutes: number;
 
     if (absenceData.isFullDay) {
-      workingHours = absenceData.customHours ? parseFloat(absenceData.customHours) : automaticHours;
+      const custom = absenceData.customHours ? parseFloat(absenceData.customHours) : NaN;
+      // Validierung: muss eine endliche, nicht-negative Zahl zwischen 0 und 24 sein
+      workingHours = (isFinite(custom) && custom >= 0 && custom <= 24) ? custom : automaticHours;
       entryStartTime = defaultTimes?.startTime || "07:00";
       entryEndTime = defaultTimes?.endTime || "16:00";
       entryPauseMinutes = defaultTimes?.pauseMinutes || 30;
@@ -425,8 +431,10 @@ const TimeTracking = () => {
       // Calculate from Von/Bis
       const [sH, sM] = absenceData.absenceStartTime.split(':').map(Number);
       const [eH, eM] = absenceData.absenceEndTime.split(':').map(Number);
-      const pause = parseInt(absenceData.absencePauseMinutes) || 0;
-      const totalMinutes = (eH * 60 + eM) - (sH * 60 + sM) - pause;
+      const pause = Math.max(0, parseInt(absenceData.absencePauseMinutes) || 0);
+      let totalMinutes = (eH * 60 + eM) - (sH * 60 + sM);
+      if (totalMinutes < 0) totalMinutes += 24 * 60; // Overnight
+      totalMinutes -= pause;
       workingHours = Math.max(0, totalMinutes / 60);
       entryStartTime = absenceData.absenceStartTime;
       entryEndTime = absenceData.absenceEndTime;
