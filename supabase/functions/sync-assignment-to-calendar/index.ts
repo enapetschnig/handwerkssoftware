@@ -285,6 +285,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
+    // Cleanup: delete ALL [montipro-plantafel] events from Google Calendar
+    if (action === "cleanup_all") {
+      const calId = await getCalendarId();
+      if (!calId) {
+        return new Response(JSON.stringify({ error: "No calendar ID configured" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Fetch all events from Google Calendar
+      const params = new URLSearchParams({
+        singleEvents: "true",
+        maxResults: "2500",
+        timeMin: "2025-01-01T00:00:00Z",
+      });
+      const listRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?${params}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const listData = await listRes.json();
+      const allEvents = listData.items || [];
+
+      let deleted = 0;
+      for (const ev of allEvents) {
+        if (ev.description?.includes("[montipro-plantafel]")) {
+          try {
+            await deleteEvent(accessToken, ev.id);
+            deleted++;
+          } catch (e) {
+            console.error(`Failed to delete ${ev.id}:`, e);
+          }
+        }
+      }
+
+      // Also clear google_event_id from all worker_assignments
+      await supabase.from("worker_assignments").update({ google_event_id: null }).neq("id", "00000000-0000-0000-0000-000000000000");
+
+      // Delete imported plantafel calendar_events
+      await supabase.from("calendar_events").delete().like("title", "%→%");
+
+      return new Response(JSON.stringify({ ok: true, deleted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
