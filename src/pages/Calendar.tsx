@@ -240,6 +240,29 @@ export default function Calendar() {
       return;
     }
 
+    // Datum-Validierung: Ende darf nicht vor Start liegen
+    if (formData.end_date && formData.end_date < formData.start_date) {
+      toast({
+        variant: "destructive",
+        title: "Ungültiger Datumsbereich",
+        description: "Das Enddatum muss gleich oder nach dem Startdatum liegen.",
+      });
+      return;
+    }
+
+    // Zeit-Validierung bei ganztägig=false und gleichem Datum: Endzeit muss nach Startzeit liegen
+    if (!formData.all_day &&
+        formData.start_date === (formData.end_date || formData.start_date) &&
+        formData.start_time && formData.end_time &&
+        formData.end_time <= formData.start_time) {
+      toast({
+        variant: "destructive",
+        title: "Ungültige Uhrzeit",
+        description: "Die Endzeit muss nach der Startzeit liegen.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingEvent) {

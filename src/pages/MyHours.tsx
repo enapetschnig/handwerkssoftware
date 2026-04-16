@@ -353,7 +353,7 @@ const MyHours = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Von</Label>
-                  <Select value={editingEntry.start_time || "07:00"} onValueChange={(v) => setEditingEntry({...editingEntry, start_time: v})}>
+                  <Select value={(editingEntry.start_time || "07:00").slice(0, 5)} onValueChange={(v) => setEditingEntry({...editingEntry, start_time: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
@@ -362,7 +362,7 @@ const MyHours = () => {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Bis</Label>
-                  <Select value={editingEntry.end_time || "16:00"} onValueChange={(v) => setEditingEntry({...editingEntry, end_time: v})}>
+                  <Select value={(editingEntry.end_time || "16:00").slice(0, 5)} onValueChange={(v) => setEditingEntry({...editingEntry, end_time: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}

@@ -164,7 +164,14 @@ const BautagesberichtDetail = () => {
   const handleSave = async () => {
     if (saving) return; // Doppelklick-Schutz
     if (!projectId) {
-      toast({ variant: "destructive", title: "Fehler", description: "Bitte Projekt wählen" });
+      toast({ variant: "destructive", title: "Projekt fehlt", description: "Bitte wählen Sie ein Projekt aus (Pflichtfeld)." });
+      // Scroll zu Projekt-Feld + Highlight
+      const el = document.getElementById("btb-project-field");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-destructive", "rounded");
+        setTimeout(() => el.classList.remove("ring-2", "ring-destructive", "rounded"), 3000);
+      }
       return;
     }
 
@@ -391,7 +398,7 @@ const BautagesberichtDetail = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Projekt */}
-              <div className="space-y-1">
+              <div className="space-y-1" id="btb-project-field">
                 <Label>Projekt *</Label>
                 <Select value={projectId} onValueChange={setProjectId}>
                   <SelectTrigger>

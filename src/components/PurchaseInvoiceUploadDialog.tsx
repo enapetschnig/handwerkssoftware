@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Upload, X, FileText, Image as ImageIcon, Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,6 +30,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -102,6 +103,56 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
 
   const removeFile = (idx: number) => {
     setFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // KI-Scan: Rechnungsdaten aus dem ersten Bild extrahieren und Form vorausfüllen
+  const handleScan = async () => {
+    if (files.length === 0) return;
+    const firstImage = files.find(f => f.type.startsWith("image/"));
+    if (!firstImage) {
+      toast({ variant: "destructive", title: "Kein Bild", description: "KI-Scan funktioniert nur mit Foto/JPG/PNG. PDF-Scan folgt." });
+      return;
+    }
+
+    setScanning(true);
+    try {
+      // Bild → Base64 Data-URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(firstImage);
+      });
+
+      const { data, error } = await supabase.functions.invoke("parse-invoice-document", {
+        body: { imageBase64: dataUrl },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      const parsed = data?.data;
+      if (!parsed) throw new Error("Keine Daten erkannt");
+
+      // Form vorausfüllen (nur wenn Feld nicht manuell gefüllt)
+      setForm(prev => ({
+        ...prev,
+        lieferant: prev.lieferant || parsed.lieferant || "",
+        rechnungsnummer: prev.rechnungsnummer || parsed.rechnungsnummer || "",
+        rechnungsdatum: prev.rechnungsdatum || parsed.rechnungsdatum || prev.rechnungsdatum,
+        faellig_am: prev.faellig_am || parsed.faellig_am || "",
+        betrag_brutto: prev.betrag_brutto || (parsed.betrag_brutto ? String(parsed.betrag_brutto) : ""),
+        betrag_netto: prev.betrag_netto || (parsed.betrag_netto ? String(parsed.betrag_netto) : ""),
+        ust_satz: parsed.ust_satz ? String(parsed.ust_satz) : prev.ust_satz,
+        kategorie: parsed.kategorie || prev.kategorie,
+        notizen: prev.notizen || parsed.notizen || "",
+      }));
+
+      toast({ title: "KI-Scan erfolgreich", description: "Daten wurden übernommen. Bitte prüfen." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "KI-Scan fehlgeschlagen", description: err.message });
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleSave = async () => {
@@ -245,6 +296,19 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
                 </div>
               ))}
             </div>
+          )}
+
+          {/* KI-Scan Button — sichtbar wenn mindestens 1 Bild */}
+          {files.some(f => f.type.startsWith("image/")) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleScan}
+              disabled={scanning}
+              className="w-full gap-2 bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 hover:from-orange-100 hover:to-amber-100"
+            >
+              {scanning ? <><Loader2 className="h-4 w-4 animate-spin" /> KI liest Rechnung...</> : <><Sparkles className="h-4 w-4 text-orange-600" /> Mit KI automatisch ausfüllen</>}
+            </Button>
           )}
 
           {/* Quick form */}

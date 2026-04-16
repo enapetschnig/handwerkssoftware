@@ -11,10 +11,12 @@ import { useToast } from "@/hooks/use-toast";
 export default function ChangePasswordDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleChangePassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
@@ -22,21 +24,13 @@ export default function ChangePasswordDialog() {
     const confirmPassword = formData.get("confirm-password") as string;
 
     if (newPassword !== confirmPassword) {
-      toast({
-        variant: "destructive",
-        title: "Passwörter stimmen nicht überein",
-        description: "Bitte überprüfen Sie Ihre Eingabe.",
-      });
+      setError("Die Passwörter stimmen nicht überein.");
       setLoading(false);
       return;
     }
 
     if (newPassword.length < 6) {
-      toast({
-        variant: "destructive",
-        title: "Passwort zu kurz",
-        description: "Das Passwort muss mindestens 6 Zeichen lang sein.",
-      });
+      setError("Das Passwort muss mindestens 6 Zeichen lang sein.");
       setLoading(false);
       return;
     }
@@ -46,24 +40,21 @@ export default function ChangePasswordDialog() {
     });
 
     if (error) {
-      toast({
-        variant: "destructive",
-        title: "Fehler",
-        description: error.message,
-      });
+      setError(error.message);
     } else {
       toast({
         title: "Passwort geändert",
         description: "Ihr Passwort wurde erfolgreich aktualisiert.",
       });
       setOpen(false);
+      setError(null);
       (e.target as HTMLFormElement).reset();
     }
     setLoading(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
       <DialogTrigger asChild>
         <DropdownMenuItem onSelect={(e) => {
           e.preventDefault();
@@ -81,6 +72,11 @@ export default function ChangePasswordDialog() {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleChangePassword} className="space-y-4">
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="new-password">Neues Passwort</Label>
             <Input
