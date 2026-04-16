@@ -104,12 +104,20 @@ export default function ScheduleBoard() {
 
   // --- Handlers ---
 
-  const handleAddProjectToBoard = async (projectId: string, color: string, colorMode: "status" | "custom") => {
+  const handleAddProjectToBoard = async (projectId: string, color: string, startDate: string, endDate: string, beschreibung: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data, error } = await supabase
       .from("board_projects")
-      .insert({ project_id: projectId, board_color: color, color_mode: colorMode, created_by: user.id })
+      .insert({
+        project_id: projectId,
+        board_color: color,
+        color_mode: "custom",
+        start_date: startDate,
+        end_date: endDate,
+        beschreibung: beschreibung || null,
+        created_by: user.id,
+      })
       .select()
       .single();
     if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }

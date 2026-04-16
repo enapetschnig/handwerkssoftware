@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { EinsatzBar } from "./EinsatzBar";
@@ -8,8 +8,8 @@ import {
   isOnLeave,
   isCompanyHoliday,
   isWeekendDay,
+  getProjectColor,
 } from "./scheduleUtils";
-import { getProjectColor } from "./scheduleUtils";
 import type {
   Profile,
   Einsatz,
@@ -18,6 +18,8 @@ import type {
   LeaveRequest,
   CompanyHoliday,
 } from "./scheduleTypes";
+
+const WEEKEND_BG = "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)";
 
 interface Props {
   profiles: Profile[];
@@ -28,7 +30,7 @@ interface Props {
   leaveRequests: LeaveRequest[];
   holidays: CompanyHoliday[];
   onManageClick: () => void;
-  onCellClick: (userId: string, startDate: string, endDate: string) => void;
+  onCellClick?: (userId: string, startDate: string, endDate: string) => void;
   onEinsatzClick: (einsatz: Einsatz) => void;
 }
 
@@ -45,99 +47,92 @@ export function MitarbeiterSection({
   onEinsatzClick,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+  // Drag state
+  const [dragUserId, setDragUserId] = useState<string | null>(null);
+  const [dragStartIdx, setDragStartIdx] = useState<number | null>(null);
+  const [dragEndIdx, setDragEndIdx] = useState<number | null>(null);
 
   const projectMap = new Map(projects.map((p) => [p.id, p]));
-  const boardColorMap = new Map(
-    boardProjects.map((bp) => [bp.project_id, bp])
-  );
+  const boardColorMap = new Map(boardProjects.map((bp) => [bp.project_id, bp]));
 
   function getBarColor(projectId: string): string {
     const bp = boardColorMap.get(projectId);
-    if (bp?.color_mode === "custom" && bp.board_color) {
-      return bp.board_color;
-    }
+    if (bp?.board_color) return bp.board_color;
     return getProjectColor(projectId).fill;
   }
+
+  // Mouse up handler for drag selection
+  useEffect(() => {
+    const onMouseUp = () => {
+      if (dragUserId && dragStartIdx !== null && dragEndIdx !== null && onCellClick) {
+        const lo = Math.min(dragStartIdx, dragEndIdx);
+        const hi = Math.max(dragStartIdx, dragEndIdx);
+        const startDate = format(days[lo], "yyyy-MM-dd");
+        const endDate = format(days[hi], "yyyy-MM-dd");
+        onCellClick(dragUserId, startDate, endDate);
+      }
+      setDragUserId(null);
+      setDragStartIdx(null);
+      setDragEndIdx(null);
+    };
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, [dragUserId, dragStartIdx, dragEndIdx, days, onCellClick]);
 
   function renderMemberRow(profile: Profile) {
     const userEinsaetze = getEinsaetzeForUser(einsaetze, profile.id);
 
     return (
-      <div
-        key={profile.id}
-        className="grid border-t"
-        style={{
-          gridTemplateColumns: `280px 1fr`,
-        }}
-      >
-        {/* Sidebar label */}
-        <div className="flex items-center px-3 py-1 border-r bg-white min-h-[36px]">
-          <span className="text-sm truncate">
-            {profile.vorname} {profile.nachname}
-          </span>
+      <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
+        {/* Sidebar */}
+        <div className="flex items-center px-3 py-1 border-r bg-white shrink-0" style={{ width: 280 }}>
+          <span className="text-sm truncate">{profile.vorname} {profile.nachname}</span>
         </div>
 
-        {/* Timeline cells */}
-        <div className="relative min-h-[36px]">
-          {/* Grid lines + interactive cells */}
+        {/* Timeline */}
+        <div className="flex-1 relative min-h-[36px]">
+          {/* Grid cells (interactive) */}
           <div
             className="absolute inset-0 grid"
-            style={{
-              gridTemplateColumns: `repeat(${days.length}, minmax(28px, 1fr))`,
-            }}
+            style={{ gridTemplateColumns: `repeat(${days.length}, minmax(28px, 1fr))` }}
           >
-            {days.map((day) => {
+            {days.map((day, dayIdx) => {
               const dateStr = format(day, "yyyy-MM-dd");
               const holiday = isCompanyHoliday(holidays, day);
               const leave = isOnLeave(leaveRequests, profile.id, day);
               const weekend = isWeekendDay(day);
+              const isDragSelected =
+                dragUserId === profile.id &&
+                dragStartIdx !== null &&
+                dragEndIdx !== null &&
+                dayIdx >= Math.min(dragStartIdx, dragEndIdx) &&
+                dayIdx <= Math.max(dragStartIdx, dragEndIdx);
 
-              let bgClass = "";
-              let overlay: React.ReactNode = null;
-
-              if (holiday) {
-                bgClass = "bg-gray-50";
-                overlay = (
-                  <span className="text-[9px] text-gray-400 truncate px-0.5">
-                    {holiday.bezeichnung || "Feiertag"}
-                  </span>
-                );
-              } else if (leave) {
-                bgClass = "bg-orange-50";
-                overlay = (
-                  <span className="text-[9px] text-orange-400 truncate px-0.5">
-                    {leave.type === "urlaub"
-                      ? "Urlaub"
-                      : leave.type === "krankenstand"
-                      ? "Krank"
-                      : leave.type === "za"
-                      ? "ZA"
-                      : leave.type}
-                  </span>
-                );
-              } else if (weekend) {
-                bgClass = "bg-gray-50/50";
-              }
+              let cellStyle: React.CSSProperties = {};
+              if (weekend && !holiday && !leave) cellStyle.background = WEEKEND_BG;
 
               return (
                 <div
                   key={dateStr}
-                  className={`border-r border-gray-100 flex items-end justify-center pb-0.5 ${bgClass} ${
-                    !holiday && !leave
-                      ? "cursor-pointer hover:bg-muted/20"
-                      : ""
+                  className={`border-r border-gray-100 ${
+                    holiday ? "bg-gray-50" : leave ? "bg-orange-50" : ""
+                  } ${isDragSelected ? "bg-blue-100" : ""} ${
+                    !holiday && !leave && onCellClick ? "cursor-crosshair" : ""
                   }`}
-                  onClick={() => {
-                    if (!holiday && !leave) {
-                      onCellClick(profile.id, dateStr, dateStr);
+                  style={!isDragSelected ? cellStyle : undefined}
+                  onMouseDown={() => {
+                    if (!holiday && !leave && onCellClick) {
+                      setDragUserId(profile.id);
+                      setDragStartIdx(dayIdx);
+                      setDragEndIdx(dayIdx);
                     }
                   }}
-                >
-                  {overlay}
-                  {!holiday && !leave && !weekend && (
-                    <div className="w-full h-full border border-dashed border-transparent hover:border-gray-200 rounded-sm min-h-[28px]" />
-                  )}
-                </div>
+                  onMouseEnter={() => {
+                    if (dragUserId === profile.id) {
+                      setDragEndIdx(dayIdx);
+                    }
+                  }}
+                />
               );
             })}
           </div>
@@ -167,34 +162,19 @@ export function MitarbeiterSection({
 
   return (
     <div className="border-b">
-      {/* Section header */}
-      <div
-        className="grid border-b"
-        style={{ gridTemplateColumns: "280px 1fr" }}
-      >
+      {/* Header */}
+      <div className="flex items-center border-b">
         <button
-          className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors text-left border-r"
+          className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors text-left"
+          style={{ width: 280 }}
           onClick={() => setCollapsed(!collapsed)}
         >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4 shrink-0" />
-          ) : (
-            <ChevronDown className="h-4 w-4 shrink-0" />
-          )}
+          {collapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
           <span className="font-semibold text-sm">Mitarbeiter</span>
-          <span className="text-xs text-muted-foreground">
-            {profiles.length}
-          </span>
-        </button>
-        <div className="flex items-center px-2">
-          <button
-            className="p-1 rounded hover:bg-muted/40 transition-colors"
-            onClick={onManageClick}
-            title="Mitarbeiter verwalten"
-          >
-            <Pencil className="h-4 w-4 text-muted-foreground" />
+          <button className="ml-auto p-1 rounded hover:bg-muted/40" onClick={(e) => { e.stopPropagation(); onManageClick(); }}>
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
-        </div>
+        </button>
       </div>
 
       {!collapsed && profiles.map(renderMemberRow)}

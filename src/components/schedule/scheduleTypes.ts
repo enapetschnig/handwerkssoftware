@@ -57,6 +57,9 @@ export type BoardProject = {
   board_color: string | null;
   color_mode: "status" | "custom";
   sort_order: number;
+  start_date: string | null;
+  end_date: string | null;
+  beschreibung: string | null;
 };
 
 export type Resource = {
