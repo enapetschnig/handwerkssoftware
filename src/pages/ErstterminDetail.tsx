@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Save, Trash2, CheckCircle, PenLine, FolderPlus, Camera, Upload, ZoomIn, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -404,7 +405,13 @@ export default function ErstterminDetail() {
             )}
             {field("Ansprechpartner vor Ort", ansprechpartner, setAnsprechpartner, 0, "Name des Ansprechpartners")}
             {field("Projektname", projektname, setProjektname, 0, "Projektbezeichnung")}
-            {field("Standort / Baustellenadresse", standort, setStandort, 0, "Adresse der Baustelle")}
+            <AddressAutocomplete
+              label="Standort / Baustellenadresse"
+              value={standort}
+              onChange={setStandort}
+              onSelect={(addr) => setStandort(addr.displayName)}
+              placeholder="Adresse der Baustelle"
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {field("Telefon", telefon, setTelefon, 0, "Telefonnummer")}
               <div className="space-y-1"><Label>E-Mail</Label>

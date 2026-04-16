@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -788,30 +789,21 @@ export function CreateProjectDialog({
                     />
                   </div>
                 </div>
-                <div>
-                  <Label>Adresse</Label>
-                  <Input
-                    value={adresse}
-                    onChange={(e) => setAdresse(e.target.value)}
-                    placeholder="Straße + Hausnr."
-                  />
-                </div>
+                <AddressAutocomplete
+                  label="Adresse"
+                  value={adresse}
+                  onChange={setAdresse}
+                  onSelect={(addr) => { setAdresse(addr.street); setPlz(addr.plz); setOrt(addr.ort); }}
+                  placeholder="Straße + Hausnr."
+                />
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Label>PLZ</Label>
-                    <Input
-                      value={plz}
-                      onChange={(e) => setPlz(e.target.value)}
-                      placeholder="8831"
-                    />
+                    <Input value={plz} onChange={(e) => setPlz(e.target.value)} placeholder="8831" />
                   </div>
                   <div className="col-span-2">
                     <Label>Ort</Label>
-                    <Input
-                      value={ort}
-                      onChange={(e) => setOrt(e.target.value)}
-                      placeholder="Niederwölz"
-                    />
+                    <Input value={ort} onChange={(e) => setOrt(e.target.value)} placeholder="Niederwölz" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -849,30 +841,21 @@ export function CreateProjectDialog({
               <Label className="text-base font-semibold border-b pb-1 block">
                 Projektadresse / Leistungsort
               </Label>
-              <div>
-                <Label>Adresse</Label>
-                <Input
-                  value={projektAdresse}
-                  onChange={(e) => setProjektAdresse(e.target.value)}
-                  placeholder="Straße + Hausnr. des Projekts"
-                />
-              </div>
+              <AddressAutocomplete
+                label="Adresse"
+                value={projektAdresse}
+                onChange={setProjektAdresse}
+                onSelect={(addr) => { setProjektAdresse(addr.street); setProjektPlz(addr.plz); setProjektOrt(addr.ort); }}
+                placeholder="Straße + Hausnr. des Projekts"
+              />
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label>PLZ</Label>
-                  <Input
-                    value={projektPlz}
-                    onChange={(e) => setProjektPlz(e.target.value)}
-                    placeholder="8831"
-                  />
+                  <Input value={projektPlz} onChange={(e) => setProjektPlz(e.target.value)} placeholder="8831" />
                 </div>
                 <div className="col-span-2">
                   <Label>Ort</Label>
-                  <Input
-                    value={projektOrt}
-                    onChange={(e) => setProjektOrt(e.target.value)}
-                    placeholder="z.B. Wien, Graz..."
-                  />
+                  <Input value={projektOrt} onChange={(e) => setProjektOrt(e.target.value)} placeholder="z.B. Wien, Graz..." />
                 </div>
               </div>
               <div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -681,10 +682,13 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           </p>
         )}
       </div>
-      <div>
-        <Label>Adresse</Label>
-        <Input value={form.adresse} onChange={(e) => setForm(p => ({ ...p, adresse: e.target.value }))} placeholder="Straße und Hausnummer" />
-      </div>
+      <AddressAutocomplete
+        label="Adresse"
+        value={form.adresse}
+        onChange={(v) => setForm(p => ({ ...p, adresse: v }))}
+        onSelect={(addr) => setForm(p => ({ ...p, adresse: addr.street, plz: addr.plz, ort: addr.ort, land: addr.land || p.land }))}
+        placeholder="Straße und Hausnummer"
+      />
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>PLZ</Label>
