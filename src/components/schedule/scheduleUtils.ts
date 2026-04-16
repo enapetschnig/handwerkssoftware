@@ -1,5 +1,5 @@
-import { isSameDay, isWithinInterval, parseISO } from "date-fns";
-import type { Assignment, LeaveRequest, CompanyHoliday, EmployeeColor } from "./scheduleTypes";
+import { isSameDay, isWithinInterval, parseISO, isWeekend, getISOWeek } from "date-fns";
+import type { Assignment, Einsatz, LeaveRequest, CompanyHoliday, EmployeeColor, TeamMember, Profile } from "./scheduleTypes";
 
 export const EMPLOYEE_COLORS = [
   { bg: "bg-blue-200",    text: "text-blue-900",    border: "border-blue-300"    },
@@ -21,10 +21,7 @@ export const EMPLOYEE_COLORS = [
 ];
 
 export function getEmployeeColor(profileId: string, allProfileIds: string[], dbColors?: Record<string, EmployeeColor>) {
-  // If DB custom colors are provided for this employee, return inline-compatible style
   if (dbColors) {
-    // We need to find the employee by profile id - dbColors are keyed by employee_id
-    // For now, look up by iterating (caller should pass mapped colors)
     const customColor = Object.values(dbColors).find(c => c.employee_id === profileId);
     if (customColor) {
       return {
@@ -81,6 +78,7 @@ export const RESOURCE_SUGGESTIONS = [
   "Diverses",
 ];
 
+// ─── Legacy: for backward compat during migration ───
 export function getAssignmentForDay(
   assignments: Assignment[],
   userId: string,
@@ -90,6 +88,78 @@ export function getAssignmentForDay(
     (a) => a.user_id === userId && isSameDay(parseISO(a.datum), date)
   );
 }
+
+// ─── NEW: Einsatz helpers ───
+
+/** Get all einsaetze for a user that overlap with a given date */
+export function getEinsaetzeForDay(
+  einsaetze: Einsatz[],
+  userId: string,
+  date: Date
+): Einsatz[] {
+  return einsaetze.filter(
+    (e) =>
+      e.user_id === userId &&
+      isWithinInterval(date, {
+        start: parseISO(e.start_date),
+        end: parseISO(e.end_date),
+      })
+  );
+}
+
+/** Get all einsaetze for a user (any date range) */
+export function getEinsaetzeForUser(einsaetze: Einsatz[], userId: string): Einsatz[] {
+  return einsaetze.filter((e) => e.user_id === userId);
+}
+
+/** Get profiles NOT assigned to any team */
+export function getUnteamedProfiles(profiles: Profile[], teamMembers: TeamMember[]): Profile[] {
+  const teamedUserIds = new Set(teamMembers.map((tm) => tm.user_id));
+  return profiles.filter((p) => !teamedUserIds.has(p.id));
+}
+
+/** Get profiles assigned to a specific team */
+export function getTeamProfiles(profiles: Profile[], teamMembers: TeamMember[], teamId: string): Profile[] {
+  const memberUserIds = new Set(
+    teamMembers.filter((tm) => tm.team_id === teamId).map((tm) => tm.user_id)
+  );
+  return profiles.filter((p) => memberUserIds.has(p.id));
+}
+
+/** Calculate column span for an einsatz bar within visible days */
+export function getEinsatzColumns(
+  einsatz: Einsatz,
+  days: Date[]
+): { startCol: number; endCol: number } | null {
+  const eStart = parseISO(einsatz.start_date);
+  const eEnd = parseISO(einsatz.end_date);
+
+  let startCol = -1;
+  let endCol = -1;
+
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    if (d >= eStart && d <= eEnd) {
+      if (startCol === -1) startCol = i;
+      endCol = i;
+    }
+  }
+
+  if (startCol === -1) return null;
+  return { startCol, endCol };
+}
+
+/** Check if a date is a weekend */
+export function isWeekendDay(date: Date): boolean {
+  return isWeekend(date);
+}
+
+/** Get ISO week number */
+export function getWeekNumber(date: Date): number {
+  return getISOWeek(date);
+}
+
+// ─── Leave / Holiday helpers (unchanged) ───
 
 export function isOnLeave(
   leaveRequests: LeaveRequest[],
@@ -114,9 +184,9 @@ export function isCompanyHoliday(
   return holidays.find((h) => isSameDay(parseISO(h.datum), date));
 }
 
-/** Get contiguous day ranges for a project's assignments */
+/** Get contiguous day ranges for a project's einsaetze */
 export function getProjectDayRanges(
-  assignments: Assignment[],
+  einsaetze: Einsatz[],
   projectId: string,
   days: Date[]
 ): { startIdx: number; endIdx: number; workerCount: number }[] {
@@ -124,19 +194,28 @@ export function getProjectDayRanges(
   let rangeStart: number | null = null;
 
   for (let i = 0; i < days.length; i++) {
-    const dayAssignments = assignments.filter(
-      (a) => a.project_id === projectId && isSameDay(parseISO(a.datum), days[i])
+    const dayEinsaetze = einsaetze.filter(
+      (e) =>
+        e.project_id === projectId &&
+        isWithinInterval(days[i], {
+          start: parseISO(e.start_date),
+          end: parseISO(e.end_date),
+        })
     );
 
-    if (dayAssignments.length > 0) {
+    if (dayEinsaetze.length > 0) {
       if (rangeStart === null) rangeStart = i;
     } else {
       if (rangeStart !== null) {
-        // Calculate avg worker count for this range
         let totalWorkers = 0;
         for (let j = rangeStart; j < i; j++) {
-          totalWorkers += assignments.filter(
-            (a) => a.project_id === projectId && isSameDay(parseISO(a.datum), days[j])
+          totalWorkers += einsaetze.filter(
+            (e) =>
+              e.project_id === projectId &&
+              isWithinInterval(days[j], {
+                start: parseISO(e.start_date),
+                end: parseISO(e.end_date),
+              })
           ).length;
         }
         ranges.push({
@@ -149,12 +228,16 @@ export function getProjectDayRanges(
     }
   }
 
-  // Close last range
   if (rangeStart !== null) {
     let totalWorkers = 0;
     for (let j = rangeStart; j < days.length; j++) {
-      totalWorkers += assignments.filter(
-        (a) => a.project_id === projectId && isSameDay(parseISO(a.datum), days[j])
+      totalWorkers += einsaetze.filter(
+        (e) =>
+          e.project_id === projectId &&
+          isWithinInterval(days[j], {
+            start: parseISO(e.start_date),
+            end: parseISO(e.end_date),
+          })
       ).length;
     }
     ranges.push({

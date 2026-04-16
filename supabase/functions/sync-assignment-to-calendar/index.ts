@@ -133,7 +133,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { action, assignment_id } = await req.json();
+    const { action, assignment_id, einsatz_id } = await req.json();
 
     if (!action) {
       return new Response(JSON.stringify({ error: "action required (sync/delete)" }), {
@@ -281,6 +281,85 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       return new Response(JSON.stringify({ ok: true, synced }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ─── Einsatz sync (date-range deployments) ───
+    if (action === "sync_einsatz" && einsatz_id) {
+      const { data: einsatz } = await supabase
+        .from("einsaetze")
+        .select("*")
+        .eq("id", einsatz_id)
+        .maybeSingle();
+
+      if (!einsatz) {
+        return new Response(JSON.stringify({ error: "Einsatz not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let projectName = "Projekt";
+      if (einsatz.project_id) {
+        const { data: project } = await supabase.from("projects").select("name").eq("id", einsatz.project_id).maybeSingle();
+        if (project) projectName = project.name;
+      }
+
+      const { data: profile } = await supabase.from("profiles").select("vorname, nachname").eq("id", einsatz.user_id).maybeSingle();
+      const workerName = profile ? `${profile.vorname} ${profile.nachname}` : "Mitarbeiter";
+
+      const calId = await getCalendarId();
+      const isMultiDay = einsatz.start_date !== einsatz.end_date;
+
+      // Build event
+      const event: Record<string, any> = {
+        summary: `${workerName} → ${projectName}`,
+        description: (einsatz.beschreibung || "") + (einsatz.adresse ? `\nAdresse: ${einsatz.adresse}` : "") + "\n[montipro-plantafel]",
+      };
+
+      if (einsatz.ganztaegig || isMultiDay) {
+        // All-day event (end date is exclusive in Google Calendar API)
+        const endDate = new Date(einsatz.end_date + "T12:00:00");
+        endDate.setDate(endDate.getDate() + 1);
+        event.start = { date: einsatz.start_date };
+        event.end = { date: endDate.toISOString().split("T")[0] };
+      } else {
+        event.start = { dateTime: `${einsatz.start_date}T${einsatz.start_time || "07:00"}:00`, timeZone: "Europe/Vienna" };
+        event.end = { dateTime: `${einsatz.end_date}T${einsatz.end_time || "16:00"}:00`, timeZone: "Europe/Vienna" };
+      }
+
+      const existingEventId = einsatz.google_event_id || undefined;
+      const url = existingEventId
+        ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${existingEventId}`
+        : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
+
+      const res = await fetch(url, {
+        method: existingEventId ? "PUT" : "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("Google Calendar error:", data);
+        return new Response(JSON.stringify({ error: data.error?.message || "Calendar API error" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await supabase.from("einsaetze").update({ google_event_id: data.id }).eq("id", einsatz.id);
+
+      return new Response(JSON.stringify({ ok: true, google_event_id: data.id }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "delete_einsatz" && einsatz_id) {
+      const { data: einsatz } = await supabase.from("einsaetze").select("google_event_id").eq("id", einsatz_id).maybeSingle();
+      if (einsatz?.google_event_id) {
+        try { await deleteEvent(accessToken, einsatz.google_event_id); } catch {}
+      }
+      return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

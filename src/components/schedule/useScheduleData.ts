@@ -4,7 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type {
   Profile,
   Project,
-  Assignment,
+  Einsatz,
+  Team,
+  TeamMember,
+  BoardProject,
   Resource,
   DailyTarget,
   LeaveRequest,
@@ -16,7 +19,10 @@ import type {
 export function useScheduleData() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [einsaetze, setEinsaetze] = useState<Einsatz[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [boardProjects, setBoardProjects] = useState<BoardProject[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [dailyTargets, setDailyTargets] = useState<DailyTarget[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -47,7 +53,10 @@ export function useScheduleData() {
       const [
         { data: profs },
         { data: projs },
-        { data: assigns },
+        { data: eins },
+        { data: tms },
+        { data: tmMembers },
+        { data: brdProjects },
         { data: res },
         { data: targets },
         { data: leave },
@@ -61,14 +70,26 @@ export function useScheduleData() {
           .order("nachname"),
         supabase
           .from("projects")
-          .select("id, name")
-          .eq("status", "In Arbeit")
+          .select("id, name, status, geplanter_start, geplantes_ende")
           .order("name"),
+        // Einsaetze that overlap with the visible date range
         supabase
-          .from("worker_assignments")
-          .select("id, user_id, project_id, datum, notizen, start_time, end_time, google_event_id")
-          .gte("datum", fromDate)
-          .lte("datum", toDate),
+          .from("einsaetze")
+          .select("id, user_id, project_id, name, adresse, beschreibung, start_date, end_date, ganztaegig, start_time, end_time, google_event_id")
+          .lte("start_date", toDate)
+          .gte("end_date", fromDate),
+        supabase
+          .from("teams")
+          .select("id, name, sort_order")
+          .order("sort_order"),
+        supabase
+          .from("team_members")
+          .select("id, team_id, user_id, sort_order")
+          .order("sort_order"),
+        supabase
+          .from("board_projects")
+          .select("id, project_id, board_color, color_mode, sort_order")
+          .order("sort_order"),
         supabase
           .from("assignment_resources")
           .select("id, project_id, datum, resource_name, menge, einheit")
@@ -76,9 +97,7 @@ export function useScheduleData() {
           .lte("datum", toDate),
         supabase
           .from("project_daily_targets")
-          .select(
-            "id, project_id, datum, tagesziel, nachkalkulation_stunden, notizen"
-          )
+          .select("id, project_id, datum, tagesziel, nachkalkulation_stunden, notizen")
           .gte("datum", fromDate)
           .lte("datum", toDate),
         supabase
@@ -92,8 +111,11 @@ export function useScheduleData() {
       ] as const);
 
       if (profs) setProfiles(profs);
-      if (projs) setProjects(projs);
-      if (assigns) setAssignments(assigns as Assignment[]);
+      if (projs) setProjects(projs as Project[]);
+      if (eins) setEinsaetze(eins as Einsatz[]);
+      if (tms) setTeams(tms as Team[]);
+      if (tmMembers) setTeamMembers(tmMembers as TeamMember[]);
+      if (brdProjects) setBoardProjects(brdProjects as BoardProject[]);
       if (res) setResources(res as Resource[]);
       if (targets) setDailyTargets(targets as DailyTarget[]);
       if (leave) setLeaveRequests(leave as LeaveRequest[]);
@@ -112,8 +134,14 @@ export function useScheduleData() {
   return {
     profiles,
     projects,
-    assignments,
-    setAssignments,
+    einsaetze,
+    setEinsaetze,
+    teams,
+    setTeams,
+    teamMembers,
+    setTeamMembers,
+    boardProjects,
+    setBoardProjects,
     resources,
     setResources,
     dailyTargets,

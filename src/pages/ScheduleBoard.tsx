@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,24 +11,21 @@ import {
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  isWeekend,
   format,
 } from "date-fns";
 
-import type {
-  Assignment,
-  DailyTarget,
-  ScheduleMode,
-} from "@/components/schedule/scheduleTypes";
-import { getAssignmentForDay, getProjectColorClass } from "@/components/schedule/scheduleUtils";
+import type { Einsatz, ScheduleMode } from "@/components/schedule/scheduleTypes";
+import { getUnteamedProfiles } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
-import { GanttTimeline } from "@/components/schedule/GanttTimeline";
-import { ProjectGanttSection } from "@/components/schedule/ProjectGanttSection";
-import { TeamGanttSection } from "@/components/schedule/TeamGanttSection";
-import { AssignmentPopover } from "@/components/schedule/AssignmentPopover";
-import { DayDetailSheet } from "@/components/schedule/DayDetailSheet";
+import { TimelineHeader } from "@/components/schedule/TimelineHeader";
+import { ProjectBoardSection } from "@/components/schedule/ProjectBoardSection";
+import { TeamSection } from "@/components/schedule/TeamSection";
+import { MitarbeiterSection } from "@/components/schedule/MitarbeiterSection";
+import { AddProjectToBoardDialog } from "@/components/schedule/AddProjectToBoardDialog";
+import { CreateTeamDialog } from "@/components/schedule/CreateTeamDialog";
+import { EinsatzDialog } from "@/components/schedule/EinsatzDialog";
 import { CompanyHolidayManager } from "@/components/schedule/CompanyHolidayManager";
 import { YearPlanningView } from "@/components/schedule/YearPlanningView";
 
@@ -36,18 +33,20 @@ export default function ScheduleBoard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [mode, setMode] = useState<ScheduleMode>("week");
+  const [mode, setMode] = useState<ScheduleMode>("month");
   const [weekStart, setWeekStart] = useState(() => startOfISOWeek(new Date()));
 
   const {
     profiles,
     projects,
-    assignments,
-    setAssignments,
-    resources,
-    setResources,
-    dailyTargets,
-    setDailyTargets,
+    einsaetze,
+    setEinsaetze,
+    teams,
+    setTeams,
+    teamMembers,
+    setTeamMembers,
+    boardProjects,
+    setBoardProjects,
     leaveRequests,
     companyHolidays,
     loading,
@@ -59,48 +58,30 @@ export default function ScheduleBoard() {
     isAdmin,
     isVorarbeiter,
     isExtern,
-    canEditProject,
     canManageHolidays,
     loading: permLoading,
   } = useSchedulePermissions();
 
-  const isExternView = isExtern && !isAdmin && !isVorarbeiter;
-
-  // Calculate visible days based on mode
+  // Calculate visible days
   const weekDays = (() => {
-    if (mode === "2weeks") {
-      // 2 weeks: all weekdays (Mon-Fri) over 2 weeks
-      const days: Date[] = [];
-      for (let i = 0; i < 14; i++) {
-        const d = addDays(weekStart, i);
-        if (!isWeekend(d)) days.push(d);
-      }
-      return days;
-    }
     if (mode === "month") {
-      // Month: all weekdays of the month containing weekStart
       const mStart = startOfMonth(weekStart);
       const mEnd = endOfMonth(weekStart);
-      return eachDayOfInterval({ start: mStart, end: mEnd }).filter(d => !isWeekend(d));
+      return eachDayOfInterval({ start: mStart, end: mEnd });
     }
-    // Default: 1 week (Mon-Fri)
-    return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+    // Week: Mon-Sun (7 days)
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   })();
-  const weekEnd = weekDays.length > 0 ? weekDays[weekDays.length - 1] : addDays(weekStart, 4);
+  const weekEnd = weekDays[weekDays.length - 1] || addDays(weekStart, 6);
 
-  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
-  const assigningRef = useRef<Set<string>>(new Set());
-
-  // Assignment popover state
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [popoverUserId, setPopoverUserId] = useState<string | null>(null);
-  const [popoverDate, setPopoverDate] = useState<Date | null>(null);
-  const [popoverDays, setPopoverDays] = useState<Date[]>([]);
-
-  // Day detail sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetProjectId, setSheetProjectId] = useState<string | null>(null);
-  const [sheetDatum, setSheetDatum] = useState<string | null>(null);
+  // Dialog states
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [einsatzDialogOpen, setEinsatzDialogOpen] = useState(false);
+  const [editEinsatz, setEditEinsatz] = useState<Einsatz | null>(null);
+  const [prefillUserId, setPrefillUserId] = useState<string | undefined>();
+  const [prefillStartDate, setPrefillStartDate] = useState<string | undefined>();
+  const [prefillEndDate, setPrefillEndDate] = useState<string | undefined>();
 
   useEffect(() => {
     if (!permLoading && !isAdmin && !isVorarbeiter && !isExtern) {
@@ -114,289 +95,142 @@ export default function ScheduleBoard() {
     }
   }, [weekStart, mode, permLoading]);
 
-  // --- Assignment handlers ---
-  const handleAssign = async (uid: string, date: Date, projectId: string, notizen?: string, startTime?: string, endTime?: string) => {
-    const datum = format(date, "yyyy-MM-dd");
-    const lockKey = `${uid}_${datum}`;
-    if (assigningRef.current.has(lockKey)) return;
-    assigningRef.current.add(lockKey);
+  const canEdit = isAdmin || isVorarbeiter;
+  const unteamedProfiles = getUnteamedProfiles(profiles, teamMembers);
 
-    try {
-    const existing = getAssignmentForDay(assignments, uid, date);
+  // Available projects (not yet on board)
+  const boardProjectIds = new Set(boardProjects.map((bp) => bp.project_id));
+  const availableProjects = projects.filter((p) => !boardProjectIds.has(p.id));
 
-    const payload = {
-      project_id: projectId,
-      notizen: notizen ?? null,
-      start_time: startTime || "07:00",
-      end_time: endTime || "16:00",
-    };
+  // --- Handlers ---
 
-    let assignmentId: string | null = null;
-
-    if (existing) {
-      const { error } = await supabase
-        .from("worker_assignments")
-        .update(payload)
-        .eq("id", existing.id);
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
-      }
-      assignmentId = existing.id;
-      setAssignments((prev) =>
-        prev.map((a) =>
-          a.id === existing.id ? { ...a, ...payload } : a
-        )
-      );
-    } else {
-      const { data, error } = await supabase
-        .from("worker_assignments")
-        .upsert(
-          { user_id: uid, datum, created_by: userId, ...payload },
-          { onConflict: "user_id,project_id,datum,start_time" }
-        )
-        .select()
-        .single();
-      if (error) {
-        toast({ variant: "destructive", title: "Fehler", description: error.message });
-        return;
-      }
-      if (data) {
-        assignmentId = data.id;
-        setAssignments((prev) => [...prev, data as Assignment]);
-      }
-    }
-
-    // Sync to Google Calendar
-    if (assignmentId) {
-      try {
-        const { error: syncErr } = await supabase.functions.invoke("sync-assignment-to-calendar", {
-          body: { action: "sync", assignment_id: assignmentId },
-        });
-        if (syncErr) {
-          console.error("Calendar sync error:", syncErr);
-        }
-      } catch (e) {
-        console.error("Calendar sync failed:", e);
-      }
-    }
-    } finally {
-      assigningRef.current.delete(lockKey);
-    }
-  };
-
-  const handleRemove = async (uid: string, date: Date) => {
-    const existing = getAssignmentForDay(assignments, uid, date);
-    if (!existing) return;
-
-    // Delete from Google Calendar first
-    if (existing.google_event_id) {
-      try {
-        await supabase.functions.invoke("sync-assignment-to-calendar", {
-          body: { action: "delete", assignment_id: existing.id },
-        });
-      } catch (e) {
-        console.error("Calendar delete failed:", e);
-      }
-      // Also clean up any imported calendar_events with same google_event_id
-      await supabase.from("calendar_events").delete().eq("google_event_id", existing.google_event_id);
-    }
-
-    const { error } = await supabase
-      .from("worker_assignments")
-      .delete()
-      .eq("id", existing.id);
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
-    }
-    setAssignments((prev) => prev.filter((a) => a.id !== existing.id));
-    toast({ title: "Entfernt", description: "Zuweisung wurde entfernt" });
-  };
-
-  // --- Daily target handlers ---
-  const getTarget = (projectId: string, datum: string): DailyTarget | undefined =>
-    dailyTargets.find((t) => t.project_id === projectId && t.datum === datum);
-
-  const upsertTarget = (
-    projectId: string,
-    datum: string,
-    field: keyof DailyTarget,
-    value: string | number | null
-  ) => {
-    const key = `${projectId}-${datum}`;
-    setDailyTargets((prev) => {
-      const existing = prev.find(
-        (t) => t.project_id === projectId && t.datum === datum
-      );
-      if (existing) {
-        return prev.map((t) =>
-          t.id === existing.id ? { ...t, [field]: value } : t
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: `temp-${key}`,
-          project_id: projectId,
-          datum,
-          tagesziel: null,
-          nachkalkulation_stunden: null,
-          notizen: null,
-          [field]: value,
-        } as DailyTarget,
-      ];
-    });
-
-    if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
-    debounceTimers.current[key] = setTimeout(async () => {
-      // Use functional state access to avoid stale closure
-      let targetToSave: DailyTarget | undefined;
-      setDailyTargets((prev) => {
-        targetToSave = prev.find(
-          (t) => t.project_id === projectId && t.datum === datum
-        );
-        return prev; // no mutation, just reading
-      });
-
-      const payload: Record<string, unknown> = {
-        project_id: projectId,
-        datum,
-        created_by: userId,
-        [field]: value,
-      };
-
-      if (targetToSave && !targetToSave.id.startsWith("temp-")) {
-        await supabase
-          .from("project_daily_targets")
-          .update({ [field]: value })
-          .eq("id", targetToSave.id);
-      } else {
-        if (targetToSave) {
-          payload.tagesziel = targetToSave.tagesziel;
-          payload.nachkalkulation_stunden = targetToSave.nachkalkulation_stunden;
-          payload.notizen = targetToSave.notizen;
-          payload[field] = value;
-        }
-        const { data } = await supabase
-          .from("project_daily_targets")
-          .upsert(payload, { onConflict: "project_id,datum" })
-          .select()
-          .single();
-        if (data) {
-          setDailyTargets((prev) =>
-            prev.map((t) =>
-              t.project_id === projectId && t.datum === datum
-                ? (data as DailyTarget)
-                : t
-            )
-          );
-        }
-      }
-    }, 500);
-  };
-
-  // --- Resource handlers ---
-  const handleAddResource = async (
-    projectId: string,
-    datum: string,
-    resourceName: string
-  ) => {
-    if (!resourceName.trim()) return;
+  const handleAddProjectToBoard = async (projectId: string, color: string, colorMode: "status" | "custom") => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     const { data, error } = await supabase
-      .from("assignment_resources")
-      .upsert(
-        {
-          project_id: projectId,
-          datum,
-          resource_name: resourceName.trim(),
-          menge: 1,
-          einheit: "Stk",
-          created_by: userId,
-        },
-        { onConflict: "project_id,datum,resource_name" }
-      )
+      .from("board_projects")
+      .insert({ project_id: projectId, board_color: color, color_mode: colorMode, created_by: user.id })
       .select()
       .single();
+    if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+    if (data) setBoardProjects((prev) => [...prev, data as any]);
+    setAddProjectOpen(false);
+  };
 
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
+  const handleRemoveBoardProject = async (boardProjectId: string) => {
+    await supabase.from("board_projects").delete().eq("id", boardProjectId);
+    setBoardProjects((prev) => prev.filter((bp) => bp.id !== boardProjectId));
+  };
+
+  const handleCreateTeam = async (name: string, memberIds: string[]) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: team, error } = await supabase
+      .from("teams")
+      .insert({ name, created_by: user.id })
+      .select()
+      .single();
+    if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+    if (team) {
+      setTeams((prev) => [...prev, team as any]);
+      if (memberIds.length > 0) {
+        const { data: members } = await supabase
+          .from("team_members")
+          .insert(memberIds.map((uid) => ({ team_id: team.id, user_id: uid })))
+          .select();
+        if (members) setTeamMembers((prev) => [...prev, ...(members as any[])]);
+      }
     }
-    if (data) {
-      setResources((prev) => {
-        const exists = prev.find(
-          (r) =>
-            r.project_id === projectId &&
-            r.datum === datum &&
-            r.resource_name === resourceName.trim()
-        );
-        if (exists)
-          return prev.map((r) => (r.id === exists.id ? (data as any) : r));
-        return [...prev, data as any];
-      });
+    setCreateTeamOpen(false);
+  };
+
+  const handleSaveEinsatz = async (data: {
+    name: string; project_id: string; adresse: string;
+    start_date: string; end_date: string; ganztaegig: boolean;
+    start_time: string; end_time: string; beschreibung: string; id?: string;
+  }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const payload = {
+      user_id: prefillUserId || user.id,
+      project_id: data.project_id,
+      name: data.name || null,
+      adresse: data.adresse || null,
+      beschreibung: data.beschreibung || null,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      ganztaegig: data.ganztaegig,
+      start_time: data.ganztaegig ? "07:00" : (data.start_time || "07:00"),
+      end_time: data.ganztaegig ? "16:00" : (data.end_time || "16:00"),
+    };
+
+    if (data.id) {
+      // Update
+      const { error } = await supabase.from("einsaetze").update(payload).eq("id", data.id);
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      setEinsaetze((prev) => prev.map((e) => e.id === data.id ? { ...e, ...payload } as Einsatz : e));
+
+      // Sync to Google Calendar
+      try {
+        await supabase.functions.invoke("sync-assignment-to-calendar", {
+          body: { action: "sync_einsatz", einsatz_id: data.id },
+        });
+      } catch {}
+    } else {
+      // Create
+      const { data: created, error } = await supabase
+        .from("einsaetze")
+        .insert({ ...payload, created_by: user.id })
+        .select()
+        .single();
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      if (created) {
+        setEinsaetze((prev) => [...prev, created as Einsatz]);
+        // Sync to Google Calendar
+        try {
+          await supabase.functions.invoke("sync-assignment-to-calendar", {
+            body: { action: "sync_einsatz", einsatz_id: created.id },
+          });
+        } catch {}
+      }
     }
+
+    setEinsatzDialogOpen(false);
+    setEditEinsatz(null);
+    setPrefillUserId(undefined);
+    setPrefillStartDate(undefined);
+    setPrefillEndDate(undefined);
   };
 
-  const handleUpdateResource = async (
-    id: string,
-    field: "menge" | "einheit",
-    value: number | string | null
-  ) => {
-    setResources((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-    );
-    await supabase
-      .from("assignment_resources")
-      .update({ [field]: value })
-      .eq("id", id);
-  };
-
-  const handleDeleteResource = async (id: string) => {
-    const { error } = await supabase
-      .from("assignment_resources")
-      .delete()
-      .eq("id", id);
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
+  const handleDeleteEinsatz = async (id: string) => {
+    const einsatz = einsaetze.find((e) => e.id === id);
+    if (einsatz?.google_event_id) {
+      try {
+        await supabase.functions.invoke("sync-assignment-to-calendar", {
+          body: { action: "delete_einsatz", einsatz_id: id },
+        });
+      } catch {}
     }
-    setResources((prev) => prev.filter((r) => r.id !== id));
+    await supabase.from("einsaetze").delete().eq("id", id);
+    setEinsaetze((prev) => prev.filter((e) => e.id !== id));
+    setEinsatzDialogOpen(false);
+    setEditEinsatz(null);
   };
 
-  // --- Click handlers ---
-  const handleCellClick = (cellUserId: string, date: Date) => {
-    setPopoverUserId(cellUserId);
-    setPopoverDate(date);
-    setPopoverDays([]);
-    setPopoverOpen(true);
+  const handleCellClick = (uid: string, startDate: string, endDate: string) => {
+    setPrefillUserId(uid);
+    setPrefillStartDate(startDate);
+    setPrefillEndDate(endDate);
+    setEditEinsatz(null);
+    setEinsatzDialogOpen(true);
   };
 
-  const handleRangeSelect = (uid: string, selectedDays: Date[]) => {
-    setPopoverUserId(uid);
-    setPopoverDate(selectedDays[0]);
-    setPopoverDays(selectedDays);
-    setPopoverOpen(true);
+  const handleEinsatzClick = (einsatz: Einsatz) => {
+    setEditEinsatz(einsatz);
+    setPrefillUserId(einsatz.user_id);
+    setEinsatzDialogOpen(true);
   };
-
-  const handleProjectDayClick = (projectId: string, datum: string) => {
-    if (canEditProject(projectId, assignments)) {
-      setSheetProjectId(projectId);
-      setSheetDatum(datum);
-      setSheetOpen(true);
-    }
-  };
-
-  const popoverProfile = profiles.find((p) => p.id === popoverUserId) || null;
-  const popoverAssignment =
-    popoverUserId && popoverDate
-      ? getAssignmentForDay(assignments, popoverUserId, popoverDate)
-      : null;
-
-  const sheetProject = projects.find((p) => p.id === sheetProjectId) || null;
-  const sheetTarget = sheetProjectId && sheetDatum
-    ? getTarget(sheetProjectId, sheetDatum)
-    : null;
 
   if (loading || permLoading) {
     return (
@@ -407,32 +241,20 @@ export default function ScheduleBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-50 shadow-sm">
-        <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Zurück</span>
-            </Button>
-            <img
-              src="/newmontilogo.png"
-              alt="MONTI.PRO"
-              className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-              onClick={() => navigate("/")}
-            />
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        <ScheduleHeader
-          weekStart={weekStart}
-          onWeekChange={setWeekStart}
-          mode={isExternView ? "week" : mode}
-          onModeChange={isExternView ? undefined : setMode}
-          title={isExternView ? "Meine Einteilung" : undefined}
-        >
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <img
+            src="/newmontilogo.png"
+            alt="MONTI.PRO"
+            className="h-8 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
+            onClick={() => navigate("/")}
+          />
+          <div className="flex-1" />
           {canManageHolidays && (
             <CompanyHolidayManager
               holidays={companyHolidays}
@@ -440,97 +262,104 @@ export default function ScheduleBoard() {
               userId={userId}
             />
           )}
-        </ScheduleHeader>
+        </div>
+      </header>
+
+      <main className="px-4 py-4">
+        {/* Navigation Header */}
+        <ScheduleHeader
+          weekStart={weekStart}
+          onWeekChange={setWeekStart}
+          mode={mode}
+          onModeChange={setMode}
+          title="Plantafel"
+        />
 
         {mode !== "year" ? (
-          <>
-            {/* Legend */}
-            {projects.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {projects
-                  .filter((p) =>
-                    assignments.some((a) => a.project_id === p.id)
-                  )
-                  .map((p) => (
-                    <span
-                      key={p.id}
-                      className={`text-xs px-2 py-0.5 rounded border ${getProjectColorClass(p.id)}`}
-                    >
-                      {p.name}
-                    </span>
-                  ))}
-              </div>
-            )}
+          <div className="border rounded-lg overflow-x-auto bg-white mt-3">
+            {/* Timeline Header */}
+            <TimelineHeader days={weekDays} holidays={companyHolidays} />
 
-            {/* Gantt Grid */}
-            <div className="border rounded-lg overflow-x-auto">
-              <GanttTimeline days={weekDays} holidays={companyHolidays} />
-              {!isExternView && (
-                <ProjectGanttSection
-                  projects={projects}
-                  assignments={assignments}
-                  days={weekDays}
-                  holidays={companyHolidays}
-                  onProjectDayClick={
-                    isAdmin || isVorarbeiter ? handleProjectDayClick : undefined
-                  }
-                />
-              )}
-              <TeamGanttSection
-                profiles={isExternView ? profiles.filter((p) => p.id === userId) : profiles}
-                projects={projects}
-                assignments={assignments}
-                leaveRequests={leaveRequests}
-                holidays={companyHolidays}
-                days={weekDays}
-                canEditProject={(pid) => canEditProject(pid, assignments)}
-                onCellClick={
-                  isAdmin || isVorarbeiter ? handleCellClick : undefined
-                }
-                onRangeSelect={
-                  isAdmin || isVorarbeiter ? handleRangeSelect : undefined
-                }
-              />
-            </div>
-          </>
+            {/* Projekte Section */}
+            <ProjectBoardSection
+              boardProjects={boardProjects}
+              projects={projects}
+              days={weekDays}
+              onAddClick={canEdit ? () => setAddProjectOpen(true) : undefined}
+              onRemove={canEdit ? handleRemoveBoardProject : undefined}
+            />
+
+            {/* Teams Section */}
+            <TeamSection
+              teams={teams}
+              teamMembers={teamMembers}
+              profiles={profiles}
+              einsaetze={einsaetze}
+              boardProjects={boardProjects}
+              projects={projects}
+              days={weekDays}
+              leaveRequests={leaveRequests}
+              holidays={companyHolidays}
+              onAddTeam={canEdit ? () => setCreateTeamOpen(true) : undefined}
+              onEditTeam={() => {}}
+              onCellClick={canEdit ? handleCellClick : undefined}
+              onEinsatzClick={handleEinsatzClick}
+            />
+
+            {/* Mitarbeiter Section */}
+            <MitarbeiterSection
+              profiles={unteamedProfiles}
+              einsaetze={einsaetze}
+              boardProjects={boardProjects}
+              projects={projects}
+              days={weekDays}
+              leaveRequests={leaveRequests}
+              holidays={companyHolidays}
+              onManageClick={() => {}}
+              onCellClick={canEdit ? handleCellClick : undefined}
+              onEinsatzClick={handleEinsatzClick}
+            />
+          </div>
         ) : (
           <YearPlanningView
             year={weekStart.getFullYear()}
             projects={projects}
-            assignments={assignments}
+            assignments={[]}
             holidays={companyHolidays}
             leaveRequests={leaveRequests}
           />
         )}
       </main>
 
-      {/* Assignment Popover */}
-      <AssignmentPopover
-        open={popoverOpen}
-        onOpenChange={setPopoverOpen}
-        profile={popoverProfile}
-        date={popoverDate}
-        days={popoverDays.length > 1 ? popoverDays : undefined}
-        assignment={popoverAssignment || null}
-        projects={projects}
-        onAssign={handleAssign}
-        onRemove={handleRemove}
+      {/* Dialogs */}
+      <AddProjectToBoardDialog
+        open={addProjectOpen}
+        onOpenChange={setAddProjectOpen}
+        availableProjects={availableProjects}
+        onSave={handleAddProjectToBoard}
       />
 
-      {/* Day Detail Sheet */}
-      <DayDetailSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        project={sheetProject}
-        datum={sheetDatum}
+      <CreateTeamDialog
+        open={createTeamOpen}
+        onOpenChange={setCreateTeamOpen}
         profiles={profiles}
-        assignments={assignments}
-        resources={resources}
-        dailyTarget={sheetTarget || null}
-        onUpdateTarget={upsertTarget}
-        onAddResource={handleAddResource}
-        onUpdateResource={handleUpdateResource}
-        onDeleteResource={handleDeleteResource}
+        existingTeamMemberIds={teamMembers.map((tm) => tm.user_id)}
+        onSave={handleCreateTeam}
+      />
+
+      <EinsatzDialog
+        open={einsatzDialogOpen}
+        onOpenChange={(open) => {
+          setEinsatzDialogOpen(open);
+          if (!open) { setEditEinsatz(null); setPrefillUserId(undefined); }
+        }}
+        projects={projects}
+        editEinsatz={editEinsatz}
+        prefillUserId={prefillUserId}
+        prefillStartDate={prefillStartDate}
+        prefillEndDate={prefillEndDate}
+        onSave={handleSaveEinsatz}
+        onDelete={handleDeleteEinsatz}
       />
     </div>
   );
