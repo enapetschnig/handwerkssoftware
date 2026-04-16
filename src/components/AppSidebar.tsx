@@ -16,7 +16,7 @@ import {
 import {
   Home, Clock, FolderKanban, LayoutGrid, CalendarDays,
   Receipt, ClipboardList, FileText, UserPlus, MessageSquare,
-  BookUser, Package, BarChart3, Shield, LogOut,
+  BookUser, Package, BarChart3, Shield, LogOut, FileDown,
 } from "lucide-react";
 import { usePermissions, type FeatureKey } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +49,7 @@ const MENU_GROUPS: MenuGroup[] = [
     label: "Dokumente",
     items: [
       { title: "Rechnungen & Angebote", path: "/invoices", icon: Receipt, feature: "rechnungen" },
+      { title: "Eingangsrechnungen", path: "/eingangsrechnungen", icon: FileDown, feature: "eingangsrechnungen" },
       { title: "Bautagesberichte", path: "/bautagesberichte", icon: ClipboardList, feature: "bautagesberichte" },
       { title: "Regieberichte", path: "/disturbances", icon: FileText, feature: "regieberichte" },
       { title: "Ersttermine", path: "/ersttermine", icon: UserPlus, feature: "ersttermine" },

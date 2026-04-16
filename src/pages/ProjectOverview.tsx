@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
@@ -53,6 +53,7 @@ const ProjectOverview = () => {
   const [regieCount, setRegieCount] = useState(0);
   const [protokollCount, setProtokollCount] = useState(0);
   const [regiePdfs, setRegiePdfs] = useState<{id: string; datum: string; kunde_name: string; pdf_path: string}[]>([]);
+  const [purchaseInvoices, setPurchaseInvoices] = useState<{id: string; lieferant: string; rechnungsdatum: string | null; betrag_brutto: number; status: string; kategorie: string | null}[]>([]);
   const [projectData, setProjectData] = useState<any>(null);
   const [projectHours, setProjectHours] = useState<{user_id: string, name: string, total: number}[]>([]);
   const [angebotPositionen, setAngebotPositionen] = useState<{position: number; beschreibung: string; menge: number; einheit: string}[]>([]);
@@ -312,6 +313,13 @@ const ProjectOverview = () => {
       .not("pdf_path", "is", null)
       .order("datum", { ascending: false })
       .then(({ data: pdfData }: any) => setRegiePdfs(pdfData || []));
+
+    // Fetch Eingangsrechnungen for this project
+    supabase.from("purchase_invoices")
+      .select("id, lieferant, rechnungsdatum, betrag_brutto, status, kategorie")
+      .eq("project_id", projectId)
+      .order("rechnungsdatum", { ascending: false, nullsFirst: false })
+      .then(({ data }) => setPurchaseInvoices(data || []));
 
     // Fetch Protokoll count
     (supabase.from("besprechungsprotokolle" as never) as any)
@@ -575,6 +583,59 @@ const ProjectOverview = () => {
                   ))}
                 </div>
               </CardContent>
+            </Card>
+          )}
+
+          {/* Eingangsrechnungen — nur Admin */}
+          {isAdmin && (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileDown className="h-5 w-5 text-purple-600" />
+                    Eingangsrechnungen
+                    {purchaseInvoices.length > 0 && (
+                      <span className="text-xs text-muted-foreground font-normal">
+                        · € {purchaseInvoices.reduce((s, i) => s + Number(i.betrag_brutto), 0).toFixed(2)}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/eingangsrechnungen?project=${projectId}`)}>
+                    {purchaseInvoices.length === 0 ? "Hinzufügen" : "Verwalten"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {purchaseInvoices.length > 0 && (
+                <CardContent className="space-y-1">
+                  {purchaseInvoices.slice(0, 5).map(inv => (
+                    <button
+                      key={inv.id}
+                      className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
+                      onClick={() => navigate(`/eingangsrechnungen?project=${projectId}`)}
+                    >
+                      <FileDown className="h-4 w-4 shrink-0 text-purple-500" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{inv.lieferant}</span>
+                          {inv.status === "bezahlt" && <span className="text-[10px] text-green-600">✓ bezahlt</span>}
+                          {inv.status === "offen" && <span className="text-[10px] text-orange-600">offen</span>}
+                        </div>
+                        {inv.rechnungsdatum && (
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(inv.rechnungsdatum).toLocaleDateString("de-AT")}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium whitespace-nowrap">€ {Number(inv.betrag_brutto).toFixed(2)}</span>
+                    </button>
+                  ))}
+                  {purchaseInvoices.length > 5 && (
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      +{purchaseInvoices.length - 5} weitere
+                    </p>
+                  )}
+                </CardContent>
+              )}
             </Card>
           )}
 

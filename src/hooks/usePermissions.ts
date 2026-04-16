@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export const FEATURES = [
   'zeiterfassung','projekte','meine_stunden','regieberichte','rechnungen',
   'kalender','plantafel','bautagesberichte','ersttermine','protokolle',
-  'kunden','materialien','admin','stundenauswertung'
+  'kunden','materialien','admin','stundenauswertung','eingangsrechnungen'
 ] as const;
 export type FeatureKey = typeof FEATURES[number];
 
@@ -23,6 +23,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   materialien: "Materialien",
   admin: "Admin-Bereich",
   stundenauswertung: "Stundenauswertung",
+  eingangsrechnungen: "Eingangsrechnungen",
 };
 
 // Map routes to features for ProtectedRoute
@@ -42,6 +43,7 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
   '/materials': 'materialien',
   '/admin': 'admin',
   '/hours-report': 'stundenauswertung',
+  '/eingangsrechnungen': 'eingangsrechnungen',
 };
 
 type PermsMap = Record<string, { can_view: boolean; can_edit: boolean }>;
