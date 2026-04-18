@@ -19,7 +19,6 @@ import { ImportTimeDialog } from "@/components/ImportTimeDialog";
 import { useEinheiten } from "@/hooks/useEinheiten";
 import { ImportDisturbanceToInvoiceDialog } from "@/components/ImportDisturbanceToInvoiceDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
-import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
 import { format, addMonths, parseISO } from "date-fns";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 import { loadInvoiceLogo } from "@/lib/logoLoader";
@@ -169,7 +168,6 @@ export default function InvoiceDetail() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSaved, setPreviewSaved] = useState(false);
   const [importMaterialsOpen, setImportMaterialsOpen] = useState(false);
-  const [importProjectOpen, setImportProjectOpen] = useState(false);
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
@@ -681,10 +679,10 @@ export default function InvoiceDetail() {
       };
 
       if (isNew || !savedId) {
-        const { data: numData, error: numError } = await supabase.rpc("next_invoice_number", {
+        const { data: numData, error: numError } = await supabase.rpc("next_document_number" as never, {
           p_typ: form.typ,
           p_jahr: form.jahr,
-        });
+        } as never);
 
         if (numError) throw numError;
         const nummer = numData as string;
@@ -940,10 +938,10 @@ export default function InvoiceDetail() {
     if (!user) return;
 
     try {
-      const { data: numData, error: numError } = await supabase.rpc("next_invoice_number", {
+      const { data: numData, error: numError } = await supabase.rpc("next_document_number" as never, {
         p_typ: form.typ,
         p_jahr: new Date().getFullYear(),
-      });
+      } as never);
       if (numError) throw numError;
 
       const nummer = numData as string;
@@ -1644,13 +1642,123 @@ export default function InvoiceDetail() {
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {form.kunde_name ? (
-                <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm relative">
-                  {!isKundeLocked && (
+              {!form.kunde_name && !isKundeLocked ? (
+                <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus — oder tragen Sie die Daten direkt unten ein.</p>
+              ) : null}
+
+              {/* Editierbare Kundendaten — Änderungen wirken nur auf DIESES Dokument,
+                   nicht auf den Kundenstamm. Bei ausgestellten Rechnungen gesperrt. */}
+              <div className={isKundeLocked ? "space-y-3 opacity-80" : "space-y-3"}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Anrede</Label>
+                    <Select
+                      value={(form as any).kunde_anrede || "none"}
+                      onValueChange={(v) => updateField("kunde_anrede", v === "none" ? "" : v)}
+                      disabled={isKundeLocked}
+                    >
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="Herr">Herr</SelectItem>
+                        <SelectItem value="Frau">Frau</SelectItem>
+                        <SelectItem value="Firma">Firma</SelectItem>
+                        <SelectItem value="Familie">Familie</SelectItem>
+                        <SelectItem value="Divers">Divers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Titel</Label>
+                    <Input
+                      value={(form as any).kunde_titel || ""}
+                      onChange={(e) => updateField("kunde_titel", e.target.value)}
+                      disabled={isKundeLocked}
+                      placeholder="Mag., Dr., Ing."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Kundennummer</Label>
+                    <Input
+                      value={(form as any).kundennummer || ""}
+                      onChange={(e) => updateField("kundennummer" as any, e.target.value)}
+                      disabled={isKundeLocked}
+                      placeholder="—"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Firma / Name</Label>
+                  <Input
+                    value={form.kunde_name || ""}
+                    onChange={(e) => updateField("kunde_name", e.target.value)}
+                    disabled={isKundeLocked}
+                    placeholder="Firma oder Name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Adresse</Label>
+                  <Input
+                    value={form.kunde_adresse || ""}
+                    onChange={(e) => updateField("kunde_adresse", e.target.value)}
+                    disabled={isKundeLocked}
+                    placeholder="Straße + Hausnr."
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">PLZ</Label>
+                    <Input
+                      value={form.kunde_plz || ""}
+                      onChange={(e) => updateField("kunde_plz", e.target.value)}
+                      disabled={isKundeLocked}
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Ort</Label>
+                    <Input
+                      value={form.kunde_ort || ""}
+                      onChange={(e) => updateField("kunde_ort", e.target.value)}
+                      disabled={isKundeLocked}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">E-Mail</Label>
+                    <Input
+                      type="email"
+                      value={form.kunde_email || ""}
+                      onChange={(e) => updateField("kunde_email", e.target.value)}
+                      disabled={isKundeLocked}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Telefon</Label>
+                    <Input
+                      value={form.kunde_telefon || ""}
+                      onChange={(e) => updateField("kunde_telefon", e.target.value)}
+                      disabled={isKundeLocked}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">UID-Nummer</Label>
+                  <Input
+                    value={form.kunde_uid || ""}
+                    onChange={(e) => updateField("kunde_uid", e.target.value)}
+                    disabled={isKundeLocked}
+                    placeholder="ATU..."
+                  />
+                </div>
+                {form.customer_id && !isKundeLocked && (
+                  <div className="flex justify-between items-center pt-1">
+                    <p className="text-xs text-muted-foreground">
+                      Verknüpft mit Kundenstamm · Änderungen hier gelten nur für dieses Dokument
+                    </p>
                     <button
                       type="button"
-                      className="absolute top-2 right-2 rounded-full p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      title="Kunde entfernen"
+                      className="text-xs text-destructive hover:underline"
                       onClick={() => {
                         setForm(prev => ({
                           ...prev,
@@ -1669,26 +1777,11 @@ export default function InvoiceDetail() {
                         } as any));
                       }}
                     >
-                      <X className="h-4 w-4" />
+                      Verknüpfung lösen
                     </button>
-                  )}
-                  <div className="font-medium text-base pr-6">
-                    {(form as any).kunde_anrede && <span className="text-muted-foreground">{(form as any).kunde_anrede} </span>}
-                    {(form as any).kunde_titel && <span className="text-muted-foreground">{(form as any).kunde_titel} </span>}
-                    {form.kunde_name}
                   </div>
-                  {form.kunde_adresse && <div className="text-muted-foreground">{form.kunde_adresse}</div>}
-                  {(form.kunde_plz || form.kunde_ort) && <div className="text-muted-foreground">{form.kunde_plz} {form.kunde_ort} {form.kunde_land && form.kunde_land !== "Österreich" ? `· ${form.kunde_land}` : ""}</div>}
-                  <div className="flex gap-4 mt-1">
-                    {form.kunde_email && <span className="text-muted-foreground">{form.kunde_email}</span>}
-                    {form.kunde_telefon && <span className="text-muted-foreground">{form.kunde_telefon}</span>}
-                  </div>
-                  {form.kunde_uid && <div className="text-muted-foreground">UID: {form.kunde_uid}</div>}
-                  {(form as any).kundennummer && <div className="text-muted-foreground">Kundennr.: {(form as any).kundennummer}</div>}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
-              )}
+                )}
+              </div>
               {/* Zahlungseinstellungen (vom Kunden) */}
               {form.typ === "rechnung" && (form.skonto_prozent > 0 || form.skonto_tage > 0 || (form as any).zahlungsbedingungen) && (
                 <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
@@ -2518,52 +2611,6 @@ export default function InvoiceDetail() {
             setItems(prev => mergeItems(prev, newItems));
             setImportTimeOpen(false);
             toast({ title: "Arbeitszeit importiert", description: `${newItems.length} Positionen hinzugefügt` });
-          }}
-        />
-
-        {/* Import from Project Dialog (Arbeitszeit + Material) */}
-        <ImportFromProjectDialog
-          open={importProjectOpen}
-          onClose={() => setImportProjectOpen(false)}
-          projectId={form.project_id}
-          onImport={(importedItems) => {
-            setItems(prev => {
-              // Replace matching positions (same beschreibung) with imported menge
-              let updated = prev.map(existing => {
-                const match = importedItems.find(imp =>
-                  imp.beschreibung.toLowerCase().trim() === existing.beschreibung.toLowerCase().trim()
-                );
-                if (match) {
-                  return {
-                    ...existing,
-                    menge: match.menge,
-                    einzelpreis: match.einzelpreis || existing.einzelpreis,
-                    gesamtpreis: match.menge * (match.einzelpreis || existing.einzelpreis),
-                  };
-                }
-                return existing;
-              });
-              // Add new positions that don't exist yet
-              const newOnes = importedItems.filter(imp =>
-                !prev.some(ex => ex.beschreibung.toLowerCase().trim() === imp.beschreibung.toLowerCase().trim())
-              );
-              if (newOnes.length > 0) {
-                const additions = newOnes.map((item, idx) => ({
-                  position: updated.length + idx + 1,
-                  beschreibung: item.beschreibung,
-                  menge: item.menge,
-                  einheit: item.einheit,
-                  einzelpreis: item.einzelpreis,
-                  gesamtpreis: item.menge * item.einzelpreis,
-                }));
-                updated = [...updated, ...additions];
-              }
-              return updated.map((item, idx) => ({ ...item, position: idx + 1 }));
-            });
-            setImportProjectOpen(false);
-            const replaced = importedItems.filter(imp => items.some(ex => ex.beschreibung.toLowerCase().trim() === imp.beschreibung.toLowerCase().trim())).length;
-            const added = importedItems.length - replaced;
-            toast({ title: "Aus Projekt importiert", description: `${replaced} Positionen aktualisiert${added > 0 ? `, ${added} neu hinzugefügt` : ""}` });
           }}
         />
 

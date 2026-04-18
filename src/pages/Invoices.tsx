@@ -618,7 +618,7 @@ export default function Invoices() {
                       <Archive className="h-4 w-4 mr-2" />
                       {showArchive ? "Archiv ausblenden" : "Archiv anzeigen"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/admin")}>
+                    <DropdownMenuItem onClick={() => navigate("/admin?tab=einstellungen#nummernkreise")}>
                       <Settings className="h-4 w-4 mr-2" /> Nummernkreise
                     </DropdownMenuItem>
                   </DropdownMenuContent>

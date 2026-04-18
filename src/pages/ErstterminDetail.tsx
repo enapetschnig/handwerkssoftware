@@ -39,6 +39,8 @@ export default function ErstterminDetail() {
   const { options: projektartOptions } = useConfigOptions("projektart");
   const { options: entscheidungsOptions } = useConfigOptions("entscheidungsstatus");
   const { options: checklistenItems } = useConfigOptions("ersttermin_checkliste");
+  const { options: leistungsartOptions } = useConfigOptions("leistungsart");
+  const [employees, setEmployees] = useState<{ id: string; vorname: string; nachname: string }[]>([]);
 
   // Section 1: Allgemeine Daten
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -46,6 +48,8 @@ export default function ErstterminDetail() {
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [projektname, setProjektname] = useState("");
   const [standort, setStandort] = useState("");
+  const [standortPlz, setStandortPlz] = useState("");
+  const [standortOrt, setStandortOrt] = useState("");
   const [telefon, setTelefon] = useState("");
   const [email, setEmail] = useState("");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
@@ -58,9 +62,11 @@ export default function ErstterminDetail() {
   const [leistungsumfang, setLeistungsumfang] = useState("");
   const [entscheidungsstatus, setEntscheidungsstatus] = useState("");
   const [zeitrahmen, setZeitrahmen] = useState("");
+  const [geplantesEnde, setGeplantesEnde] = useState("");
   const [budget, setBudget] = useState<number | "">("");
   const [quelle, setQuelle] = useState("");
   const [prioritaeten, setPrioritaeten] = useState("");
+  const [leistungsarten, setLeistungsarten] = useState<string[]>([]);
 
   // Section 3: Technische Rahmenbedingungen
   const [zufahrt, setZufahrt] = useState("");
@@ -90,6 +96,7 @@ export default function ErstterminDetail() {
 
   // Section 6: Ressourcen & Kalkulation
   const [bauleiter, setBauleiter] = useState("");
+  const [bauleiterId, setBauleiterId] = useState("");
   const [beteiligte, setBeteiligte] = useState("");
   const [benoetigteMaterialien, setBenoetigteMaterialien] = useState("");
   const [stundenSchaetzung, setStundenSchaetzung] = useState<number | "">("");
@@ -139,6 +146,13 @@ export default function ErstterminDetail() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate("/auth"); return; }
 
+    // Aktive Mitarbeiter für Bauleiter-Dropdown laden
+    (supabase.from("employees" as never) as any)
+      .select("id, vorname, nachname")
+      .eq("aktiv", true)
+      .order("nachname")
+      .then(({ data }: any) => { if (data) setEmployees(data); });
+
     if (!isNew && id) {
       const { data } = await (supabase.from("ersttermin_interessent" as never) as any)
         .select("*").eq("id", id).single();
@@ -147,11 +161,14 @@ export default function ErstterminDetail() {
         const s = (v: any) => v || "";
         setCustomerId(d.customer_id || null); setAnsprechpartner(s(d.notizen));
         setProjektname(s(d.projektname)); setStandort(s(d.standort));
+        setStandortPlz(s(d.standort_plz)); setStandortOrt(s(d.standort_ort));
         setTelefon(s(d.telefon)); setEmail(s(d.email)); setDatum(s(d.datum));
         setNummer(s(d.nummer));
         setProjektart(s(d.projektart)); setGewerk(s(d.gewerke));
+        setLeistungsarten(Array.isArray(d.leistungsarten) ? d.leistungsarten : []);
         setLeistungsumfang(s(d.umfang)); setEntscheidungsstatus(s(d.entscheidungsstatus));
-        setZeitrahmen(s(d.zeitrahmen)); setBudget(d.budget ?? "");
+        setZeitrahmen(s(d.zeitrahmen)); setGeplantesEnde(s(d.geplantes_ende));
+        setBudget(d.budget ?? "");
         setQuelle(s(d.quelle)); setPrioritaeten(s(d.prioritaeten));
         setZufahrt(s(d.zufahrt_parkplatz)); setInfrastruktur(s(d.infrastruktur));
         setMaterialien(s(d.materialien)); setSicherheit(s(d.sicherheit));
@@ -164,7 +181,8 @@ export default function ErstterminDetail() {
         setFolgeterminDatum(s(d.folgetermin_datum)); setFehlendeUnterlagen(s(d.fehlende_unterlagen));
         setZustaendigkeitenIntern(s(d.zustaendigkeiten_intern));
         setZustaendigkeitenExtern(s(d.zustaendigkeiten_extern));
-        setBauleiter(s(d.bauleiter)); setBeteiligte(s(d.beteiligte));
+        setBauleiter(s(d.bauleiter)); setBauleiterId(s(d.bauleiter_id));
+        setBeteiligte(s(d.beteiligte));
         setBenoetigteMaterialien(s(d.benoetigte_materialien));
         setStundenSchaetzung(d.stunden_schaetzung ?? ""); setMaterialkosten(d.materialkosten ?? "");
         setFremdkosten(d.fremdkosten ?? ""); setGesamtkosten(d.gesamtkosten ?? "");
@@ -273,15 +291,22 @@ export default function ErstterminDetail() {
 
     const payload: any = {
       customer_id: customerId, notizen: ansprechpartner, projektname, standort, telefon, email, datum,
-      nummer: docNummer, projektart: projektart || null, gewerke: gewerk, umfang: leistungsumfang,
-      entscheidungsstatus: entscheidungsstatus || null, zeitrahmen, budget: budget === "" ? null : budget,
+      standort_plz: standortPlz || null, standort_ort: standortOrt || null,
+      nummer: docNummer, projektart: projektart || null, gewerke: gewerk,
+      leistungsarten: leistungsarten.length > 0 ? leistungsarten : null,
+      umfang: leistungsumfang,
+      entscheidungsstatus: entscheidungsstatus || null, zeitrahmen,
+      geplantes_ende: geplantesEnde || null,
+      budget: budget === "" ? null : budget,
       quelle, prioritaeten, zufahrt_parkplatz: zufahrt, infrastruktur, materialien, sicherheit, hindernisse, entsorgung,
       genehmigungen_relevant: genehmigungen, offene_technische_fragen: offeneFragen, leistungsbeschreibung, firmen_intern: firmenIntern,
       firmen_extern: firmenExtern, aufmasse: flaecheAufmass, anmerkungen,
       angebot_ersteller: angebotErsteller, angebot_bis: angebotBis || null,
       folgetermin_noetig: folgeterminNoetig, folgetermin_datum: folgeterminDatum || null,
       fehlende_unterlagen: fehlendeUnterlagen, zustaendigkeiten_intern: zustaendigkeitenIntern,
-      zustaendigkeiten_extern: zustaendigkeitenExtern, bauleiter, beteiligte, benoetigte_materialien: benoetigteMaterialien,
+      zustaendigkeiten_extern: zustaendigkeitenExtern,
+      bauleiter, bauleiter_id: bauleiterId || null,
+      beteiligte, benoetigte_materialien: benoetigteMaterialien,
       stunden_schaetzung: stundenSchaetzung === "" ? null : stundenSchaetzung,
       materialkosten: materialkosten === "" ? null : materialkosten,
       fremdkosten: fremdkosten === "" ? null : fremdkosten,
@@ -350,15 +375,21 @@ export default function ErstterminDetail() {
           p_typ: "projekt",
         } as never);
 
-        // Ersttermin-Daten in Projekt-Struktur mappen
-        // leistungsarten: Gewerk als JSONB-Array für spätere Erweiterung
-        const leistungsartenArr = gewerk ? [gewerk] : null;
+        // Leistungsarten: strukturierter Multi-Select bevorzugt, sonst Gewerk als Fallback
+        const leistungsartenArr = leistungsarten.length > 0
+          ? leistungsarten
+          : (gewerk ? [gewerk] : null);
 
-        // Zusätzliche Info (Zeitrahmen, Quelle, Prioritäten) als strukturierter Zusatz
+        // Prioritaet auf Projekt-Enum normalisieren (niedrig/normal/hoch/dringend)
+        const prioritaetValid = ["niedrig", "normal", "hoch", "dringend"];
+        const projektPrioritaet = prioritaetValid.includes((prioritaeten || "").toLowerCase())
+          ? (prioritaeten as string).toLowerCase()
+          : "normal";
+
+        // Zusätzliche Info (Zeitrahmen, Quelle, Entscheidungsstatus) als strukturierter Zusatz
         const zusatzInfos = [
           zeitrahmen ? `Zeitrahmen: ${zeitrahmen}` : "",
           quelle ? `Quelle: ${quelle}` : "",
-          prioritaeten ? `Prioritäten: ${prioritaeten}` : "",
           entscheidungsstatus ? `Entscheidungsstatus: ${entscheidungsstatus}` : "",
         ].filter(Boolean).join("\n");
 
@@ -377,15 +408,21 @@ export default function ErstterminDetail() {
             projektnummer: projektNummer || null,
             // Leistungsort = Standort aus Ersttermin (NICHT Kunden-Adresse)
             adresse: standort || null,
+            plz: standortPlz || null,
+            ort: standortOrt || null,
             // Projekt-Inhalt
             projektart: projektart || null,
             leistungsarten: leistungsartenArr as any,
+            prioritaet: projektPrioritaet,
             beschreibung: beschreibungFull,
             zusatzinfos: zusatzInfos || null,
             // Zeit & Geld
             geplanter_start: (folgeterminDatum || null) as any,
+            geplantes_ende: (geplantesEnde || null) as any,
             budget: budget === "" ? null : Number(budget),
             auftragsvolumen: gesamtkosten === "" ? null : Number(gesamtkosten),
+            // Team
+            bauleiter_id: bauleiterId || null,
           } as any)
           .select("id")
           .single();
@@ -610,7 +647,9 @@ export default function ErstterminDetail() {
                   <span className="text-sm font-medium">{selectedCustomerData.name}</span>
                   <Button type="button" variant="outline" size="sm" onClick={() => {
                     const c = selectedCustomerData;
-                    if (c.adresse || c.plz || c.ort) setStandort([c.adresse, [c.plz, c.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "));
+                    if (c.adresse) setStandort(c.adresse);
+                    if (c.plz) setStandortPlz(c.plz);
+                    if (c.ort) setStandortOrt(c.ort);
                     if (c.telefon) setTelefon(c.telefon);
                     if (c.email) setEmail(c.email);
                     toast({ title: "Kundendaten übernommen" });
@@ -631,9 +670,23 @@ export default function ErstterminDetail() {
               label="Standort / Baustellenadresse"
               value={standort}
               onChange={setStandort}
-              onSelect={(addr) => setStandort(addr.displayName)}
-              placeholder="Adresse der Baustelle"
+              onSelect={(addr) => {
+                setStandort(addr.street || addr.displayName);
+                if (addr.plz) setStandortPlz(addr.plz);
+                if (addr.ort) setStandortOrt(addr.ort);
+              }}
+              placeholder="Straße + Hausnr. der Baustelle"
             />
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label>PLZ</Label>
+                <Input value={standortPlz} onChange={(e) => setStandortPlz(e.target.value)} placeholder="2733" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Ort</Label>
+                <Input value={standortOrt} onChange={(e) => setStandortOrt(e.target.value)} placeholder="z.B. Schrattenbach" />
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {field("Telefon", telefon, setTelefon, 0, "Telefonnummer")}
               <div className="space-y-1"><Label>E-Mail</Label>
@@ -657,6 +710,29 @@ export default function ErstterminDetail() {
               </Select>
             </div>
             {field("Gewerk (betroffene Bereiche)", gewerk, setGewerk, 0, "z.B. Fassade, Innenausbau...")}
+
+            {/* Leistungsarten — Multi-Select (fürs Projekt) */}
+            {leistungsartOptions.length > 0 && (
+              <div className="space-y-1">
+                <Label>Art der Leistung</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border rounded-md p-3">
+                  {leistungsartOptions.map((l) => (
+                    <label key={l.wert} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={leistungsarten.includes(l.wert)}
+                        onChange={() => setLeistungsarten((prev) =>
+                          prev.includes(l.wert) ? prev.filter((x) => x !== l.wert) : [...prev, l.wert]
+                        )}
+                        className="rounded border-input"
+                      />
+                      {l.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {field("Leistungsumfang", leistungsumfang, setLeistungsumfang, 3, "Beschreibung des Leistungsumfangs")}
             <div className="space-y-1"><Label>Entscheidungsstatus</Label>
               <Select value={entscheidungsstatus} onValueChange={setEntscheidungsstatus}>
@@ -664,10 +740,29 @@ export default function ErstterminDetail() {
                 <SelectContent>{entscheidungsOptions.map((o) => <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            {field("Zeitrahmen", zeitrahmen, setZeitrahmen, 0, "z.B. Q2 2026")}
-            <div className="space-y-1"><Label>Budget</Label>{numInput(budget, setBudget)}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {field("Zeitrahmen (Freitext)", zeitrahmen, setZeitrahmen, 0, "z.B. Q2 2026")}
+              <div className="space-y-1">
+                <Label>Geplantes Ende</Label>
+                <Input type="date" value={geplantesEnde} onChange={(e) => setGeplantesEnde(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1"><Label>Budget</Label>{numInput(budget, setBudget)}</div>
+              <div className="space-y-1">
+                <Label>Priorität</Label>
+                <Select value={prioritaeten || "normal"} onValueChange={setPrioritaeten}>
+                  <SelectTrigger><SelectValue placeholder="Priorität wählen" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="niedrig">Niedrig</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="hoch">Hoch</SelectItem>
+                    <SelectItem value="dringend">Dringend</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             {field("Quelle / Empfehlung", quelle, setQuelle, 0, "Wie kam der Kontakt zustande?")}
-            {field("Prioritäten", prioritaeten, setPrioritaeten, 0, "z.B. Qualität, Preis, Termin")}
           </CardContent>
         </Card>
 
@@ -736,7 +831,31 @@ export default function ErstterminDetail() {
             </CardHeader>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-                {field("Bauleiter", bauleiter, setBauleiter)}
+                <div className="space-y-1">
+                  <Label>Bauleiter</Label>
+                  <Select
+                    value={bauleiterId || "none"}
+                    onValueChange={(v) => {
+                      const id = v === "none" ? "" : v;
+                      setBauleiterId(id);
+                      // Auch den Text-Namen synchronisieren (für Display)
+                      if (id) {
+                        const emp = employees.find((e) => e.id === id);
+                        if (emp) setBauleiter(`${emp.vorname} ${emp.nachname}`.trim());
+                      } else {
+                        setBauleiter("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Bauleiter wählen..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {employees.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>{e.vorname} {e.nachname}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {field("Beteiligte", beteiligte, setBeteiligte, 2)}
                 {field("Benötigte Materialien", benoetigteMaterialien, setBenoetigteMaterialien, 2)}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,20 @@ interface Employee {
 
 export default function Admin() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "benutzer";
+
+  // Scroll zur Anchor-Sektion wenn Hash gesetzt (z.B. #nummernkreise)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(hash);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
   const { toast } = useToast();
   
   // User roles states
@@ -633,7 +647,7 @@ export default function Admin() {
       </header>
 
       <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
-        <Tabs defaultValue="benutzer" className="w-full">
+        <Tabs defaultValue={initialTab} className="w-full">
           <TabsList className="flex w-full overflow-x-auto mb-6">
             <TabsTrigger value="benutzer" className="flex-shrink-0">Benutzer & Mitarbeiter</TabsTrigger>
             <TabsTrigger value="einstellungen" className="flex-shrink-0">Einstellungen</TabsTrigger>
@@ -1166,7 +1180,9 @@ export default function Admin() {
             </Card>
 
             {/* ===== NUMMERNKREISE ===== */}
-            <NumberRangeSettings />
+            <div id="nummernkreise" className="scroll-mt-4">
+              <NumberRangeSettings />
+            </div>
           </TabsContent>
 
           {/* ===== TAB 3: RECHNUNGS-LAYOUT ===== */}
