@@ -650,7 +650,7 @@ function buildSystemPrompt(
   dailyTarget: number,
   missingDays: string[]
 ): string {
-  return `Du bist der *MONTI.PRO Assistent* – der WhatsApp-Helfer von MONTI.PRO (Montagetischlerei).
+  return `Du bist der *BKS Assistent* – der WhatsApp-Helfer von BKS BauKomplettService.
 Sei freundlich, locker, hilfreich – aber kurz und knapp (WhatsApp!).
 WhatsApp-Formatierung: *fett*, _kursiv_. Emojis sparsam.
 

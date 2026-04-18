@@ -30,7 +30,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const greeting = vorname ? `Hallo ${vorname}!` : "Hallo!";
-    const message = `${greeting} Du wurdest zu MONTI.PRO eingeladen.\n\nBenutzername: ${username}\nPasswort: ${password}\n\nBitte melde dich an und ändere dein Passwort.\nhttps://monti.handwerkapp.at`;
+    const message = `${greeting} Du wurdest zu BKS BauKomplettService eingeladen.\n\nBenutzername: ${username}\nPasswort: ${password}\n\nBitte melde dich an und ändere dein Passwort.\nhttps://monti.handwerkapp.at`;
 
     // Send via Twilio REST API
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;

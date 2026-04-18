@@ -41,7 +41,7 @@ export function WhatsAppAdminSettings() {
     whatsapp_reminder_days: "mo,di,mi,do,fr",
     whatsapp_morning_enabled: "true",
     whatsapp_morning_time: "07:00",
-    whatsapp_bot_name: "MONTI.PRO Assistent",
+    whatsapp_bot_name: "BKS Assistent",
   });
 
   useEffect(() => {
@@ -190,7 +190,7 @@ export function WhatsAppAdminSettings() {
             <Input
               value={settings.whatsapp_bot_name}
               onChange={(e) => updateSetting("whatsapp_bot_name", e.target.value)}
-              placeholder="MONTI.PRO Assistent"
+              placeholder="BKS Assistent"
             />
           </div>
         </CardContent>

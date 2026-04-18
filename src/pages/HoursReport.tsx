@@ -293,7 +293,7 @@ export default function HoursReport() {
 
     const worksheetData: any[][] = [
       // Firmendaten Header
-      ["MONTI.PRO - Ihr Montagetischler", "", "", "", "", "", "", "", "", "", "", ""],
+      ["BKS BauKomplettService — Wir machen es komplett", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],

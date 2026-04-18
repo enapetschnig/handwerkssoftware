@@ -137,7 +137,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(26, 26, 26);
-    doc.text("MONTI.PRO", margin, 18);
+    doc.text("BKS BauKomplettService", margin, 18);
   }
 
   // Red line under header
@@ -344,7 +344,7 @@ async function generatePDF(data: ReportRequest & { technicians: string[] }, phot
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(130, 130, 130);
-  doc.text("MONTI.PRO · Ihr Montagetischler · Adresse · PLZ Ort · info@monti.pro", margin, footerY + 1);
+  doc.text("BKS BauKomplettService · Wir machen es komplett · info@bks.at", margin, footerY + 1);
   doc.text(`Erstellt: ${new Date().toLocaleDateString("de-AT")}`, pageWidth - margin, footerY + 1, { align: "right" });
 
   // Return as base64
@@ -365,16 +365,16 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         .header { font-size: 12px; font-weight: 900; color: #1A1A1A; letter-spacing: 2px; margin-bottom: 2px; }
         .header-large { font-size: 28px; font-weight: 900; color: #1A1A1A; letter-spacing: 1px; margin-bottom: 4px; }
         .header-sub { font-size: 11px; color: #64748b; margin-bottom: 10px; }
-        .red-bar { height: 3px; background: #E08A20; margin-bottom: 16px; border-radius: 2px; }
+        .red-bar { height: 3px; background: #1F3A5F; margin-bottom: 16px; border-radius: 2px; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #E08A20; }
+        .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #1F3A5F; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">MONTI</div>
         <div class="header-large">PRO</div>
-        <div class="header-sub">MONTI.PRO · Ihr Montagetischler · Adresse, PLZ Ort</div>
+        <div class="header-sub">BKS BauKomplettService · Wir machen es komplett</div>
         <div class="red-bar"></div>
         <h2>Regiebericht</h2>
 
@@ -392,8 +392,8 @@ function generateEmailHtml(data: ReportRequest & { technicians: string[] }): str
         <p>Der vollständige Bericht mit allen Details und der Kundenunterschrift befindet sich im angehängten PDF-Dokument.</p>
 
         <p>Mit freundlichen Grüßen,<br>
-        MONTI.PRO<br>
-        <span style="color:#64748b;font-size:12px;">Ihr Montagetischler<br>Adresse, PLZ Ort<br>info@monti.pro</span></p>
+        BKS BauKomplettService<br>
+        <span style="color:#64748b;font-size:12px;">Wir machen es komplett</span></p>
       </div>
     </body>
     </html>
@@ -466,7 +466,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Use Resend test domain if monti.pro is not verified yet
     // Once domain is verified in Resend dashboard, change back to noreply@monti.pro
-    const fromAddress = Deno.env.get("RESEND_FROM_EMAIL") || "MONTI.PRO <onboarding@resend.dev>";
+    const fromAddress = Deno.env.get("RESEND_FROM_EMAIL") || "BKS BauKomplettService <onboarding@resend.dev>";
 
     console.log("Sending from:", fromAddress);
 

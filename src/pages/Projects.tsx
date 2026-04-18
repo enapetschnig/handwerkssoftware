@@ -342,8 +342,8 @@ const Projects = () => {
               </Button>
               <img
                 src="/newmontilogo.png"
-                alt="MONTI.PRO"
-                className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
+                alt="BKS BauKomplettService"
+                className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
                 onClick={() => navigate("/")}
               />
             </div>

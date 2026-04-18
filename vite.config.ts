@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'MONTI.PRO - Ihr Montagetischler',
-        short_name: 'MONTI.PRO',
+        name: 'BKS BauKomplettService — Wir machen es komplett',
+        short_name: 'BKS',
         description: 'Baustellendokumentation und Zeiterfassung',
-        theme_color: '#E08A20',
+        theme_color: '#1F3A5F',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',

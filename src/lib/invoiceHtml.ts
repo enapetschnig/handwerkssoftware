@@ -38,7 +38,7 @@ export interface BankData {
 }
 
 export const DEFAULT_BANK: BankData = {
-  kontoinhaber: "MONTI.PRO",
+  kontoinhaber: "BKS BauKomplettService",
   iban: "",
   bic: "",
 };
@@ -153,7 +153,7 @@ export function buildInvoiceHtml(
   let totalsHtml = "";
   if (hasRabatt) {
     totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Zwischensumme</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(positionenNetto)}</td></tr>`;
-    totalsHtml += `<tr><td style="padding:5px 0;color:#E08A20;font-size:9.5pt;">Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}</td><td style="padding:5px 0;text-align:right;color:#E08A20;font-size:9.5pt;">- ${fmtCurrency(rabattWert)}</td></tr>`;
+    totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">- ${fmtCurrency(rabattWert)}</td></tr>`;
   }
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Nettobetrag</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.netto_summe))}</td></tr>`;
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">USt. ${Number(invoice.mwst_satz).toFixed(0)}%</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.mwst_betrag))}</td></tr>`;
@@ -161,7 +161,7 @@ export function buildInvoiceHtml(
   totalsHtml += `<tr><td style="padding:6px 0;font-size:14pt;font-weight:800;color:#1a1a1a;">Gesamtbetrag</td><td style="padding:6px 0;text-align:right;font-size:14pt;font-weight:800;color:#1a1a1a;">${fmtCurrency(Number(invoice.brutto_summe))}</td></tr>`;
   if (showPaymentInfo) {
     totalsHtml += `<tr><td style="padding:4px 0;color:#16a34a;font-size:9pt;">Bereits bezahlt</td><td style="padding:4px 0;text-align:right;color:#16a34a;font-size:9pt;">${fmtCurrency(bezahltBetrag)}</td></tr>`;
-    totalsHtml += `<tr><td style="padding:4px 0;font-weight:700;color:#E08A20;font-size:10pt;">Offener Betrag</td><td style="padding:4px 0;text-align:right;font-weight:700;color:#E08A20;font-size:10pt;">${fmtCurrency(restBetrag)}</td></tr>`;
+    totalsHtml += `<tr><td style="padding:4px 0;font-weight:700;color:${accent};font-size:10pt;">Offener Betrag</td><td style="padding:4px 0;text-align:right;font-weight:700;color:${accent};font-size:10pt;">${fmtCurrency(restBetrag)}</td></tr>`;
   }
 
   const metaParts: string[] = [];

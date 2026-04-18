@@ -62,10 +62,10 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
-            <img src="/newmontilogo.png" alt="MONTI.PRO" className="h-16 w-auto object-contain" />
+            <img src="/newmontilogo.png" alt="BKS BauKomplettService" className="h-20 w-auto object-contain" />
             <div>
-              <h1 className="text-4xl font-bold text-foreground">MONTI.PRO</h1>
-              <p className="text-muted-foreground">Ihr Montagetischler - Baustellendokumentation & Zeiterfassung</p>
+              <h1 className="text-4xl font-bold text-foreground">BKS BauKomplettService</h1>
+              <p className="text-muted-foreground">Wir machen es komplett — Baustellendokumentation & Zeiterfassung</p>
             </div>
           </div>
         </div>

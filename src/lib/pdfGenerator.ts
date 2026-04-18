@@ -4,7 +4,7 @@ import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceLayoutTypes";
 
 const DEFAULT_BANK: BankData = {
-  kontoinhaber: "MONTI.PRO",
+  kontoinhaber: "BKS BauKomplettService",
   iban: "",
   bic: "",
 };

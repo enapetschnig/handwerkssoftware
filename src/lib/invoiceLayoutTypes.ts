@@ -38,8 +38,8 @@ export interface InvoiceLayoutSettings {
 
 export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   company: {
-    name: "MONTI.PRO",
-    slogan: "Ihr Montagetischler",
+    name: "BKS BauKomplettService",
+    slogan: "Wir machen es komplett",
     address_line1: "",
     address_line2: "",
     phone: "",
@@ -49,8 +49,8 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   logo: {
     enabled: true,
     position: "left",
-    width_mm: 30,
-    height_mm: 12,
+    width_mm: 50,
+    height_mm: 18,
   },
   footer: {
     line1: "",
@@ -63,7 +63,7 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   closing_text_invoice: "Wir bitten um Überweisung innerhalb von {{tage}} Tagen auf das unten angegebene Konto.",
   closing_text_angebot: "Dieses Angebot ist 30 Tage gültig. Wir freuen uns auf Ihren Auftrag!",
   danke_text: "Vielen Dank für Ihren Auftrag!",
-  accent_color: "#E08A20",
+  accent_color: "#1F3A5F", /* BKS Dunkelblau */
 };
 
 /** Safely parse layout settings JSON, merging with defaults for missing fields */
@@ -101,12 +101,12 @@ export function buildFooterLines(c: InvoiceLayoutCompany): { line1: string; line
   return { line1, line2: parts2.join(" · ") };
 }
 
-/** Convert hex color to RGB tuple */
+/** Convert hex color to RGB tuple (default fallback: BKS Dunkelblau #1F3A5F) */
 export function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
   return [
-    parseInt(clean.slice(0, 2), 16) || 224,
-    parseInt(clean.slice(2, 4), 16) || 138,
-    parseInt(clean.slice(4, 6), 16) || 32,
+    parseInt(clean.slice(0, 2), 16) || 31,   // 0x1F
+    parseInt(clean.slice(2, 4), 16) || 58,   // 0x3A
+    parseInt(clean.slice(4, 6), 16) || 95,   // 0x5F
   ];
 }

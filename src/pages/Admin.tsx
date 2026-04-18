@@ -128,7 +128,7 @@ export default function Admin() {
 
   // App settings states
   const [regiereportEmail, setRegiereportEmail] = useState("");
-  const [bankKontoinhaber, setBankKontoinhaber] = useState("MONTI.PRO");
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("BKS BauKomplettService");
   const [bankIban, setBankIban] = useState("");
   const [bankBic, setBankBic] = useState("");
   const [firmenUid, setFirmenUid] = useState("");
@@ -625,10 +625,10 @@ export default function Admin() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Zurück</span>
             </Button>
-            <img 
+            <img
               src="/newmontilogo.png"
-              alt="MONTI.PRO"
-              className="h-8 sm:h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain" 
+              alt="BKS BauKomplettService"
+              className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
               onClick={() => navigate("/")}
             />
             <div className="flex-1">

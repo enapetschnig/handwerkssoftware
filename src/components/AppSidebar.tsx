@@ -104,7 +104,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r">
       <SidebarHeader className="p-3">
         <Link to="/" className="flex items-center gap-2 px-1">
-          <img src="/newmontilogo.png" alt="MONTI.PRO" className="h-8 w-auto" />
+          <img src="/newmontilogo.png" alt="BKS BauKomplettService" className="h-10 w-auto" />
         </Link>
       </SidebarHeader>
 

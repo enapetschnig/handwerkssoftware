@@ -339,8 +339,8 @@ export default function ScheduleBoard() {
           </Button>
           <img
             src="/newmontilogo.png"
-            alt="MONTI.PRO"
-            className="h-8 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
+            alt="BKS BauKomplettService"
+            className="h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
             onClick={() => navigate("/")}
           />
           <div className="flex-1" />

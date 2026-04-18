@@ -453,7 +453,7 @@ export function InvoiceLayoutEditor() {
               onChange={(e) => setForm((prev) => ({ ...prev, accent_color: e.target.value }))}
               className="w-32 font-mono"
               maxLength={7}
-              placeholder="#E08A20"
+              placeholder="#1F3A5F"
             />
             <div
               className="h-10 w-10 rounded-md border shadow-sm"

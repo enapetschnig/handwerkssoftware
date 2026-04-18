@@ -2,75 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
-All colors MUST be HSL.
+/* Corporate Fonts: Montserrat (Überschriften) + system Sans-Serif mit Segoe UI bevorzugt (Fließtext) */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap');
+
+/* Definition of the design system.
+   Corporate Design BKS BauKomplettService:
+   - Dunkelblau  #1F3A5F
+   - Blau        #0077CC
+   - Grün        #4CAF50
+   - Grau hell   #F2F2F2
+   - Grau mittel #666666
+   All colors MUST be HSL.
 */
 
 @layer base {
   :root {
-    /* Clean, modern base colors */
-    --background: 30 20% 98%;
-    --foreground: 25 10% 12%;
+    /* Clean, hellerer Hintergrund */
+    --background: 0 0% 100%;
+    --foreground: 215 51% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 25 10% 12%;
+    --card-foreground: 215 51% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 25 10% 12%;
+    --popover-foreground: 215 51% 15%;
 
-    /* MONTI.PRO Orange als Hauptfarbe */
-    --primary: 25 90% 50%;
+    /* BKS Dunkelblau #1F3A5F als Hauptfarbe */
+    --primary: 215 51% 25%;
     --primary-foreground: 0 0% 100%;
 
-    /* Neutral warm gray as secondary */
-    --secondary: 25 8% 92%;
-    --secondary-foreground: 25 10% 20%;
+    /* Grau hell #F2F2F2 als secondary */
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 215 51% 25%;
 
-    --muted: 25 6% 94%;
-    --muted-foreground: 25 5% 45%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 40%;  /* Grau mittel #666666 */
 
-    /* Orange accent matching MONTI.PRO brand */
-    --accent: 20 85% 45%;
+    /* BKS Blau #0077CC als accent */
+    --accent: 206 100% 40%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 25 8% 88%;
-    --input: 25 8% 92%;
-    --ring: 25 90% 50%;
+    /* BKS Grün #4CAF50 für Success */
+    --success: 122 39% 49%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --border: 0 0% 90%;
+    --input: 0 0% 95%;
+    --ring: 206 100% 40%;
 
-    /* Custom design tokens - MONTI.PRO */
-    --monti-orange: 25 90% 50%;
-    --monti-dark: 20 15% 10%;
-    --monti-light: 30 85% 60%;
-    --monti-red: 10 80% 45%;
-    --neutral-gray: 25 5% 50%;
+    --radius: 0.5rem;
+
+    /* Corporate design tokens - BKS */
+    --bks-dunkelblau: 215 51% 25%;
+    --bks-blau: 206 100% 40%;
+    --bks-gruen: 122 39% 49%;
+    --bks-grau-hell: 0 0% 95%;
+    --bks-grau-mittel: 0 0% 40%;
 
     /* Shadows */
-    --shadow-soft: 0 2px 8px hsl(25 10% 15% / 0.08);
-    --shadow-medium: 0 4px 16px hsl(25 10% 15% / 0.12);
+    --shadow-soft: 0 2px 8px hsl(215 51% 25% / 0.08);
+    --shadow-medium: 0 4px 16px hsl(215 51% 25% / 0.12);
 
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 25 10% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 25 15% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 25 8% 95%;
-
-    --sidebar-accent-foreground: 25 15% 10%;
-
-    --sidebar-border: 25 10% 91%;
-
-    --sidebar-ring: 25 90% 50%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 51% 25%;
+    --sidebar-primary: 215 51% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 215 51% 25%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 206 100% 40%;
   }
 
   .dark {
@@ -119,5 +125,14 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    /* Body: Segoe UI (Windows/Mac System) mit Fallbacks */
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Überschriften: Montserrat ExtraBold */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Montserrat", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 }

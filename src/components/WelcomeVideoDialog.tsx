@@ -27,7 +27,7 @@ export function WelcomeVideoDialog({
           <DialogTitle>
             {isReplay 
               ? "App zum Startbildschirm hinzufügen" 
-              : "Willkommen bei MONTI.PRO"}
+              : "Willkommen bei BKS BauKomplettService"}
           </DialogTitle>
           <DialogDescription>
             In diesem Video zeigen wir Ihnen, wie Sie die App auf Ihrem 

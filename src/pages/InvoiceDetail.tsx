@@ -1073,7 +1073,7 @@ export default function InvoiceDetail() {
         const { generateStornoPdf } = await import("@/lib/pdfGenerator");
         const logoUri = await loadInvoiceLogo();
         const { data: bankSettings1 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-        const bank1 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+        const bank1 = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
         bankSettings1?.forEach((s: any) => {
           if (s.key === "bank_kontoinhaber") bank1.kontoinhaber = s.value;
           if (s.key === "bank_iban") bank1.iban = s.value;
@@ -1163,7 +1163,7 @@ export default function InvoiceDetail() {
                       const { generateStornoPdf } = await import("@/lib/pdfGenerator");
                       const logoUri = await loadInvoiceLogo();
                       const { data: bankSettings2 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                      const bank2 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                      const bank2 = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
                       bankSettings2?.forEach((s: any) => {
                         if (s.key === "bank_kontoinhaber") bank2.kontoinhaber = s.value;
                         if (s.key === "bank_iban") bank2.iban = s.value;
@@ -1241,7 +1241,7 @@ export default function InvoiceDetail() {
                           // Generate Mahnung PDF
                           const logoUri = await loadInvoiceLogo();
                           const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                          const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                          const bank = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
                           bankSettings?.forEach((s: any) => {
                             if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
                             if (s.key === "bank_iban") bank.iban = s.value;
@@ -1445,7 +1445,7 @@ export default function InvoiceDetail() {
                           try {
                             const logoUri = await loadInvoiceLogo();
                             const { data: bankSettings } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                            const bank = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                            const bank = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
                             bankSettings?.forEach((s: any) => {
                               if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
                               if (s.key === "bank_iban") bank.iban = s.value;
@@ -2189,7 +2189,7 @@ export default function InvoiceDetail() {
                   const { data: inv } = await supabase.from("invoices").select("storno_nummer, storno_datum, storno_grund").eq("id", invoiceId).single();
                   if (!inv?.storno_nummer) return;
                   const { data: bankSettings3 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                  const bank3 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                  const bank3 = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
                   bankSettings3?.forEach((s: any) => {
                     if (s.key === "bank_kontoinhaber") bank3.kontoinhaber = s.value;
                     if (s.key === "bank_iban") bank3.iban = s.value;
@@ -2717,7 +2717,7 @@ export default function InvoiceDetail() {
                   const logoUri = await loadInvoiceLogo();
 
                   const { data: bankSettings4 } = await supabase.from("app_settings").select("key, value").in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic"]);
-                  const bank4 = { kontoinhaber: "MONTI.PRO", iban: "", bic: "" };
+                  const bank4 = { kontoinhaber: "BKS BauKomplettService", iban: "", bic: "" };
                   bankSettings4?.forEach((s: any) => {
                     if (s.key === "bank_kontoinhaber") bank4.kontoinhaber = s.value;
                     if (s.key === "bank_iban") bank4.iban = s.value;
