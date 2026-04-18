@@ -110,12 +110,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth: entweder Service-Role-Key (Cron-Trigger) oder CRON_SECRET
+  // Auth: Service-Role-Key, CRON_SECRET (env) oder cron_webhook_secret (app_settings)
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const cronSecret = Deno.env.get("CRON_SECRET");
-  const isAuthorized = (serviceKey && token === serviceKey) || (cronSecret && token === cronSecret);
+  const dbCronSecret = await getSetting("cron_webhook_secret", "");
+  const isAuthorized =
+    (serviceKey && token === serviceKey) ||
+    (cronSecret && token === cronSecret) ||
+    (dbCronSecret && token === dbCronSecret);
   if (!isAuthorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -124,15 +128,75 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     let reminderType = "auto";
+    let mode: "auto" | "force" = "auto";
     try {
       const body = await req.json();
       reminderType = body?.type || "auto";
+      if (body?.mode === "force") mode = "force";
     } catch { /* no body */ }
 
-    const hour = new Date().getHours();
-    const isEvening =
-      reminderType === "evening" ||
-      (reminderType === "auto" && hour >= 14);
+    // Europe/Vienna Zeit berechnen (pg_cron läuft in UTC)
+    const viennaFmt = new Intl.DateTimeFormat("de-AT", {
+      timeZone: "Europe/Vienna",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+      weekday: "short",
+    });
+    const parts = viennaFmt.formatToParts(new Date()).reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
+    const vienna = {
+      date: `${parts.year}-${parts.month}-${parts.day}`,
+      hour: parseInt(parts.hour, 10),
+      minute: parseInt(parts.minute, 10),
+      weekday: parts.weekday?.toLowerCase().slice(0, 2) || "",
+    };
+
+    // Feiertags-Check: an AT-Feiertagen keine Reminders
+    const { data: holiday } = await supabase
+      .from("austrian_holidays")
+      .select("bezeichnung")
+      .eq("datum", vienna.date)
+      .maybeSingle();
+    if (holiday && mode !== "force") {
+      return new Response(
+        JSON.stringify({ message: `Feiertag: ${(holiday as any).bezeichnung} — keine Reminders` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Cron-Modus: entscheiden ob Morgen oder Abend anhand der konfigurierten Zeiten
+    const morningTimeStr = await getSetting("whatsapp_morning_time", "07:00");
+    const eveningTimeStr = await getSetting("whatsapp_reminder_time", "17:00");
+    const parseHHMM = (s: string) => {
+      const [h, m] = s.split(":").map((x) => parseInt(x, 10));
+      return { h: h || 0, m: m || 0 };
+    };
+    const mt = parseHHMM(morningTimeStr);
+    const et = parseHHMM(eveningTimeStr);
+    const nowMin = vienna.hour * 60 + vienna.minute;
+    const morningMin = mt.h * 60 + mt.m;
+    const eveningMin = et.h * 60 + et.m;
+    // Slot-Window ±15 Min (passend zum Cron-Intervall)
+    const inMorningWindow = Math.abs(nowMin - morningMin) <= 15;
+    const inEveningWindow = Math.abs(nowMin - eveningMin) <= 15;
+
+    let isEvening: boolean;
+    if (reminderType === "morning") isEvening = false;
+    else if (reminderType === "evening") isEvening = true;
+    else if (mode === "force") isEvening = vienna.hour >= 14;
+    else {
+      // Cron-Auto: sende nur wenn Zeit-Fenster gerade passt
+      if (inEveningWindow) isEvening = true;
+      else if (inMorningWindow) isEvening = false;
+      else {
+        return new Response(
+          JSON.stringify({ message: `Kein Sende-Fenster gerade (${parts.hour}:${parts.minute})` }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     const enabled = isEvening
       ? await getSetting("whatsapp_reminder_enabled", "true")
@@ -146,23 +210,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const allowedDays = await getSetting("whatsapp_reminder_days", "mo,di,mi,do,fr");
-    const dayMap: Record<number, string> = {
-      0: "so", 1: "mo", 2: "di", 3: "mi", 4: "do", 5: "fr", 6: "sa",
-    };
-    const todayDay = dayMap[new Date().getDay()];
-    if (!allowedDays.includes(todayDay)) {
+    if (!allowedDays.includes(vienna.weekday)) {
       return new Response(
-        JSON.stringify({ message: `${todayDay} not in allowed days` }),
+        JSON.stringify({ message: `${vienna.weekday} nicht in erlaubten Tagen` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = vienna.date;
 
     // Only send to admin-verified WhatsApp numbers
     const { data: employees } = await supabase
       .from("employees")
-      .select("id, vorname, nachname, telefon, user_id")
+      .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
       .eq("whatsapp_aktiv", true)
       .not("telefon", "is", null)
       .not("user_id", "is", null);
@@ -203,6 +263,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (isEvening && usersWithEnoughHours.has(emp.user_id)) {
         results.push({ name: `${emp.vorname} ${emp.nachname}`, sent: false, reason: "hours_ok" });
         continue;
+      }
+
+      // Dedup: wenn heute schon gesendet wurde (gleicher Typ), überspringen
+      // (außer mode=force → manueller Admin-Trigger ignoriert Dedup)
+      if (mode !== "force") {
+        const lastSentField = isEvening ? "whatsapp_last_evening_date" : "whatsapp_last_morning_date";
+        const lastSent = (emp as any)[lastSentField];
+        if (lastSent === today) {
+          results.push({ name: `${emp.vorname} ${emp.nachname}`, sent: false, reason: "already_sent_today" });
+          continue;
+        }
       }
 
       try {
@@ -263,6 +334,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
           user_id: emp.user_id,
           processed: true,
         });
+
+        // Dedup-Marker setzen
+        const dedupField = isEvening ? "whatsapp_last_evening_date" : "whatsapp_last_morning_date";
+        await supabase.from("employees")
+          .update({ [dedupField]: today })
+          .eq("id", emp.id);
 
         sentCount++;
         results.push({ name: `${emp.vorname} ${emp.nachname}`, sent: true });
