@@ -31,7 +31,6 @@ const Ersttermine = () => {
   const [termine, setTermine] = useState<Ersttermin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("alle");
 
   useEffect(() => {
     checkAuth();
@@ -87,26 +86,13 @@ const Ersttermine = () => {
     setLoading(false);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "entwurf":
-        return <Badge variant="secondary">Entwurf</Badge>;
-      case "abgeschlossen":
-        return <Badge className="bg-green-500 text-white">Abgeschlossen</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   const filteredTermine = termine.filter((t) => {
     const matchesSearch =
       (t.customer_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.nummer || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.projektname || "").toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus = statusFilter === "alle" || t.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   if (loading) {
@@ -150,17 +136,6 @@ const Ersttermine = () => {
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="alle">Alle Status</SelectItem>
-                  <SelectItem value="entwurf">Entwurf</SelectItem>
-                  <SelectItem value="abgeschlossen">Abgeschlossen</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
@@ -204,7 +179,6 @@ const Ersttermine = () => {
                             <p className="text-sm text-muted-foreground">Nr. {termin.nummer}</p>
                           )}
                         </div>
-                        {getStatusBadge(termin.status)}
                       </div>
 
                       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">

@@ -751,6 +751,11 @@ export default function InvoiceDetail() {
       setIsDirty(false);
       toast({ title: "Gespeichert", description: `${form.typ === "rechnung" ? "Rechnung" : "Angebot"} wurde gespeichert` });
 
+      // Wenn Projekt zugeordnet → PDF zusätzlich in den Projektordner ablegen
+      if (savedId && form.project_id) {
+        void uploadInvoicePdfToProjectFolder(savedId);
+      }
+
       if (isNew && !previewOpen) {
         navigate(`/invoices/${savedId}`, { replace: true });
       } else if (isNew) {
@@ -765,6 +770,59 @@ export default function InvoiceDetail() {
       toast({ variant: "destructive", title: "Fehler", description: err.message || "Speichern fehlgeschlagen" });
       setSaving(false);
       return false;
+    }
+  };
+
+  /**
+   * Erzeugt client-seitig das Rechnungs-/Angebots-PDF und legt es im Projekt-
+   * Ordner ab (project-reports/<project_id>/rechnungen/ oder /angebote/).
+   * Wird nach jedem Save aufgerufen, wenn die Rechnung/das Angebot einem
+   * Projekt zugeordnet ist — non-blocking.
+   */
+  const uploadInvoicePdfToProjectFolder = async (invId: string) => {
+    if (!form.project_id) return;
+    try {
+      const [{ generateInvoicePdf }, { loadInvoiceLogo }, { uploadProjectPdf }] =
+        await Promise.all([
+          import("@/lib/pdfGenerator"),
+          import("@/lib/logoLoader"),
+          import("@/lib/pdfUploader"),
+        ]);
+
+      // Bankdaten + UID aus Einstellungen laden
+      const { data: bankSettings } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
+      const bank = { kontoinhaber: "", iban: "", bic: "" };
+      let firmenUid = "";
+      bankSettings?.forEach((s: any) => {
+        if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
+        if (s.key === "bank_iban") bank.iban = s.value;
+        if (s.key === "bank_bic") bank.bic = s.value;
+        if (s.key === "firmen_uid") firmenUid = s.value || "";
+      });
+
+      const logoUri = await loadInvoiceLogo();
+      const pdfBlob = await generateInvoicePdf(
+        form as any,
+        items as any,
+        bank,
+        logoUri,
+        undefined,
+        firmenUid,
+        invoiceLayout,
+      );
+
+      const basename = `${form.typ === "rechnung" ? "Rechnung" : "Angebot"}-${form.nummer || invId.slice(0, 8)}-${form.datum}`;
+      await uploadProjectPdf({
+        projectId: form.project_id,
+        category: form.typ === "angebot" ? "angebote" : "rechnungen",
+        basename,
+        blob: pdfBlob,
+      });
+    } catch (err) {
+      console.warn("PDF-Upload in Projektordner fehlgeschlagen:", err);
     }
   };
 

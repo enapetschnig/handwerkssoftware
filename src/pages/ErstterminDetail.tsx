@@ -109,9 +109,10 @@ export default function ErstterminDetail() {
   const [customCheckItems, setCustomCheckItems] = useState<string[]>([]);
   const [newCheckItem, setNewCheckItem] = useState("");
 
-  // Status
-  const [status, setStatus] = useState("entwurf");
+  // Status (Legacy — bleibt in DB, UI zeigt es nicht mehr)
+  const [status, setStatus] = useState("abgeschlossen");
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [askProjectOpen, setAskProjectOpen] = useState(false);
 
   // UI state
   const [loading, setLoading] = useState(!isNew);
@@ -332,14 +333,6 @@ export default function ErstterminDetail() {
     // Upload pending photos after first save
     if (eid && pendingPhotos.length > 0) await uploadPendingPhotos(eid);
 
-    // Auto-Projekt-Anlage: Wenn noch kein Projekt verknüpft ist, aber
-    // Kunde + Projektname gesetzt sind → automatisch Projekt anlegen
-    // (mit Duplicate-Check, damit kein zweites entsteht).
-    let finalProjectId = projectId;
-    if (eid && !finalProjectId && customerId && projektname.trim()) {
-      finalProjectId = await ensureProjectForErsttermin(eid);
-    }
-
     setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Ersttermin wurde gespeichert" });
 
@@ -348,8 +341,25 @@ export default function ErstterminDetail() {
       void generateErstterminPdfAndUpload(eid);
     }
 
+    // Wenn noch kein Projekt verknüpft und Kunde + Projektname vorhanden
+    // → Dialog zeigen "Projekt jetzt anlegen?" (nicht mehr automatisch).
+    if (eid && !projectId && customerId && projektname.trim()) {
+      setAskProjectOpen(true);
+    }
+
     if (isNew && eid) navigate(`/ersttermine/${eid}`, { replace: true });
     setSaving(false);
+  };
+
+  /** Wird vom "Projekt jetzt anlegen"-Dialog aufgerufen. */
+  const confirmCreateProject = async () => {
+    if (!savedId) { setAskProjectOpen(false); return; }
+    const pid = await ensureProjectForErsttermin(savedId);
+    setAskProjectOpen(false);
+    if (pid) {
+      // PDF neu erzeugen, jetzt mit Projekt-Verknüpfung
+      void generateErstterminPdfAndUpload(savedId);
+    }
   };
 
   /** Legt automatisch ein Projekt für den Ersttermin an (oder verknüpft ein
@@ -577,10 +587,6 @@ export default function ErstterminDetail() {
     </div>
   );
 
-  const badge = status === "entwurf" ? <Badge variant="secondary">Entwurf</Badge>
-    : status === "abgeschlossen" ? <Badge className="bg-green-500 text-white">Abgeschlossen</Badge>
-    : <Badge variant="outline">{status}</Badge>;
-
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
@@ -588,28 +594,8 @@ export default function ErstterminDetail() {
       <PageHeader title={isNew ? "Neuer Ersttermin" : `Ersttermin ${nummer || ""}`} backPath="/ersttermine" />
 
       <main className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
-        {/* Status & Actions */}
-        <div className="flex flex-wrap gap-2 justify-between items-center">
-          <div className="flex items-center gap-2">
-            {badge}
-            {status === "entwurf" && savedId && (
-              <Button variant="outline" size="sm" onClick={async () => {
-                setSaving(true);
-                const { error } = await (supabase.from("ersttermin_interessent" as never) as any)
-                  .update({ status: "abgeschlossen" }).eq("id", savedId);
-                if (error) { toast({ variant: "destructive", title: "Fehler" }); }
-                else { setStatus("abgeschlossen"); toast({ title: "Abgeschlossen" }); }
-                setSaving(false);
-              }} disabled={saving}>
-                <CheckCircle className="h-4 w-4 mr-1" />Abschließen
-              </Button>
-            )}
-            {savedId && !projectId && (
-              <Button variant="outline" size="sm" onClick={() => setCreateProjectOpen(true)}>
-                <FolderPlus className="h-4 w-4 mr-1" />Projekt erstellen
-              </Button>
-            )}
-          </div>
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2 justify-end items-center">
           <div className="flex gap-2">
             {savedId && (
               <AlertDialog>
@@ -629,6 +615,24 @@ export default function ErstterminDetail() {
             </Button>
           </div>
         </div>
+
+        {/* Projekt-Verknüpfung (wenn gespeichert und noch kein Projekt) */}
+        {savedId && !projectId && customerId && projektname.trim() && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <FolderPlus className="h-5 w-5 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Kein Projekt verknüpft</p>
+                  <p className="text-xs text-muted-foreground">Aus diesem Ersttermin kann jederzeit ein Projekt angelegt werden.</p>
+                </div>
+              </div>
+              <Button size="sm" onClick={() => setAskProjectOpen(true)}>
+                <FolderPlus className="h-4 w-4 mr-1" />Projekt aus Ersttermin erstellen
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 1. Allgemeine Daten */}
         <Card>
@@ -1007,7 +1011,7 @@ export default function ErstterminDetail() {
           </DialogContent>
         </Dialog>
 
-        {/* 10. Create Project Dialog */}
+        {/* 10. Create Project Dialog (Legacy - für komplexe Fälle falls nötig) */}
         <CreateProjectDialog
           open={createProjectOpen}
           onClose={() => setCreateProjectOpen(false)}
@@ -1016,6 +1020,29 @@ export default function ErstterminDetail() {
           defaultCustomerId={customerId}
           defaultAdresse={standort}
         />
+
+        {/* "Projekt jetzt anlegen?" — Bestätigungsdialog nach Speichern */}
+        <AlertDialog open={askProjectOpen} onOpenChange={setAskProjectOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Projekt aus Ersttermin erstellen?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Aus diesem Ersttermin kann jetzt ein Projekt mit allen erfassten
+                Daten (Kunde, Standort, Leistungsarten, Budget usw.) angelegt werden.
+                <br /><br />
+                Kunde: <strong>{selectedCustomerData?.name || "—"}</strong>
+                <br />
+                Projektname: <strong>{projektname || "—"}</strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Später</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmCreateProject}>
+                Ja, Projekt erstellen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

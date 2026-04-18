@@ -61,6 +61,7 @@ const ProjectOverview = () => {
   const [btbCount, setBtbCount] = useState(0);
   const [regieCount, setRegieCount] = useState(0);
   const [protokollCount, setProtokollCount] = useState(0);
+  const [projectProtokolle, setProjectProtokolle] = useState<{ id: string; nummer: string | null; datum: string; typ: string | null; ort: string | null; kind: "protokoll" | "ersttermin" }[]>([]);
   const [regiePdfs, setRegiePdfs] = useState<{id: string; datum: string; kunde_name: string; pdf_path: string}[]>([]);
   const [purchaseInvoices, setPurchaseInvoices] = useState<{id: string; lieferant: string; rechnungsdatum: string | null; betrag_brutto: number; status: string; kategorie: string | null}[]>([]);
   const [projectData, setProjectData] = useState<any>(null);
@@ -359,11 +360,27 @@ const ProjectOverview = () => {
       .order("rechnungsdatum", { ascending: false, nullsFirst: false })
       .then(({ data }) => setPurchaseInvoices(data || []));
 
-    // Fetch Protokoll count
-    (supabase.from("besprechungsprotokolle" as never) as any)
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .then(({ count }: any) => setProtokollCount(count || 0));
+    // Fetch Protokoll count + Liste (Besprechungsprotokolle + Ersttermine)
+    Promise.all([
+      (supabase.from("besprechungsprotokolle" as never) as any)
+        .select("id, nummer, datum, typ, ort")
+        .eq("project_id", projectId)
+        .order("datum", { ascending: false }),
+      (supabase.from("ersttermin_interessent" as never) as any)
+        .select("id, nummer, datum, projektname, standort")
+        .eq("project_id", projectId)
+        .order("datum", { ascending: false }),
+    ]).then(([protoRes, erstterminRes]) => {
+      const protos = ((protoRes as any).data || []).map((p: any) => ({
+        id: p.id, nummer: p.nummer, datum: p.datum, typ: p.typ, ort: p.ort, kind: "protokoll" as const,
+      }));
+      const ersts = ((erstterminRes as any).data || []).map((e: any) => ({
+        id: e.id, nummer: e.nummer, datum: e.datum, typ: "Ersttermin", ort: e.standort || e.projektname, kind: "ersttermin" as const,
+      }));
+      const all = [...protos, ...ersts].sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
+      setProjectProtokolle(all);
+      setProtokollCount(all.length);
+    });
   };
 
   const [projectInvoices, setProjectInvoices] = useState<{id: string; nummer: string; typ: string; datum: string; brutto_summe: number; kunde_name: string; status: string}[]>([]);
@@ -725,16 +742,55 @@ const ProjectOverview = () => {
             </Card>
           )}
 
-          {/* Protokolle */}
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/besprechungsprotokolle?project=${projectId}`)}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <MessageSquare className="h-5 w-5 text-cyan-600" />
-              <div className="flex-1">
-                <p className="font-medium">Protokolle</p>
-                <p className="text-xs text-muted-foreground">{protokollCount} Protokolle</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Protokolle — direkte Links zu Besprechungsprotokollen + Ersttermin */}
+          {projectProtokolle.length > 0 ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-cyan-600" />
+                    Protokolle & Erstaufnahmen
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/besprechungsprotokolle?project=${projectId}`)}>
+                    Alle anzeigen
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {projectProtokolle.map((p) => (
+                  <button
+                    key={`${p.kind}-${p.id}`}
+                    className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
+                    onClick={() => navigate(p.kind === "ersttermin" ? `/ersttermine/${p.id}` : `/besprechungsprotokolle/${p.id}`)}
+                  >
+                    <MessageSquare className={`h-4 w-4 shrink-0 ${p.kind === "ersttermin" ? "text-orange-500" : "text-cyan-600"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{p.nummer || "—"}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {p.kind === "ersttermin" ? "Erstaufnahme" : (p.typ ? p.typ.charAt(0).toUpperCase() + p.typ.slice(1) : "Protokoll")}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {p.datum ? new Date(p.datum).toLocaleDateString("de-AT") : "—"}
+                        {p.ort ? ` · ${p.ort}` : ""}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/besprechungsprotokolle?project=${projectId}`)}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <MessageSquare className="h-5 w-5 text-cyan-600" />
+                <div className="flex-1">
+                  <p className="font-medium">Protokolle & Erstaufnahmen</p>
+                  <p className="text-xs text-muted-foreground">Keine zugeordnet</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Angebote & Rechnungen — Liste mit PDF-Links */}
           {isAdmin && projectInvoices.length > 0 && (

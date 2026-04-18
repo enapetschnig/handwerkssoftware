@@ -133,18 +133,19 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
       const parsed = data?.data;
       if (!parsed) throw new Error("Keine Daten erkannt");
 
-      // Form vorausfüllen (nur wenn Feld nicht manuell gefüllt)
+      // Form vorausfüllen — KI-Werte haben Vorrang (überschreiben leere Defaults),
+      // bestehende manuelle Eingabe bleibt nur dann, wenn KI nichts findet.
       setForm(prev => ({
         ...prev,
-        lieferant: prev.lieferant || parsed.lieferant || "",
-        rechnungsnummer: prev.rechnungsnummer || parsed.rechnungsnummer || "",
-        rechnungsdatum: prev.rechnungsdatum || parsed.rechnungsdatum || prev.rechnungsdatum,
-        faellig_am: prev.faellig_am || parsed.faellig_am || "",
-        betrag_brutto: prev.betrag_brutto || (parsed.betrag_brutto ? String(parsed.betrag_brutto) : ""),
-        betrag_netto: prev.betrag_netto || (parsed.betrag_netto ? String(parsed.betrag_netto) : ""),
+        lieferant: parsed.lieferant || prev.lieferant,
+        rechnungsnummer: parsed.rechnungsnummer || prev.rechnungsnummer,
+        rechnungsdatum: parsed.rechnungsdatum || prev.rechnungsdatum,
+        faellig_am: parsed.faellig_am || prev.faellig_am,
+        betrag_brutto: parsed.betrag_brutto ? String(parsed.betrag_brutto) : prev.betrag_brutto,
+        betrag_netto: parsed.betrag_netto ? String(parsed.betrag_netto) : prev.betrag_netto,
         ust_satz: parsed.ust_satz ? String(parsed.ust_satz) : prev.ust_satz,
         kategorie: parsed.kategorie || prev.kategorie,
-        notizen: prev.notizen || parsed.notizen || "",
+        notizen: parsed.notizen || prev.notizen,
       }));
 
       toast({ title: "KI-Scan erfolgreich", description: "Daten wurden übernommen. Bitte prüfen." });

@@ -519,6 +519,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
           .eq("id", disturbance.id);
         console.log("PDF stored at:", storagePath);
       }
+
+      // Zusätzlich im Projekt-Ordner ablegen, wenn Projekt zugeordnet
+      // (analog zu BTB/Ersttermin/Protokoll)
+      if ((disturbance as any).project_id) {
+        const sanitizedName = pdfFilename.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+        const projectPath = `${(disturbance as any).project_id}/regieberichte/${sanitizedName}`;
+        const { error: projErr } = await supabaseAdmin.storage
+          .from("project-reports")
+          .upload(projectPath, pdfBytes, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+        if (projErr) {
+          console.error("Regiebericht-PDF-Upload in Projektordner fehlgeschlagen:", projErr);
+        } else {
+          console.log("Regiebericht-PDF im Projektordner abgelegt:", projectPath);
+        }
+      }
     } catch (storageErr) {
       console.error("PDF storage failed (non-critical):", storageErr);
     }

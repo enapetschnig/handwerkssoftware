@@ -2,15 +2,18 @@
  * Lädt ein generiertes PDF-Blob in Supabase Storage hoch und
  * liefert den Storage-Pfad zurück.
  *
- * Ordner-Struktur:
- *   project-reports/{project_id}/berichte/   → BTB
- *   project-reports/{project_id}/protokolle/ → Besprechungsprotokoll + Ersttermin
+ * Ordner-Struktur im Bucket project-reports:
+ *   {project_id}/berichte/       → Bautagesberichte
+ *   {project_id}/protokolle/     → Besprechungsprotokoll + Ersttermin
+ *   {project_id}/rechnungen/     → Rechnungen
+ *   {project_id}/angebote/       → Angebote
+ *   {project_id}/regieberichte/  → Regieberichte / Störungsmeldungen
  *
  * Wenn project_id fehlt (Orphan), wird unter _orphan/ abgelegt.
  */
 import { supabase } from "@/integrations/supabase/client";
 
-export type PdfCategory = "berichte" | "protokolle";
+export type PdfCategory = "berichte" | "protokolle" | "rechnungen" | "angebote" | "regieberichte";
 
 export interface UploadPdfOptions {
   projectId: string | null;
