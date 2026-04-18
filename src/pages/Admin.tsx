@@ -1,11 +1,11 @@
-import { useEffect, useState, FormEvent, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Shield, User as UserIcon, UserPlus, Send, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar } from "lucide-react";
+import { ArrowLeft, Shield, User as UserIcon, UserPlus, Mail, Phone, MapPin, Shirt, FileText, Clock, Trash2, Settings, Save, Calendar } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -112,9 +112,7 @@ export default function Admin() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [userRoles, setUserRoles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [inviteTelefon, setInviteTelefon] = useState("");
   const [createUserOpen, setCreateUserOpen] = useState(false);
-  const [sendingInvite, setSendingInvite] = useState(false);
   
   // Config options
   const { options: familienstandOptions } = useConfigOptions("familienstand");
@@ -443,55 +441,6 @@ export default function Admin() {
         title: "Fehler",
         description: error.message || "Krankmeldung konnte nicht gelöscht werden",
       });
-    }
-  };
-
-  const handleInviteSend = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    if (!inviteTelefon.match(/^\+43\d{9,13}$/)) {
-      toast({
-        variant: "destructive",
-        title: "Ungültige Telefonnummer",
-        description: "Bitte Format +43... verwenden",
-      });
-      return;
-    }
-
-    setSendingInvite(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('send-invitation', {
-        body: { telefonnummer: inviteTelefon }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      // Check if the function returned an application error
-      if (data && !data.success) {
-        toast({
-          variant: "destructive",
-          title: "Fehler beim Senden",
-          description: data.error || "Ein Fehler ist aufgetreten",
-        });
-        return;
-      }
-
-      toast({
-        title: "SMS gesendet!",
-        description: `Einladung wurde an ${inviteTelefon} gesendet.`,
-      });
-      setInviteTelefon("");
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Fehler beim Senden",
-        description: error.message || "Ein Fehler ist aufgetreten",
-      });
-    } finally {
-      setSendingInvite(false);
     }
   };
 

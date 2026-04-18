@@ -117,6 +117,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       role: userRole,
     }, { onConflict: "user_id" });
 
+    // Create or attach employees row (for Plantafel, WhatsApp, etc.)
+    // whatsapp_aktiv = true if telefon provided, so the bot is live from day one
+    const employeePayload: Record<string, unknown> = {
+      user_id: userId,
+      vorname,
+      nachname,
+      email: email || null,
+      telefon: telefon || null,
+      whatsapp_aktiv: !!telefon,
+      position: userRole === "vorarbeiter" ? "vorarbeiter" : "mitarbeiter",
+      aktiv: true,
+    };
+
+    // Try to attach an existing employee row with matching name & null user_id first
+    const { data: existingEmp } = await supabase
+      .from("employees")
+      .select("id")
+      .is("user_id", null)
+      .eq("vorname", vorname)
+      .eq("nachname", nachname)
+      .maybeSingle();
+
+    if (existingEmp) {
+      await supabase
+        .from("employees")
+        .update(employeePayload)
+        .eq("id", existingEmp.id);
+    } else {
+      await supabase.from("employees").insert(employeePayload);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       user_id: userId,
