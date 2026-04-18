@@ -34,6 +34,17 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (files.length === 0) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(files[0]);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [files]);
 
   const [form, setForm] = useState({
     lieferant: "",
@@ -310,6 +321,25 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Live-Preview der ersten Datei */}
+          {previewUrl && files[0] && (
+            <div className="rounded-lg border overflow-hidden bg-muted/20">
+              {files[0].type === "application/pdf" ? (
+                <iframe
+                  src={previewUrl}
+                  title={files[0].name}
+                  className="w-full h-[420px] bg-white"
+                />
+              ) : files[0].type.startsWith("image/") ? (
+                <img
+                  src={previewUrl}
+                  alt={files[0].name}
+                  className="w-full max-h-[420px] object-contain bg-white"
+                />
+              ) : null}
             </div>
           )}
 

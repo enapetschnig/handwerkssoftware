@@ -31,11 +31,21 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!invoiceId) { setForm(null); return; }
+    if (!invoiceId) { setForm(null); setFileUrl(null); return; }
     loadData();
   }, [invoiceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!form?.pdf_path) { setFileUrl(null); return; }
+    supabase.storage.from("purchase-invoices").createSignedUrl(form.pdf_path, 300).then(({ data }) => {
+      if (!cancelled) setFileUrl(data?.signedUrl || null);
+    });
+    return () => { cancelled = true; };
+  }, [form?.pdf_path]);
 
   const loadData = async () => {
     if (!invoiceId) return;
@@ -102,11 +112,28 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
           </div>
         ) : (
           <div className="space-y-4 py-2">
-            {form.pdf_path && (
-              <Button variant="outline" onClick={openFile} className="w-full gap-2">
-                <ExternalLink className="h-4 w-4" />
-                {form.file_name || "Datei öffnen"}
-              </Button>
+            {form.pdf_path && fileUrl && (
+              <div className="space-y-2">
+                <div className="rounded-lg border overflow-hidden bg-muted/20">
+                  {form.mime_type === "application/pdf" || (form.file_name || "").toLowerCase().endsWith(".pdf") ? (
+                    <iframe
+                      src={fileUrl}
+                      title={form.file_name || "Rechnung"}
+                      className="w-full h-[420px] bg-white"
+                    />
+                  ) : (
+                    <img
+                      src={fileUrl}
+                      alt={form.file_name || "Rechnung"}
+                      className="w-full max-h-[420px] object-contain bg-white"
+                    />
+                  )}
+                </div>
+                <Button variant="outline" onClick={openFile} className="w-full gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  In neuem Tab öffnen
+                </Button>
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
