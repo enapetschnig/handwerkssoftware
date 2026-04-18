@@ -39,9 +39,11 @@ type DisturbanceFormProps = {
     beschreibung: string;
     notizen: string | null;
   } | null;
+  /** Wenn gesetzt: Projekt beim Öffnen des Formulars vorselektieren (Quick-Action aus ProjectOverview) */
+  prefillProjectId?: string | null;
 };
 
-export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: DisturbanceFormProps) => {
+export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData, prefillProjectId }: DisturbanceFormProps) => {
   const { toast } = useToast();
   const einheiten = useEinheiten();
   const navigate = useNavigate();
@@ -78,9 +80,37 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
   useEffect(() => {
     if (open) {
       supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name")
-        .then(({ data }) => { if (data) setProjects(data); });
+        .then(({ data }) => {
+          if (data) {
+            setProjects(data);
+            // Prefill-Projekt aus Quick-Action (ProjectOverview): Kunde auto-füllen
+            if (prefillProjectId && !editData) {
+              setSelectedProjectId(prefillProjectId);
+              const p = data.find((x) => x.id === prefillProjectId);
+              if (p?.customer_id) {
+                supabase.from("customers")
+                  .select("id, name, adresse, plz, ort, email, telefon")
+                  .eq("id", p.customer_id).single()
+                  .then(({ data: cust }) => {
+                    if (cust) {
+                      setSelectedCustomerId(cust.id);
+                      setFormData((prev) => ({
+                        ...prev,
+                        kundeName: cust.name,
+                        kundeEmail: cust.email || "",
+                        kundeAdresse: cust.adresse || "",
+                        kundePlz: cust.plz || "",
+                        kundeOrt: cust.ort || "",
+                        kundeTelefon: cust.telefon || "",
+                      }));
+                    }
+                  });
+              }
+            }
+          }
+        });
     }
-  }, [open]);
+  }, [open, prefillProjectId, editData]);
 
   useEffect(() => {
     if (editData) {

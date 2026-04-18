@@ -529,6 +529,25 @@ const ProjectOverview = () => {
           </div>
         </div>
 
+        {/* Quick-Actions: neues Dokument mit vorbelegter project_id */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/bautagesberichte/neu?project=${projectId}`)}>
+            <ClipboardList className="h-3.5 w-3.5" />Neuer Bautagesbericht
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/besprechungsprotokolle/neu?project=${projectId}`)}>
+            <MessageSquare className="h-3.5 w-3.5" />Neues Protokoll
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/invoices/new?typ=angebot&project=${projectId}`)}>
+            <FileText className="h-3.5 w-3.5" />Neues Angebot
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/invoices/new?typ=rechnung&project=${projectId}`)}>
+            <FileDown className="h-3.5 w-3.5" />Neue Rechnung
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/disturbances?new=${projectId}`)}>
+            <FileText className="h-3.5 w-3.5" />Neuer Regiebericht
+          </Button>
+        </div>
+
         {/* Projektinfos */}
         {projectData && (
           <Card className="mb-4">

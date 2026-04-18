@@ -95,9 +95,9 @@ const Dashboard = () => {
           <div className="mt-6">
             <h2 className="text-2xl font-bold mb-4">Admin-Bereich</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="hover:shadow-lg transition-all duration-300 border-2 border-orange-200 cursor-pointer" onClick={() => navigate("/hours-report")}>
+              <Card className="hover:shadow-lg transition-all duration-300 border-2 border-primary/20 cursor-pointer" onClick={() => navigate("/hours-report")}>
                 <CardHeader>
-                  <div className="w-14 h-14 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center mb-4">
+                  <div className="w-14 h-14 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">
                     <FileSpreadsheet className="w-7 h-7" />
                   </div>
                   <CardTitle className="text-2xl">Stundenauswertung</CardTitle>

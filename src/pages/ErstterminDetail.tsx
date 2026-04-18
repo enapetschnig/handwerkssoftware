@@ -21,7 +21,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { PageHeader } from "@/components/PageHeader";
 import { CustomerSelect } from "@/components/CustomerSelect";
-import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 
 interface ErstterminPhoto {
   id: string;
@@ -132,7 +131,6 @@ export default function ErstterminDetail() {
   const [deleting, setDeleting] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(isNew ? null : id || null);
   const [ressourcenOpen, setRessourcenOpen] = useState(false);
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   // Photos state (DB photos + local pending photos)
   const [photos, setPhotos] = useState<ErstterminPhoto[]>([]);
@@ -265,20 +263,33 @@ export default function ErstterminDetail() {
     if (pendingPhotos.length === 0) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    let failedCount = 0;
     for (const { file } of pendingPhotos) {
       const fileName = `${eid}/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
-      if (upErr) continue;
-      await (supabase.from("ersttermin_interessent_photos" as never) as any)
+      if (upErr) { failedCount++; continue; }
+      const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
         .insert({ ersttermin_interessent_id: eid, user_id: user.id, file_path: fileName, file_name: file.name });
+      if (dbErr) {
+        // Rollback: Datei wieder entfernen, damit nichts verwaist hängt
+        await supabase.storage.from("ersttermin-photos").remove([fileName]);
+        failedCount++;
+      }
+    }
+    if (failedCount > 0) {
+      toast({ variant: "destructive", title: "Fotos", description: `${failedCount} Foto(s) konnten nicht gespeichert werden.` });
     }
     setPendingPhotos([]);
     fetchPhotos(eid);
   };
 
   const handlePhotoDelete = async (p: ErstterminPhoto) => {
-    await supabase.storage.from("ersttermin-photos").remove([p.file_path]);
-    await (supabase.from("ersttermin_interessent_photos" as never) as any).delete().eq("id", p.id);
+    const { error: storageErr } = await supabase.storage.from("ersttermin-photos").remove([p.file_path]);
+    const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any).delete().eq("id", p.id);
+    if (storageErr || dbErr) {
+      toast({ variant: "destructive", title: "Foto konnte nicht gelöscht werden", description: (storageErr || dbErr)?.message });
+      return;
+    }
     setPhotos((prev) => prev.filter((x) => x.id !== p.id));
   };
   // Save
@@ -581,14 +592,6 @@ export default function ErstterminDetail() {
     setDeleting(false);
   };
 
-  const handleProjectCreated = async (project: { id: string; name: string }) => {
-    setProjectId(project.id);
-    setCreateProjectOpen(false);
-    if (savedId) {
-      await (supabase.from("ersttermin_interessent" as never) as any).update({ project_id: project.id }).eq("id", savedId);
-    }
-    toast({ title: "Projekt erstellt", description: `Projekt "${project.name}" verknuepft` });
-  };
 
   const numInput = (val: number | "", set: (v: number | "") => void) => (
     <Input type="number" value={val} onChange={(e) => set(e.target.value === "" ? "" : Number(e.target.value))} />
@@ -1031,16 +1034,6 @@ export default function ErstterminDetail() {
             {selectedPhoto && <img src={selectedPhoto} alt="Vollbild" className="w-full h-full object-contain max-h-[90vh]" />}
           </DialogContent>
         </Dialog>
-
-        {/* 10. Create Project Dialog (Legacy - für komplexe Fälle falls nötig) */}
-        <CreateProjectDialog
-          open={createProjectOpen}
-          onClose={() => setCreateProjectOpen(false)}
-          onCreated={handleProjectCreated}
-          defaultName={projektname}
-          defaultCustomerId={customerId}
-          defaultAdresse={standort}
-        />
 
         {/* "Projekt jetzt anlegen?" — Bestätigungsdialog nach Speichern */}
         <AlertDialog open={askProjectOpen} onOpenChange={setAskProjectOpen}>

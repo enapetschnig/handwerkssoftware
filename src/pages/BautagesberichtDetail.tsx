@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Save, Trash2, CheckCircle, PenLine } from "lucide-react";
 import { DictateButton } from "@/components/DictateButton";
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,12 @@ const BautagesberichtDetail = () => {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "neu";
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { options: wetterOptions } = useConfigOptions("wetter");
 
-  // Form state
-  const [projectId, setProjectId] = useState("");
+  // Form state — project_id kann via URL-Parameter vorbelegt werden (Quick-Action aus ProjectOverview)
+  const [projectId, setProjectId] = useState(isNew ? (searchParams.get("project") || "") : "");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [nummer, setNummer] = useState("");
   const [bauleiter, setBauleiter] = useState("");

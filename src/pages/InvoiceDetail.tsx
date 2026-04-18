@@ -189,6 +189,7 @@ export default function InvoiceDetail() {
   const [newPaymentDate, setNewPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [newPaymentNote, setNewPaymentNote] = useState("");
   const defaultTyp = searchParams.get("typ") || "rechnung";
+  const defaultProjectId = searchParams.get("project") || null;
 
   const [form, setForm] = useState<InvoiceData>({
     typ: defaultTyp,
@@ -215,7 +216,7 @@ export default function InvoiceDetail() {
     notizen: "",
     betreff: "",
     mwst_satz: 20,
-    project_id: null,
+    project_id: defaultProjectId,
     bezahlt_betrag: 0,
     customer_id: null,
     gueltig_bis: defaultTyp === "angebot" ? format(addMonths(new Date(), 1), "yyyy-MM-dd") : "",
@@ -267,12 +268,18 @@ export default function InvoiceDetail() {
       setImportRegieOpen(true);
     }
 
-    // Load data from Angebot conversion
-    if (isNew && searchParams.get("from_angebot") === "true") {
-      try {
-        const stored = sessionStorage.getItem("convertToInvoice");
-        if (stored) {
-          const data = JSON.parse(stored);
+    // Load data from Angebot conversion — direkt aus der DB, nicht mehr via sessionStorage
+    const fromAngebotParam = searchParams.get("from_angebot");
+    if (isNew && fromAngebotParam && fromAngebotParam !== "true") {
+      // Moderner Pfad: from_angebot=<angebot_id> → Angebot aus DB laden
+      (async () => {
+        try {
+          const [invRes, itemsRes] = await Promise.all([
+            supabase.from("invoices").select("*").eq("id", fromAngebotParam).maybeSingle(),
+            supabase.from("invoice_items").select("*").eq("invoice_id", fromAngebotParam).order("position"),
+          ]);
+          const data: any = invRes.data;
+          if (!data) return;
           setForm(prev => ({
             ...prev,
             kunde_name: data.kunde_name || "",
@@ -289,33 +296,36 @@ export default function InvoiceDetail() {
             zahlungsbedingungen: data.zahlungsbedingungen || "",
             notizen: data.notizen || "",
             betreff: data.betreff || "",
-            mwst_satz: data.mwst_satz || 20,
-            rabatt_prozent: data.rabatt_prozent || 0,
-            rabatt_betrag: data.rabatt_betrag || 0,
-            skonto_prozent: data.skonto_prozent || 0,
-            skonto_tage: data.skonto_tage || 0,
+            mwst_satz: Number(data.mwst_satz) || 20,
+            rabatt_prozent: Number(data.rabatt_prozent) || 0,
+            rabatt_betrag: Number(data.rabatt_betrag) || 0,
+            skonto_prozent: Number(data.skonto_prozent) || 0,
+            skonto_tage: Number(data.skonto_tage) || 0,
             kunde_anrede: data.kunde_anrede || "",
             kunde_titel: data.kunde_titel || "",
-            reverse_charge: data.reverse_charge || false,
+            reverse_charge: !!data.reverse_charge,
             kundennummer: data.kundennummer || "",
-          }));
-          if (data.items?.length > 0) {
-            setItems(data.items.map((it: any, idx: number) => ({
+          } as any));
+          const srcItems = (itemsRes.data || []) as any[];
+          if (srcItems.length > 0) {
+            setItems(srcItems.map((it, idx) => ({
               position: idx + 1,
               beschreibung: it.beschreibung || "",
               kurztext: it.kurztext || it.beschreibung || "",
               langtext: it.langtext || "",
-              menge: it.menge || 1,
+              menge: Number(it.menge) || 1,
               einheit: it.einheit || "Stk.",
-              einzelpreis: it.einzelpreis || 0,
-              rabatt_prozent: it.rabatt_prozent || 0,
-              gesamtpreis: it.gesamtpreis || 0,
+              einzelpreis: Number(it.einzelpreis) || 0,
+              rabatt_prozent: Number(it.rabatt_prozent) || 0,
+              gesamtpreis: Number(it.gesamtpreis) || 0,
             })));
           }
-          if (data.fromAngebotId) setFromAngebotId(data.fromAngebotId);
-          sessionStorage.removeItem("convertToInvoice");
+          setFromAngebotId(fromAngebotParam);
+        } catch (err) {
+          console.error("Angebot-Konversion fehlgeschlagen:", err);
+          toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Angebot konnte nicht geladen werden" });
         }
-      } catch {}
+      })();
     }
   }, [id]);
 
@@ -1082,26 +1092,11 @@ export default function InvoiceDetail() {
     doConvert(items.map(it => ({ ...it })));
   };
 
-  const doConvert = (finalItems: typeof items) => {
-    const convertData = {
-      fromAngebotId: invoiceId,
-      kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse,
-      kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort,
-      kunde_land: form.kunde_land, kunde_email: form.kunde_email,
-      kunde_telefon: form.kunde_telefon, kunde_uid: form.kunde_uid,
-      customer_id: form.customer_id, project_id: form.project_id,
-      leistungsdatum: form.leistungsdatum, zahlungsbedingungen: form.zahlungsbedingungen,
-      notizen: form.notizen, mwst_satz: form.mwst_satz,
-      rabatt_prozent: form.rabatt_prozent, rabatt_betrag: form.rabatt_betrag,
-      skonto_prozent: form.skonto_prozent, skonto_tage: form.skonto_tage,
-      kunde_anrede: (form as any).kunde_anrede || "",
-      kunde_titel: (form as any).kunde_titel || "",
-      reverse_charge: (form as any).reverse_charge || false,
-      kundennummer: (form as any).kundennummer || "",
-      items: finalItems,
-    };
-    sessionStorage.setItem("convertToInvoice", JSON.stringify(convertData));
-    navigate("/invoices/new?typ=rechnung&from_angebot=true");
+  const doConvert = (_finalItems: typeof items) => {
+    if (!invoiceId) return;
+    // URL-Param statt sessionStorage: robust gegenüber Reload/Tab-Close.
+    // InvoiceDetail lädt das Angebot direkt aus der DB via ?from_angebot=<id>.
+    navigate(`/invoices/new?typ=rechnung&from_angebot=${invoiceId}`);
   };
 
   const handleDelete = async () => {

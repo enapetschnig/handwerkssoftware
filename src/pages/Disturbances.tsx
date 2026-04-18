@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Zap, Plus, Calendar, Clock, User, Mail, Phone, MapPin, Filter, Search, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,7 @@ type Disturbance = {
 
 const Disturbances = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [disturbances, setDisturbances] = useState<Disturbance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,9 +44,16 @@ const Disturbances = () => {
   const [editingDisturbance, setEditingDisturbance] = useState<Disturbance | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
+  const [prefillProjectId, setPrefillProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
+    // Quick-Action aus Projekt: /disturbances?new=<project_id> → Dialog automatisch öffnen mit vorbelegtem Projekt
+    const newProjectId = searchParams.get("new");
+    if (newProjectId) {
+      setPrefillProjectId(newProjectId);
+      setShowForm(true);
+    }
   }, []);
 
   const checkAuth = async () => {
@@ -322,9 +330,13 @@ const Disturbances = () => {
       {/* Disturbance Form Dialog */}
       <DisturbanceForm
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) setPrefillProjectId(null);
+        }}
         onSuccess={handleFormSuccess}
         editData={editingDisturbance}
+        prefillProjectId={prefillProjectId}
       />
     </div>
   );

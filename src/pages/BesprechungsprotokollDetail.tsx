@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,7 @@ const BesprechungsprotokollDetail = () => {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "neu";
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { options: typOptions } = useConfigOptions("besprechungstyp");
 
@@ -34,7 +35,7 @@ const BesprechungsprotokollDetail = () => {
   const [zeitBis, setZeitBis] = useState("10:00");
   const [ort, setOrt] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState<string>(isNew ? (searchParams.get("project") || "") : "");
   const [protokollant, setProtokollant] = useState("");
   const [nummer, setNummer] = useState("");
   const [status, setStatus] = useState("entwurf");
@@ -166,8 +167,11 @@ const BesprechungsprotokollDetail = () => {
 
     // Save massnahmen: delete + reinsert
     if (protokollId) {
-      await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any)
+      const { error: delErr } = await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any)
         .delete().eq("protokoll_id", protokollId);
+      if (delErr) {
+        toast({ variant: "destructive", title: "Maßnahmen", description: "Alte Maßnahmen konnten nicht gelöscht werden" });
+      }
 
       const rows = massnahmen.filter((m) => m.aufgabe).map((m) => ({
         protokoll_id: protokollId,
@@ -178,7 +182,10 @@ const BesprechungsprotokollDetail = () => {
       }));
 
       if (rows.length > 0) {
-        await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any).insert(rows);
+        const { error: insErr } = await (supabase.from("besprechungsprotokoll_massnahmen" as never) as any).insert(rows);
+        if (insErr) {
+          toast({ variant: "destructive", title: "Maßnahmen", description: "Maßnahmen konnten nicht gespeichert werden" });
+        }
       }
     }
 

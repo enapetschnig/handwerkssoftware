@@ -399,11 +399,11 @@ export default function Index() {
           {canView('kalender') && (
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/calendar")}>
             <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center"><CalendarDays className="h-6 w-6 text-orange-600" /></div>
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><CalendarDays className="h-6 w-6 text-primary" /></div>
               <CardTitle className="text-lg sm:text-xl">Kalender</CardTitle>
               <CardDescription className="text-sm">Termine & Google Kalender Sync</CardDescription>
             </CardHeader>
-            <CardContent><Button className="bg-orange-600 hover:bg-orange-700 w-full" size="sm">Kalender öffnen</Button></CardContent>
+            <CardContent><Button className="w-full" size="sm">Kalender öffnen</Button></CardContent>
           </Card>
           )}
 
