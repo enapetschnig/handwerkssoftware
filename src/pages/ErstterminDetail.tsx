@@ -113,6 +113,7 @@ export default function ErstterminDetail() {
   const [status, setStatus] = useState("abgeschlossen");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [askProjectOpen, setAskProjectOpen] = useState(false);
+  const [askProjectName, setAskProjectName] = useState("");
 
   // UI state
   const [loading, setLoading] = useState(!isNew);
@@ -341,9 +342,12 @@ export default function ErstterminDetail() {
       void generateErstterminPdfAndUpload(eid);
     }
 
-    // Wenn noch kein Projekt verknüpft und Kunde + Projektname vorhanden
-    // → Dialog zeigen "Projekt jetzt anlegen?" (nicht mehr automatisch).
-    if (eid && !projectId && customerId && projektname.trim()) {
+    // Wenn noch kein Projekt verknüpft und Kunde vorhanden
+    // → Dialog zeigen "Projekt jetzt anlegen?" (Name kann im Dialog noch angepasst werden).
+    if (eid && !projectId && customerId) {
+      // Vorgeschlagenen Projektname füllen: Projektname aus dem Ersttermin, sonst Kundenname
+      const suggested = projektname.trim() || (selectedCustomerData?.name ? `Projekt ${selectedCustomerData.name}` : "");
+      setAskProjectName(suggested);
       setAskProjectOpen(true);
     }
 
@@ -351,12 +355,19 @@ export default function ErstterminDetail() {
     setSaving(false);
   };
 
-  /** Wird vom "Projekt jetzt anlegen"-Dialog aufgerufen. */
+  /** Wird vom "Projekt jetzt anlegen"-Dialog aufgerufen. Nutzt den vom User bestätigten Namen. */
   const confirmCreateProject = async () => {
     if (!savedId) { setAskProjectOpen(false); return; }
-    const pid = await ensureProjectForErsttermin(savedId);
+    const nameToUse = askProjectName.trim();
+    if (!nameToUse) {
+      toast({ variant: "destructive", title: "Projektname erforderlich" });
+      return;
+    }
+    const pid = await ensureProjectForErsttermin(savedId, nameToUse);
     setAskProjectOpen(false);
     if (pid) {
+      // Name am Ersttermin aktualisieren falls geändert
+      if (nameToUse !== projektname) setProjektname(nameToUse);
       // PDF neu erzeugen, jetzt mit Projekt-Verknüpfung
       void generateErstterminPdfAndUpload(savedId);
     }
@@ -364,14 +375,15 @@ export default function ErstterminDetail() {
 
   /** Legt automatisch ein Projekt für den Ersttermin an (oder verknüpft ein
    *  existierendes, wenn Name + Kunde schon matchen). Liefert project_id. */
-  const ensureProjectForErsttermin = async (eid: string): Promise<string | null> => {
-    if (!customerId || !projektname.trim()) return null;
+  const ensureProjectForErsttermin = async (eid: string, nameOverride?: string): Promise<string | null> => {
+    const effektiverName = (nameOverride ?? projektname).trim();
+    if (!customerId || !effektiverName) return null;
     try {
       // Duplicate-Check: gleicher Name + gleicher Kunde → vorhandenes verknüpfen
       const { data: existing } = await supabase
         .from("projects")
         .select("id, name")
-        .ilike("name", projektname.trim())
+        .ilike("name", effektiverName)
         .eq("customer_id", customerId)
         .limit(1)
         .maybeSingle();
@@ -411,7 +423,7 @@ export default function ErstterminDetail() {
         const { data: newProj, error } = await supabase
           .from("projects")
           .insert({
-            name: projektname.trim(),
+            name: effektiverName,
             customer_id: customerId,
             status: "Anfrage",
             erfassungsdatum: datum || new Date().toISOString().slice(0, 10),
@@ -439,7 +451,7 @@ export default function ErstterminDetail() {
 
         if (error || !newProj) return null;
         pid = (newProj as any).id;
-        toast({ title: "Projekt angelegt", description: `"${projektname}" wurde als neues Projekt erstellt und verknüpft.` });
+        toast({ title: "Projekt angelegt", description: `"${effektiverName}" wurde als neues Projekt erstellt und verknüpft.` });
       }
 
       // Ersttermin mit Projekt verknüpfen
@@ -622,7 +634,7 @@ export default function ErstterminDetail() {
         </div>
 
         {/* Projekt-Verknüpfung (wenn gespeichert und noch kein Projekt) */}
-        {savedId && !projectId && customerId && projektname.trim() && (
+        {savedId && !projectId && customerId && (
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-3">
@@ -632,7 +644,11 @@ export default function ErstterminDetail() {
                   <p className="text-xs text-muted-foreground">Aus diesem Ersttermin kann jederzeit ein Projekt angelegt werden.</p>
                 </div>
               </div>
-              <Button size="sm" onClick={() => setAskProjectOpen(true)}>
+              <Button size="sm" onClick={() => {
+                const suggested = projektname.trim() || (selectedCustomerData?.name ? `Projekt ${selectedCustomerData.name}` : "");
+                setAskProjectName(suggested);
+                setAskProjectOpen(true);
+              }}>
                 <FolderPlus className="h-4 w-4 mr-1" />Projekt aus Ersttermin erstellen
               </Button>
             </CardContent>
@@ -1031,18 +1047,31 @@ export default function ErstterminDetail() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Projekt aus Ersttermin erstellen?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Aus diesem Ersttermin kann jetzt ein Projekt mit allen erfassten
-                Daten (Kunde, Standort, Leistungsarten, Budget usw.) angelegt werden.
-                <br /><br />
-                Kunde: <strong>{selectedCustomerData?.name || "—"}</strong>
-                <br />
-                Projektname: <strong>{projektname || "—"}</strong>
+              <AlertDialogDescription asChild>
+                <div>
+                  Aus diesem Ersttermin wird ein Projekt mit allen erfassten
+                  Daten (Kunde, Standort, Leistungsarten, Budget usw.) angelegt.
+                  <div className="mt-3 text-sm">
+                    Kunde: <strong>{selectedCustomerData?.name || "—"}</strong>
+                  </div>
+                  <div className="mt-3 space-y-1">
+                    <Label className="text-sm">Projektname *</Label>
+                    <Input
+                      value={askProjectName}
+                      onChange={(e) => setAskProjectName(e.target.value)}
+                      placeholder="Projektname"
+                      autoFocus
+                    />
+                  </div>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Später</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmCreateProject}>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); confirmCreateProject(); }}
+                disabled={!askProjectName.trim()}
+              >
                 Ja, Projekt erstellen
               </AlertDialogAction>
             </AlertDialogFooter>
