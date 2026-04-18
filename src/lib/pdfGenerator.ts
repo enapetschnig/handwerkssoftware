@@ -63,6 +63,8 @@ export async function generateInvoicePdf(
 
   // ======= HEADER (only first page) =======
   let y = 15;
+  let logoBottomY = y;
+  let logoRightX = ml;
 
   // Logo — preserve aspect ratio from actual image dimensions
   if (logoDataUri) {
@@ -80,32 +82,33 @@ export async function generateInvoicePdf(
         : L.logo.position === "center" ? (pageWidth - logoW) / 2
         : ml;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
+      logoBottomY = y + logoH;
+      logoRightX = logoX + logoW;
     } catch {}
   }
 
-  // Company info (right side)
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(0, 0, 0);
-  const companyInfoLines: string[] = [
-    L.company.address_line1,
-    L.company.address_line2,
-    L.company.phone ? "Tel: " + L.company.phone : "",
-    L.company.email,
-  ].filter(Boolean);
-  companyInfoLines.forEach((line, i) => {
-    pdf.text(line, pageWidth - mr, y + 7 + i * 5, { align: "right" });
-  });
-  if (firmenUid) {
-    pdf.setFontSize(8);
-    pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 27, { align: "right" });
+  // Firmen-Info rechts — nur wenn neben dem Logo genügend Platz ist (≥ 30mm)
+  const infoStartX = Math.max(logoRightX + 5, pageWidth - mr - 40);
+  const availableInfoWidth = pageWidth - mr - infoStartX;
+  if (availableInfoWidth >= 30) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(80, 80, 80);
+    const companyInfoLines: string[] = [
+      L.company.address_line1,
+      L.company.address_line2,
+      L.company.phone ? "Tel: " + L.company.phone : "",
+      L.company.email,
+    ].filter(Boolean);
+    companyInfoLines.forEach((line, i) => {
+      pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
+    });
+    if (firmenUid) {
+      pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + companyInfoLines.length * 3.5, { align: "right" });
+    }
   }
 
-  y += 29;
+  y = Math.max(logoBottomY + 4, y + 20);
   // Separator
   pdf.setDrawColor(200, 200, 200);
   pdf.setLineWidth(0.3);

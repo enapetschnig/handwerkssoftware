@@ -300,6 +300,29 @@ export function CreateProjectDialog({
         }
       }
 
+      // Duplicate-Check: gleiches Projekt für diesen Kunden?
+      // Verhindert dass beim Ersttermin-Anlegen versehentlich ein zweites
+      // Projekt mit gleichem Namen erzeugt wird.
+      if (customerId) {
+        const { data: existing } = await supabase
+          .from("projects")
+          .select("id, name")
+          .ilike("name", projectName.trim())
+          .eq("customer_id", customerId)
+          .limit(1)
+          .maybeSingle();
+
+        if (existing) {
+          toast({
+            title: "Projekt bereits vorhanden",
+            description: `"${existing.name}" existiert schon für diesen Kunden und wurde verknüpft.`,
+          });
+          onCreated(existing as { id: string; name: string });
+          setSaving(false);
+          return;
+        }
+      }
+
       // Get next project number
       const { data: projektNummer } = await supabase.rpc("next_document_number" as never, {
         p_typ: "projekt",

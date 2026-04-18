@@ -29,6 +29,8 @@ export function drawLetterhead(
   const pageWidth = pdf.internal.pageSize.getWidth();
   const { left: ml, right: mr, top } = LETTERHEAD_MARGIN;
   let y = top;
+  let logoBottomY = y;
+  let logoRightX = ml;
 
   // Logo
   if (logoDataUri && layout.logo.enabled) {
@@ -48,34 +50,39 @@ export function drawLetterhead(
         layout.logo.position === "center" ? (pageWidth - logoW) / 2 :
         ml;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
+      logoBottomY = y + logoH;
+      logoRightX = logoX + logoW;
     } catch { /* skip logo on error */ }
   }
 
-  // Company info (right-aligned)
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(layout.company.name || "", pageWidth - mr, y + 2, { align: "right" });
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  const infoLines = [
-    layout.company.address_line1,
-    layout.company.address_line2,
-    layout.company.phone ? "Tel: " + layout.company.phone : "",
-    layout.company.email,
-    layout.company.website,
-  ].filter(Boolean) as string[];
-  infoLines.forEach((line, i) => {
-    pdf.text(line, pageWidth - mr, y + 7 + i * 4.5, { align: "right" });
-  });
-  if (firmenUid) {
-    pdf.setFontSize(8);
-    pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 7 + infoLines.length * 4.5, { align: "right" });
+  // Company info — nur wenn rechts noch sinnvoll Platz ist (≥ 30mm)
+  const infoStartX = Math.max(logoRightX + 5, pageWidth - mr - 40);
+  const availableInfoWidth = pageWidth - mr - infoStartX;
+
+  if (availableInfoWidth >= 30) {
+    const infoLines = [
+      layout.company.address_line1,
+      layout.company.address_line2,
+      layout.company.phone ? "Tel: " + layout.company.phone : "",
+      layout.company.email,
+      layout.company.website,
+    ].filter(Boolean) as string[];
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(80, 80, 80);
+    infoLines.forEach((line, i) => {
+      pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
+    });
+    if (firmenUid) {
+      pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + infoLines.length * 3.5, { align: "right" });
+    }
   }
 
-  y += 30;
+  // Abstand unter dem Logo
+  y = Math.max(logoBottomY + 4, top + 20);
 
-  // Separator
+  // Trennlinie
   pdf.setDrawColor(200, 200, 200);
   pdf.setLineWidth(0.3);
   pdf.line(ml, y, pageWidth - mr, y);

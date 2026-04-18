@@ -229,12 +229,12 @@ export function buildInvoiceHtml(
   .heading, .doc-title, .recipient-name { font-family: "Montserrat", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
   .page-wrap { max-width: 180mm; margin: 0 auto; padding: 0; display: flex; flex-direction: column; min-height: 100vh; }
 
-  /* Header — logo left, company info right (first page) */
-  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid #ccc; margin-bottom: 18px; gap: 20px; }
+  /* Header — Logo nimmt breiten Raum ein, Firmen-Info kompakt rechts */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid #ccc; margin-bottom: 18px; gap: 10px; }
   .header-logo { flex: 0 0 auto; }
-  .header-logo img { width: 100mm; height: auto; display: block; }
-  .header-info { text-align: right; font-size: 8pt; color: #555; line-height: 1.6; }
-  .header-info strong { color: #1a1a1a; font-size: 9pt; font-family: "Montserrat", "Segoe UI", sans-serif; font-weight: 700; }
+  .header-logo img { width: 140mm; height: auto; display: block; }
+  .header-info { text-align: right; font-size: 7pt; color: #666; line-height: 1.5; max-width: 40mm; }
+  .header-info strong { color: #1a1a1a; font-size: 8pt; font-family: "Montserrat", "Segoe UI", sans-serif; font-weight: 700; }
 
   /* Address row — recipient left, meta right */
   .address-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
