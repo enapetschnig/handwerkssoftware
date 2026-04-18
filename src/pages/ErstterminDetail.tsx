@@ -195,20 +195,21 @@ export default function ErstterminDetail() {
   const getPhotoUrl = (filePath: string) =>
     supabase.storage.from("ersttermin-photos").getPublicUrl(filePath).data.publicUrl;
 
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
+  // Zentrale Upload-Logik akzeptiert File[] (für Input + Drag&Drop)
+  const uploadPhotoFiles = async (files: File[]) => {
+    if (!files || files.length === 0) return;
 
     if (!savedId) {
       // No savedId yet → store locally as preview
       const newPending: { file: File; preview: string }[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) continue;
         newPending.push({ file, preview: URL.createObjectURL(file) });
       }
       setPendingPhotos(prev => [...prev, ...newPending]);
-      toast({ title: "Fotos hinzugefügt", description: `${newPending.length} Foto(s) werden beim Speichern hochgeladen` });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (newPending.length > 0) {
+        toast({ title: "Fotos hinzugefügt", description: `${newPending.length} Foto(s) werden beim Speichern hochgeladen` });
+      }
       return;
     }
 
@@ -217,7 +218,7 @@ export default function ErstterminDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUploading(false); return; }
     let count = 0;
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) continue;
       const fileName = `${savedId}/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
@@ -228,8 +229,14 @@ export default function ErstterminDetail() {
       count++;
     }
     if (count > 0) { toast({ title: "Erfolg", description: `${count} Foto${count > 1 ? "s" : ""} hochgeladen` }); fetchPhotos(savedId); }
-    if (fileInputRef.current) fileInputRef.current.value = "";
     setUploading(false);
+  };
+
+  // Input-Change-Handler (ruft zentrale Upload-Funktion auf)
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    await uploadPhotoFiles(files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Upload pending photos after first save
@@ -543,11 +550,21 @@ export default function ErstterminDetail() {
           </Collapsible>
         </Card>
 
-        {/* 7. Fotos */}
-        <Card>
+        {/* 7. Fotos — mit Drag&Drop */}
+        <Card
+          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary"); }}
+          onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary"); }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove("ring-2", "ring-primary");
+            const files = Array.from(e.dataTransfer.files);
+            await uploadPhotoFiles(files);
+          }}
+          className="transition-all"
+        >
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos <span className="text-xs font-normal text-muted-foreground">(Dateien hier ablegen oder Button klicken)</span></CardTitle>
               <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
                 <Upload className="h-4 w-4" />{uploading ? "Lädt..." : "Foto hinzufügen"}
               </Button>

@@ -50,26 +50,22 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
     return data.publicUrl;
   };
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+  // Zentrale Upload-Funktion (für Input + Drag&Drop)
+  const uploadPhotoFiles = async (files: File[]) => {
     if (!files || files.length === 0) return;
 
     setUploading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Fehler",
-        description: "Sie müssen angemeldet sein",
-      });
+      toast({ variant: "destructive", title: "Fehler", description: "Sie müssen angemeldet sein" });
       setUploading(false);
       return;
     }
 
     let uploadedCount = 0;
 
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       // Validate file type
       if (!file.type.startsWith("image/")) {
         toast({
@@ -130,18 +126,17 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
     }
 
     if (uploadedCount > 0) {
-      toast({
-        title: "Erfolg",
-        description: `${uploadedCount} Foto${uploadedCount > 1 ? "s" : ""} hochgeladen`,
-      });
+      toast({ title: "Erfolg", description: `${uploadedCount} Foto${uploadedCount > 1 ? "s" : ""} hochgeladen` });
       fetchPhotos();
     }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     setUploading(false);
+  };
+
+  // Input-Change-Handler
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    await uploadPhotoFiles(files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleDelete = async (photo: DisturbancePhoto) => {
@@ -171,12 +166,22 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
 
   return (
     <>
-      <Card>
+      <Card
+        onDragOver={canEdit ? (e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary"); } : undefined}
+        onDragLeave={canEdit ? (e) => { e.currentTarget.classList.remove("ring-2", "ring-primary"); } : undefined}
+        onDrop={canEdit ? async (e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("ring-2", "ring-primary");
+          await uploadPhotoFiles(Array.from(e.dataTransfer.files));
+        } : undefined}
+        className="transition-all"
+      >
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
               Fotos
+              {canEdit && <span className="text-xs font-normal text-muted-foreground">(hier ablegen)</span>}
             </CardTitle>
             {canEdit && (
               <Button
