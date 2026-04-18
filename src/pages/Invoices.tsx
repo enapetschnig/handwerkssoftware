@@ -11,6 +11,8 @@ import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Tr
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { matchesSearch } from "@/lib/searchUtils";
 import { loadInvoiceLogo } from "@/lib/logoLoader";
+import { formatDateShort } from "@/lib/dateFormat";
+import { EmptyState } from "@/components/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format, parseISO, isBefore } from "date-fns";
@@ -653,19 +655,23 @@ export default function Invoices() {
             {loading ? (
               <p className="text-center py-8 text-muted-foreground">Lädt...</p>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Receipt className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                {filterTyp === "storno" ? (
-                  <p>Noch keine Storno-Belege vorhanden</p>
-                ) : (
-                  <>
-                    <p>Noch keine {filterTyp === "angebot" ? "Angebote" : "Rechnungen"} erstellt</p>
-                    <Button className="mt-4" onClick={() => navigate(`/invoices/new?typ=${filterTyp}`)}>
-                      {filterTyp === "angebot" ? "Erstes Angebot erstellen" : "Erste Rechnung erstellen"}
-                    </Button>
-                  </>
-                )}
-              </div>
+              filterTyp === "storno" ? (
+                <EmptyState
+                  icon={<Receipt className="w-12 h-12" />}
+                  title="Keine Storno-Belege"
+                  description="Hier erscheinen stornierte Rechnungen. Aktuell ist nichts storniert."
+                />
+              ) : (
+                <EmptyState
+                  icon={filterTyp === "angebot" ? <FileText className="w-12 h-12" /> : <Receipt className="w-12 h-12" />}
+                  title={filterTyp === "angebot" ? "Noch keine Angebote" : "Noch keine Rechnungen"}
+                  description={filterTyp === "angebot" ? "Erstelle dein erstes Angebot für einen Kunden." : "Erstelle deine erste Rechnung."}
+                  action={{
+                    label: filterTyp === "angebot" ? "Erstes Angebot erstellen" : "Erste Rechnung erstellen",
+                    onClick: () => navigate(`/invoices/new?typ=${filterTyp}`),
+                  }}
+                />
+              )
             ) : filterTyp === "storno" ? (
               <div className="overflow-x-auto">
                 <Table>
@@ -686,7 +692,7 @@ export default function Invoices() {
                         <TableCell className="font-mono font-medium">{(inv as any).storno_nummer || "—"}</TableCell>
                         <TableCell className="font-mono text-muted-foreground">{inv.nummer}</TableCell>
                         <TableCell>{inv.kunde_name}</TableCell>
-                        <TableCell>{(inv as any).storno_datum ? format(parseISO((inv as any).storno_datum), "dd.MM.yyyy", { locale: de }) : "—"}</TableCell>
+                        <TableCell>{formatDateShort((inv as any).storno_datum)}</TableCell>
                         <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{(inv as any).storno_grund || "—"}</TableCell>
                         <TableCell className="text-right font-medium">€ {Number(inv.brutto_summe).toFixed(2)}</TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
@@ -756,7 +762,7 @@ export default function Invoices() {
                         >
                           <TableCell className="font-mono font-medium">{inv.nummer}</TableCell>
                           <TableCell>{inv.kunde_name}</TableCell>
-                          <TableCell>{format(parseISO(inv.datum), "dd.MM.yyyy", { locale: de })}</TableCell>
+                          <TableCell>{formatDateShort(inv.datum)}</TableCell>
                           <TableCell className="text-right font-medium">€ {brutto.toFixed(2)}</TableCell>
                           {filterTyp !== "angebot" && (
                             <TableCell className="text-right">

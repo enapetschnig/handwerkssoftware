@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DictateButton } from "@/components/DictateButton";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEinheiten } from "@/hooks/useEinheiten";
@@ -580,7 +581,10 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
             </h3>
             <div className="space-y-3">
               <div>
-                <Label htmlFor="beschreibung">Durchgeführte Arbeit *</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="beschreibung">Durchgeführte Arbeit *</Label>
+                  <DictateButton value={formData.beschreibung} onResult={(t) => setFormData({ ...formData, beschreibung: t })} />
+                </div>
                 <Textarea
                   id="beschreibung"
                   value={formData.beschreibung}
@@ -591,7 +595,10 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
                 />
               </div>
               <div>
-                <Label htmlFor="notizen">Notizen (optional)</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="notizen">Notizen (optional)</Label>
+                  <DictateButton value={formData.notizen} onResult={(t) => setFormData({ ...formData, notizen: t })} />
+                </div>
                 <Textarea
                   id="notizen"
                   value={formData.notizen}

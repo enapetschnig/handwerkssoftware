@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Save, Trash2, CheckCircle, PenLine } from "lucide-react";
+import { DictateButton } from "@/components/DictateButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -494,7 +495,10 @@ const BautagesberichtDetail = () => {
 
             {/* Ausgefuehrte Arbeiten */}
             <div className="space-y-1">
-              <Label>Ausgefuehrte Arbeiten</Label>
+              <div className="flex items-center justify-between">
+                <Label>Ausgefuehrte Arbeiten</Label>
+                <DictateButton value={ausgefuehrteArbeiten} onResult={setAusgefuehrteArbeiten} />
+              </div>
               <Textarea
                 rows={4}
                 value={ausgefuehrteArbeiten}
@@ -505,7 +509,10 @@ const BautagesberichtDetail = () => {
 
             {/* Besondere Vorkommnisse */}
             <div className="space-y-1">
-              <Label>Besondere Vorkommnisse</Label>
+              <div className="flex items-center justify-between">
+                <Label>Besondere Vorkommnisse</Label>
+                <DictateButton value={besondereVorkommnisse} onResult={setBesondereVorkommnisse} />
+              </div>
               <Textarea
                 rows={3}
                 value={besondereVorkommnisse}

@@ -486,11 +486,12 @@ export default function Customers() {
             {loading ? (
               <p className="text-center py-8 text-muted-foreground">Lädt...</p>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Noch keine Kunden angelegt</p>
-                <Button className="mt-4" onClick={openNew}>Ersten Kunden anlegen</Button>
-              </div>
+              <EmptyState
+                icon={<Users className="w-12 h-12" />}
+                title={search ? "Keine Kunden gefunden" : "Noch keine Kunden"}
+                description={search ? "Passe deine Suche an oder lege einen neuen Kunden an." : "Lege deinen ersten Kunden an um Rechnungen und Angebote zu erstellen."}
+                action={!search ? { label: "Ersten Kunden anlegen", onClick: openNew } : undefined}
+              />
             ) : (
               <div className="overflow-x-auto">
                 <Table>

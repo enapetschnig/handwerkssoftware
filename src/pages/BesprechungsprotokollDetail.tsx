@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DictateButton } from "@/components/DictateButton";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -316,7 +317,10 @@ const BesprechungsprotokollDetail = () => {
           <CardHeader><CardTitle className="text-base">Inhalt &amp; Vereinbarungen</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label>Inhalt</Label>
+              <div className="flex items-center justify-between">
+                <Label>Inhalt</Label>
+                <DictateButton value={inhalt} onResult={setInhalt} />
+              </div>
               <Textarea
                 value={inhalt}
                 onChange={(e) => setInhalt(e.target.value)}
@@ -326,7 +330,10 @@ const BesprechungsprotokollDetail = () => {
             </div>
             <Separator />
             <div>
-              <Label>Vereinbarungen</Label>
+              <div className="flex items-center justify-between">
+                <Label>Vereinbarungen</Label>
+                <DictateButton value={vereinbarungen} onResult={setVereinbarungen} />
+              </div>
               <Textarea
                 value={vereinbarungen}
                 onChange={(e) => setVereinbarungen(e.target.value)}
@@ -336,7 +343,10 @@ const BesprechungsprotokollDetail = () => {
             </div>
             <Separator />
             <div>
-              <Label>Offene Fragen</Label>
+              <div className="flex items-center justify-between">
+                <Label>Offene Fragen</Label>
+                <DictateButton value={offeneFragen} onResult={setOffeneFragen} />
+              </div>
               <Textarea
                 value={offeneFragen}
                 onChange={(e) => setOffeneFragen(e.target.value)}

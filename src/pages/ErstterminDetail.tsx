@@ -4,6 +4,7 @@ import { Save, Trash2, CheckCircle, PenLine, FolderPlus, Camera, Upload, ZoomIn,
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { DictateButton } from "@/components/DictateButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -334,7 +335,11 @@ export default function ErstterminDetail() {
     <Input type="number" value={val} onChange={(e) => set(e.target.value === "" ? "" : Number(e.target.value))} />
   );
   const field = (label: string, val: string, set: (v: string) => void, rows = 0, ph = "") => (
-    <div className="space-y-1"><Label>{label}</Label>
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        {rows > 0 && <DictateButton value={val} onResult={set} />}
+      </div>
       {rows > 0 ? <Textarea rows={rows} value={val} onChange={(e) => set(e.target.value)} placeholder={ph} />
         : <Input value={val} onChange={(e) => set(e.target.value)} placeholder={ph} />}
     </div>
