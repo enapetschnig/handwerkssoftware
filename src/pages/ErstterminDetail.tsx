@@ -350,6 +350,23 @@ export default function ErstterminDetail() {
           p_typ: "projekt",
         } as never);
 
+        // Ersttermin-Daten in Projekt-Struktur mappen
+        // leistungsarten: Gewerk als JSONB-Array für spätere Erweiterung
+        const leistungsartenArr = gewerk ? [gewerk] : null;
+
+        // Zusätzliche Info (Zeitrahmen, Quelle, Prioritäten) als strukturierter Zusatz
+        const zusatzInfos = [
+          zeitrahmen ? `Zeitrahmen: ${zeitrahmen}` : "",
+          quelle ? `Quelle: ${quelle}` : "",
+          prioritaeten ? `Prioritäten: ${prioritaeten}` : "",
+          entscheidungsstatus ? `Entscheidungsstatus: ${entscheidungsstatus}` : "",
+        ].filter(Boolean).join("\n");
+
+        // Beschreibung = Leistungsumfang + Leistungsbeschreibung zusammen
+        const beschreibungFull = [leistungsumfang, leistungsbeschreibung]
+          .filter(Boolean)
+          .join("\n\n") || null;
+
         const { data: newProj, error } = await supabase
           .from("projects")
           .insert({
@@ -358,10 +375,17 @@ export default function ErstterminDetail() {
             status: "Anfrage",
             erfassungsdatum: datum || new Date().toISOString().slice(0, 10),
             projektnummer: projektNummer || null,
+            // Leistungsort = Standort aus Ersttermin (NICHT Kunden-Adresse)
             adresse: standort || null,
+            // Projekt-Inhalt
             projektart: projektart || null,
+            leistungsarten: leistungsartenArr as any,
+            beschreibung: beschreibungFull,
+            zusatzinfos: zusatzInfos || null,
+            // Zeit & Geld
             geplanter_start: (folgeterminDatum || null) as any,
-            beschreibung: leistungsumfang || null,
+            budget: budget === "" ? null : Number(budget),
+            auftragsvolumen: gesamtkosten === "" ? null : Number(gesamtkosten),
           } as any)
           .select("id")
           .single();

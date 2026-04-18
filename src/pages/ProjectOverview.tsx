@@ -43,13 +43,18 @@ const ProjectOverview = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [employees, setEmployees] = useState<{id: string, vorname: string, nachname: string}[]>([]);
   const [editForm, setEditForm] = useState({
-    name: "", beschreibung: "", adresse: "", plz: "", ort: "",
+    name: "", beschreibung: "",
+    // Kunden-/Rechnungsadresse (gespeichert in customers)
     customer_id: null as string | null, kunde_name: "", kunde_anrede: "", kunde_titel: "",
     kunde_adresse: "", kunde_plz: "", kunde_ort: "", kunde_email: "", kunde_telefon: "", kunde_uid: "",
+    // Projekt-/Leistungsort (gespeichert in projects)
+    projekt_adresse: "", projekt_plz: "", projekt_ort: "",
+    // Sonstiges Projekt
     projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
-    budget: "", auftragsvolumen: "", bauleiter_id: "", projekt_ort: "",
+    budget: "", auftragsvolumen: "", bauleiter_id: "",
   });
   const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
+  const [customerData, setCustomerData] = useState<any>(null);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [invoiceCount, setInvoiceCount] = useState(0);
@@ -178,19 +183,22 @@ const ProjectOverview = () => {
     setEditForm({
       name: proj.name || "",
       beschreibung: proj.beschreibung || "",
-      adresse: kunde.adresse || parts[0] || "",
-      plz: proj.plz || kunde.plz || parts[1] || "",
-      ort: kunde.ort || parts[2] || "",
       customer_id: proj.customer_id || null,
+      // Kundenadresse (aus customers-Tabelle, für Rechnungsstellung)
       kunde_name: kunde.name || "",
       kunde_anrede: kunde.anrede || "",
       kunde_titel: kunde.titel || "",
-      kunde_adresse: kunde.adresse || parts[0] || "",
-      kunde_plz: kunde.plz || proj.plz || "",
+      kunde_adresse: kunde.adresse || "",
+      kunde_plz: kunde.plz || "",
       kunde_ort: kunde.ort || "",
       kunde_email: kunde.email || "",
       kunde_telefon: kunde.telefon || "",
       kunde_uid: kunde.uid_nummer || "",
+      // Leistungsort / Durchführungsort (aus projects-Tabelle)
+      projekt_adresse: proj.adresse || parts[0] || "",
+      projekt_plz: proj.plz || parts[1] || "",
+      projekt_ort: (proj as any).ort || parts[2] || "",
+      // Sonstiges
       projektart: (proj as any).projektart || "",
       prioritaet: (proj as any).prioritaet || "normal",
       geplanter_start: (proj as any).geplanter_start || "",
@@ -198,7 +206,6 @@ const ProjectOverview = () => {
       budget: (proj as any).budget != null ? String((proj as any).budget) : "",
       auftragsvolumen: (proj as any).auftragsvolumen != null ? String((proj as any).auftragsvolumen) : "",
       bauleiter_id: (proj as any).bauleiter_id || "",
-      projekt_ort: (proj as any).ort || "",
     });
     setEditDialogOpen(true);
   };
@@ -206,13 +213,13 @@ const ProjectOverview = () => {
   const handleEditSave = async () => {
     if (!projectId || !editForm.name.trim()) return;
     setEditSaving(true);
-    // Update project
-    const adresseStr = [editForm.kunde_adresse, editForm.kunde_plz, editForm.kunde_ort].filter(Boolean).join(", ");
+    // Update project — adresse/plz/ort = LEISTUNGSORT (NICHT die Kundenadresse!)
     await supabase.from("projects").update({
       name: editForm.name.trim(),
       beschreibung: editForm.beschreibung.trim() || null,
-      adresse: adresseStr || null,
-      plz: editForm.kunde_plz.trim() || null,
+      adresse: editForm.projekt_adresse.trim() || null,
+      plz: editForm.projekt_plz.trim() || null,
+      ort: editForm.projekt_ort.trim() || null,
       customer_id: editForm.customer_id,
       projektart: editForm.projektart || null,
       prioritaet: editForm.prioritaet || "normal",
@@ -221,7 +228,6 @@ const ProjectOverview = () => {
       budget: editForm.budget ? parseFloat(editForm.budget) : null,
       auftragsvolumen: editForm.auftragsvolumen ? parseFloat(editForm.auftragsvolumen) : null,
       bauleiter_id: editForm.bauleiter_id || null,
-      ort: editForm.projekt_ort.trim() || null,
     } as any).eq("id", projectId);
     // Update or create customer
     if (editForm.customer_id && editForm.kunde_name.trim()) {
@@ -312,6 +318,18 @@ const ProjectOverview = () => {
     if (data) {
       setProjectName(data.name);
       setProjectData(data);
+
+      // Kundendaten für Rechnungsadresse-Anzeige
+      if ((data as any).customer_id) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("id", (data as any).customer_id)
+          .maybeSingle();
+        setCustomerData(cust || null);
+      } else {
+        setCustomerData(null);
+      }
     }
 
     // Fetch BTB count
@@ -498,8 +516,21 @@ const ProjectOverview = () => {
         {projectData && (
           <Card className="mb-4">
             <CardContent className="p-4 space-y-2">
-              {projectData.adresse && (
-                <div className="text-sm"><span className="text-muted-foreground">Adresse:</span> {projectData.adresse}{projectData.plz || (projectData as any).ort ? `, ${projectData.plz || ""} ${(projectData as any).ort || ""}`.trim() : ""}</div>
+              {/* Leistungsort / Durchführungsort (aus projects-Tabelle) */}
+              {(projectData.adresse || projectData.plz || (projectData as any).ort) && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Leistungsort:</span>{" "}
+                  {[projectData.adresse, [projectData.plz, (projectData as any).ort].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
+                </div>
+              )}
+              {/* Rechnungsadresse (Kunde) */}
+              {customerData && (customerData.adresse || customerData.plz || customerData.ort) && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Rechnungsadresse:</span>{" "}
+                  {customerData.name}
+                  {customerData.adresse ? `, ${customerData.adresse}` : ""}
+                  {customerData.plz || customerData.ort ? `, ${[customerData.plz, customerData.ort].filter(Boolean).join(" ")}` : ""}
+                </div>
               )}
               {(projectData as any).geplanter_start && (
                 <div className="text-sm"><span className="text-muted-foreground">Start:</span> {format(parseISO((projectData as any).geplanter_start), "dd.MM.yyyy")}</div>
@@ -855,9 +886,41 @@ const ProjectOverview = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Ort (Projektstandort)</Label>
-                <Input value={editForm.projekt_ort} onChange={(e) => setEditForm(f => ({ ...f, projekt_ort: e.target.value }))} placeholder="z.B. Wien, Graz..." />
+            </div>
+
+            {/* Leistungsort / Durchführungsort */}
+            <div className="border-t pt-4">
+              <Label className="text-base font-semibold mb-1 block">Leistungsort / Durchführungsort</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Adresse, wo die Arbeiten tatsächlich durchgeführt werden. Kann von der Kundenadresse abweichen.
+              </p>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Straße + Hausnr.</Label>
+                  <Input
+                    value={editForm.projekt_adresse}
+                    onChange={(e) => setEditForm(f => ({ ...f, projekt_adresse: e.target.value }))}
+                    placeholder="z.B. Hinterleitenweg 19"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">PLZ</Label>
+                    <Input
+                      value={editForm.projekt_plz}
+                      onChange={(e) => setEditForm(f => ({ ...f, projekt_plz: e.target.value }))}
+                      placeholder="2733"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Ort</Label>
+                    <Input
+                      value={editForm.projekt_ort}
+                      onChange={(e) => setEditForm(f => ({ ...f, projekt_ort: e.target.value }))}
+                      placeholder="z.B. Schrattenbach"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
