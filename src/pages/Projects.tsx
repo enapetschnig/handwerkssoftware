@@ -626,7 +626,7 @@ const Projects = () => {
             });
           })()}
         </div>
-
+      </main>
 
       {/* Quick Upload Dialog - Only show when NOT in camera mode */}
       {quickUploadProject && !showCameraDialog && (

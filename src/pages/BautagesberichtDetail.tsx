@@ -19,10 +19,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { SignaturePad } from "@/components/SignaturePad";
 import { BautagesberichtWorkers, type Worker, type Employee } from "@/components/BautagesberichtWorkers";
 import { BautagesberichtPhotos } from "@/components/BautagesberichtPhotos";
-import { generateBautagesberichtPdf } from "@/lib/pdfBautagesbericht";
-import { loadDocumentLayout } from "@/lib/loadLayout";
-import { loadInvoiceLogo } from "@/lib/logoLoader";
-import { uploadProjectPdf } from "@/lib/pdfUploader";
 
 type Project = { id: string; name: string; customer_id: string | null };
 
@@ -170,6 +166,14 @@ const BautagesberichtDetail = () => {
    *  und speichert den Pfad auf der BTB-Row (bautagesberichte.pdf_path). */
   const generateBtbPdfAndUpload = async (berichtId: string) => {
     try {
+      const [{ generateBautagesberichtPdf }, { loadDocumentLayout }, { loadInvoiceLogo }, { uploadProjectPdf }] =
+        await Promise.all([
+          import("@/lib/pdfBautagesbericht"),
+          import("@/lib/loadLayout"),
+          import("@/lib/logoLoader"),
+          import("@/lib/pdfUploader"),
+        ]);
+
       // Projekt-Name + Kunde laden
       const proj = projects.find((p) => p.id === projectId);
       let kundeName: string | null = null;
