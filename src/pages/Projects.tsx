@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { QuickUploadDialog } from "@/components/QuickUploadDialog";
 import { MobilePhotoCapture } from "@/components/MobilePhotoCapture";
 import { useProjectStatuses, type ProjectStatus } from "@/hooks/useProjectStatuses";
+import { mergeDuplicateProjects } from "@/lib/mergeDuplicateProjects";
 
 type Project = {
   id: string;
@@ -66,7 +67,21 @@ const Projects = () => {
 
   useEffect(() => {
     checkAdminStatus();
-    fetchProjects();
+
+    // Einmal beim Öffnen der Projekte-Seite: Duplikate automatisch
+    // zusammenführen (gleicher Name + gleicher Kunde). Danach Projekte laden.
+    (async () => {
+      try {
+        const result = await mergeDuplicateProjects();
+        if (result.projectsRemoved > 0) {
+          toast({
+            title: "Duplikate zusammengeführt",
+            description: `${result.projectsRemoved} doppelte${result.projectsRemoved === 1 ? "s" : ""} Projekt${result.projectsRemoved === 1 ? "" : "e"} wurde${result.projectsRemoved === 1 ? "" : "n"} automatisch mit dem ältesten Eintrag verknüpft${result.details.length > 0 ? ": " + result.details.slice(0, 3).join(", ") + (result.details.length > 3 ? " …" : "") : ""}`,
+          });
+        }
+      } catch { /* silent — schlägt Cleanup fehl, normal weitermachen */ }
+      fetchProjects();
+    })();
 
     // Realtime subscription
     const channel = supabase

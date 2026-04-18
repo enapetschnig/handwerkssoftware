@@ -26,7 +26,6 @@ import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
-import { DuplicateProjectsManager } from "@/components/admin/DuplicateProjectsManager";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
@@ -1194,7 +1193,6 @@ export default function Admin() {
             <ConfigOptionsManager kategorie="wetter" title="Wetter-Optionen" description="Wetteroptionen für Bautagesberichte" icon={<Cloud className="h-5 w-5" />} showFarbe />
             <ConfigOptionsManager kategorie="projektart" title="Projektarten" description="Typen von Bauprojekten" icon={<Building className="h-5 w-5" />} />
             <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
-            <DuplicateProjectsManager />
           </TabsContent>
 
           {/* ===== TAB 6: BERECHTIGUNGEN ===== */}

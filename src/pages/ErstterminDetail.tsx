@@ -307,6 +307,14 @@ export default function ErstterminDetail() {
     // Upload pending photos after first save
     if (eid && pendingPhotos.length > 0) await uploadPendingPhotos(eid);
 
+    // Auto-Projekt-Anlage: Wenn noch kein Projekt verknüpft ist, aber
+    // Kunde + Projektname gesetzt sind → automatisch Projekt anlegen
+    // (mit Duplicate-Check, damit kein zweites entsteht).
+    let finalProjectId = projectId;
+    if (eid && !finalProjectId && customerId && projektname.trim()) {
+      finalProjectId = await ensureProjectForErsttermin(eid);
+    }
+
     setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Ersttermin wurde gespeichert" });
 
@@ -317,6 +325,63 @@ export default function ErstterminDetail() {
 
     if (isNew && eid) navigate(`/ersttermine/${eid}`, { replace: true });
     setSaving(false);
+  };
+
+  /** Legt automatisch ein Projekt für den Ersttermin an (oder verknüpft ein
+   *  existierendes, wenn Name + Kunde schon matchen). Liefert project_id. */
+  const ensureProjectForErsttermin = async (eid: string): Promise<string | null> => {
+    if (!customerId || !projektname.trim()) return null;
+    try {
+      // Duplicate-Check: gleicher Name + gleicher Kunde → vorhandenes verknüpfen
+      const { data: existing } = await supabase
+        .from("projects")
+        .select("id, name")
+        .ilike("name", projektname.trim())
+        .eq("customer_id", customerId)
+        .limit(1)
+        .maybeSingle();
+
+      let pid: string | null = null;
+      if (existing) {
+        pid = (existing as any).id;
+      } else {
+        // Nächste Projekt-Nummer
+        const { data: projektNummer } = await supabase.rpc("next_document_number" as never, {
+          p_typ: "projekt",
+        } as never);
+
+        const { data: newProj, error } = await supabase
+          .from("projects")
+          .insert({
+            name: projektname.trim(),
+            customer_id: customerId,
+            status: "Anfrage",
+            erfassungsdatum: datum || new Date().toISOString().slice(0, 10),
+            projektnummer: projektNummer || null,
+            adresse: standort || null,
+            projektart: projektart || null,
+            geplanter_start: (folgeterminDatum || null) as any,
+            beschreibung: leistungsumfang || null,
+          } as any)
+          .select("id")
+          .single();
+
+        if (error || !newProj) return null;
+        pid = (newProj as any).id;
+        toast({ title: "Projekt angelegt", description: `"${projektname}" wurde als neues Projekt erstellt und verknüpft.` });
+      }
+
+      // Ersttermin mit Projekt verknüpfen
+      if (pid) {
+        await (supabase.from("ersttermin_interessent" as never) as any)
+          .update({ project_id: pid })
+          .eq("id", eid);
+        setProjectId(pid);
+      }
+      return pid;
+    } catch {
+      return null;
+    }
   };
 
   /** Generiert das Ersttermin-PDF (mit Briefkopf + Fotos) und legt es in
