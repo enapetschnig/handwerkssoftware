@@ -547,6 +547,11 @@ export default function ErstterminDetail() {
         .update({ pdf_path: path })
         .eq("id", eid);
     } catch (err: any) {
+      // Vite/Rollup Chunk-Hash-Mismatch nach Deploy → reload statt Error-Toast
+      if (err?.message?.includes("Failed to fetch dynamically imported module")) {
+        window.location.reload();
+        return;
+      }
       toast({
         variant: "destructive",
         title: "PDF konnte nicht erstellt werden",

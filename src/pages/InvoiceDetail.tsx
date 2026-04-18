@@ -821,7 +821,12 @@ export default function InvoiceDetail() {
         basename,
         blob: pdfBlob,
       });
-    } catch (err) {
+    } catch (err: any) {
+      // Vite/Rollup Chunk-Hash-Mismatch nach Deploy → reload
+      if (err?.message?.includes("Failed to fetch dynamically imported module")) {
+        window.location.reload();
+        return;
+      }
       console.warn("PDF-Upload in Projektordner fehlgeschlagen:", err);
     }
   };
