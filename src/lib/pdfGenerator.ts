@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceLayoutTypes";
+import { drawLetterhead, drawFooter, LETTERHEAD_MARGIN } from "./pdfLetterhead";
 
 const DEFAULT_BANK: BankData = {
   kontoinhaber: "BKS BauKomplettService",
@@ -595,46 +596,14 @@ export function generateStornoPdf(
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const ml = 15;
-  const mr = 15;
+  const ml = LETTERHEAD_MARGIN.left;
+  const mr = LETTERHEAD_MARGIN.right;
 
-  let y = 15;
+  // Einheitlicher BKS-Briefkopf
+  const { afterY } = drawLetterhead(pdf, L, logoDataUri);
+  let y = afterY;
 
-  // Logo — preserve aspect ratio from actual image dimensions
-  if (logoDataUri) {
-    try {
-      let logoW = L.logo.width_mm;
-      let logoH = L.logo.height_mm;
-      try {
-        const props = pdf.getImageProperties(logoDataUri);
-        if (props.width > 0 && props.height > 0) {
-          const aspect = props.width / props.height;
-          logoH = logoW / aspect;
-        }
-      } catch {}
-      const logoX = L.logo.position === "right" ? pageWidth - mr - logoW
-        : L.logo.position === "center" ? (pageWidth - logoW) / 2
-        : ml;
-      pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
-    } catch {}
-  }
-
-  // Company info
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(7.5);
-  pdf.setTextColor(0, 0, 0);
-  const stornoInfoParts = [L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 ");
-  const stornoContactParts = [L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
-  if (stornoInfoParts) pdf.text(stornoInfoParts, pageWidth - mr, y + 6, { align: "right" });
-  if (stornoContactParts) pdf.text(stornoContactParts, pageWidth - mr, y + 10, { align: "right" });
-
-  y += 30;
-
-  // Red "STORNO" header
+  // "STORNO" Titel in BKS-Blau
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
   pdf.setTextColor(acR, acG, acB);
@@ -691,31 +660,8 @@ export function generateStornoPdf(
   y += 5;
   pdf.text("Der Rechnungsbetrag wird nicht mehr zur Zahlung fällig.", ml, y);
 
-  // Footer
-  const stornoFooterLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
-  const stornoFooterH = 8 + stornoFooterLines.length * 4;
-  const fy = pageHeight - stornoFooterH - 4;
-  pdf.setDrawColor(acR, acG, acB);
-  pdf.setLineWidth(0.3);
-  pdf.line(ml, fy, pageWidth - mr, fy);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(6);
-  pdf.setTextColor(0, 0, 0);
-  let stornoFy = fy + 4;
-  const stornoFooterLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
-  pdf.text(stornoFooterLine1, pageWidth / 2, stornoFy, { align: "center" });
-  stornoFy += 3.5;
-  if (L.footer.show_bank_in_footer) {
-    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, stornoFy, { align: "center" });
-    stornoFy += 3.5;
-  }
-  if (L.footer.line2) {
-    pdf.text(L.footer.line2, pageWidth / 2, stornoFy, { align: "center" });
-    stornoFy += 3.5;
-  }
-  if (L.footer.line3) {
-    pdf.text(L.footer.line3, pageWidth / 2, stornoFy, { align: "center" });
-  }
+  // Einheitlicher BKS-Footer
+  drawFooter(pdf, L, { withPageNumbers: false });
 
   return pdf.output("blob");
 }
@@ -730,36 +676,15 @@ export function generateMahnungPdf(
   layout?: InvoiceLayoutSettings
 ): Blob {
   const L = layout || DEFAULT_LAYOUT;
-  const [acR, acG, acB] = hexToRgb(L.accent_color);
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const ml = 20;
-  const mr = 15;
+  const ml = LETTERHEAD_MARGIN.left;
+  const mr = LETTERHEAD_MARGIN.right;
 
-  let y = 15;
-
-  if (logoDataUri) {
-    try {
-      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
-        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
-        : ml;
-      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
-    } catch {}
-  }
-
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(L.company.name, pageWidth - mr, y + 2, { align: "right" });
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(7.5);
-  const mahnInfoParts = [L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 ");
-  const mahnContactParts = [L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
-  if (mahnInfoParts) pdf.text(mahnInfoParts, pageWidth - mr, y + 6, { align: "right" });
-  if (mahnContactParts) pdf.text(mahnContactParts, pageWidth - mr, y + 10, { align: "right" });
-
-  y += 25;
+  // Einheitlicher BKS-Briefkopf (Logo + Firmen-Info + Akzent-Linie)
+  const { afterY } = drawLetterhead(pdf, L, logoDataUri);
+  let y = afterY;
 
   pdf.setFontSize(6);
   pdf.setTextColor(0, 0, 0);
@@ -843,8 +768,9 @@ export function generateMahnungPdf(
   pdf.setFontSize(9);
   pdf.text("Bitte überweisen Sie den Betrag auf folgendes Konto:", ml, y); y += 6;
   pdf.setFont("helvetica", "bold");
-  pdf.text(`IBAN: ${bank.iban}`, ml, y); y += 5;
-  pdf.text(`BIC: ${bank.bic}`, ml, y); y += 5;
+  if (bank.kontoinhaber) { pdf.text(`Kontoinhaber: ${bank.kontoinhaber}`, ml, y); y += 5; }
+  if (bank.iban) { pdf.text(`IBAN: ${bank.iban}`, ml, y); y += 5; }
+  if (bank.bic) { pdf.text(`BIC: ${bank.bic}`, ml, y); y += 5; }
   pdf.setFont("helvetica", "normal");
   pdf.text(`Verwendungszweck: ${invoice.nummer}`, ml, y); y += 10;
 
@@ -854,30 +780,8 @@ export function generateMahnungPdf(
   pdf.setFont("helvetica", "bold");
   pdf.text(L.company.name, ml, y);
 
-  const mahnFooterLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
-  const mahnFooterH = 8 + mahnFooterLines.length * 4;
-  const fy = pageHeight - mahnFooterH - 4;
-  pdf.setDrawColor(acR, acG, acB);
-  pdf.setLineWidth(0.3);
-  pdf.line(ml, fy, pageWidth - mr, fy);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(6);
-  pdf.setTextColor(0, 0, 0);
-  let mahnFy = fy + 4;
-  const mahnFooterLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
-  pdf.text(mahnFooterLine1, pageWidth / 2, mahnFy, { align: "center" });
-  mahnFy += 3.5;
-  if (L.footer.show_bank_in_footer) {
-    pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, mahnFy, { align: "center" });
-    mahnFy += 3.5;
-  }
-  if (L.footer.line2) {
-    pdf.text(L.footer.line2, pageWidth / 2, mahnFy, { align: "center" });
-    mahnFy += 3.5;
-  }
-  if (L.footer.line3) {
-    pdf.text(L.footer.line3, pageWidth / 2, mahnFy, { align: "center" });
-  }
+  // Einheitlicher BKS-Footer (BKS-Blau-Akzent-Linie + Firmen-Kurzinfo)
+  drawFooter(pdf, L, { withPageNumbers: false });
 
   return pdf.output("blob");
 }

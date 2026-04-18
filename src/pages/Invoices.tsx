@@ -97,7 +97,7 @@ export default function Invoices() {
   const [paymentBetrag, setPaymentBetrag] = useState("");
   const [paymentDatum, setPaymentDatum] = useState(format(new Date(), "yyyy-MM-dd"));
   const [paymentNotiz, setPaymentNotiz] = useState("");
-  const [existingPayments, setExistingPayments] = useState<{ betrag: number; datum: string; notiz: string | null; created_at: string }[]>([]);
+  const [existingPayments, setExistingPayments] = useState<{ betrag: number; datum: string; notizen: string | null; created_at: string }[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -168,7 +168,7 @@ export default function Invoices() {
       // Load existing payments
       const { data: payments } = await supabase
         .from("invoice_payments")
-        .select("betrag, datum, notiz, created_at")
+        .select("betrag, datum, notizen, created_at")
         .eq("invoice_id", invoiceId)
         .order("datum", { ascending: true });
       setExistingPayments(payments || []);
@@ -965,7 +965,7 @@ export default function Invoices() {
                             <span className="font-medium text-green-700">€ {Number(p.betrag).toFixed(2)}</span>
                             <span className="text-muted-foreground ml-2">{new Date(p.datum).toLocaleDateString("de-AT")}</span>
                           </div>
-                          {p.notiz && <span className="text-muted-foreground italic">{p.notiz}</span>}
+                          {p.notizen && <span className="text-muted-foreground italic">{p.notizen}</span>}
                         </div>
                       ))}
                     </div>
@@ -1038,7 +1038,7 @@ export default function Invoices() {
                   invoice_id: paymentInvoiceId,
                   betrag,
                   datum: paymentDatum,
-                  notiz: paymentNotiz.trim() || null,
+                  notizen: paymentNotiz.trim() || null,
                 });
 
                 const newBezahlt = (inv?.bezahlt_betrag || 0) + betrag;

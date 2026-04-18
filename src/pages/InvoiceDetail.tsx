@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -24,6 +24,7 @@ import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from 
 import { loadInvoiceLogo } from "@/lib/logoLoader";
 import { PageHeader } from "@/components/PageHeader";
 import { CustomerSelect, type CustomerData } from "@/components/CustomerSelect";
+import { CustomerEditDialog } from "@/components/CustomerEditDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -170,6 +171,7 @@ export default function InvoiceDetail() {
   const [importMaterialsOpen, setImportMaterialsOpen] = useState(false);
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
+  const [customerEditOpen, setCustomerEditOpen] = useState(false);
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
@@ -1642,146 +1644,63 @@ export default function InvoiceDetail() {
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {!form.kunde_name && !isKundeLocked ? (
-                <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus — oder tragen Sie die Daten direkt unten ein.</p>
-              ) : null}
-
-              {/* Editierbare Kundendaten — Änderungen wirken nur auf DIESES Dokument,
-                   nicht auf den Kundenstamm. Bei ausgestellten Rechnungen gesperrt. */}
-              <div className={isKundeLocked ? "space-y-3 opacity-80" : "space-y-3"}>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Anrede</Label>
-                    <Select
-                      value={(form as any).kunde_anrede || "none"}
-                      onValueChange={(v) => updateField("kunde_anrede", v === "none" ? "" : v)}
-                      disabled={isKundeLocked}
-                    >
-                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">—</SelectItem>
-                        <SelectItem value="Herr">Herr</SelectItem>
-                        <SelectItem value="Frau">Frau</SelectItem>
-                        <SelectItem value="Firma">Firma</SelectItem>
-                        <SelectItem value="Familie">Familie</SelectItem>
-                        <SelectItem value="Divers">Divers</SelectItem>
-                      </SelectContent>
-                    </Select>
+              {form.kunde_name ? (
+                <div className="rounded-lg border p-3 bg-muted/30 space-y-1 text-sm relative">
+                  {!isKundeLocked && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      {form.customer_id && (
+                        <button
+                          type="button"
+                          className="rounded-full p-1 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Kundendaten bearbeiten"
+                          onClick={() => setCustomerEditOpen(true)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="rounded-full p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Kunde entfernen"
+                        onClick={() => {
+                          setForm(prev => ({
+                            ...prev,
+                            customer_id: null,
+                            kunde_name: "",
+                            kunde_adresse: "",
+                            kunde_plz: "",
+                            kunde_ort: "",
+                            kunde_land: "Österreich",
+                            kunde_email: "",
+                            kunde_telefon: "",
+                            kunde_uid: "",
+                            kunde_anrede: "",
+                            kunde_titel: "",
+                            kundennummer: "",
+                          } as any));
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="font-medium text-base pr-16">
+                    {(form as any).kunde_anrede && <span className="text-muted-foreground">{(form as any).kunde_anrede} </span>}
+                    {(form as any).kunde_titel && <span className="text-muted-foreground">{(form as any).kunde_titel} </span>}
+                    {form.kunde_name}
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Titel</Label>
-                    <Input
-                      value={(form as any).kunde_titel || ""}
-                      onChange={(e) => updateField("kunde_titel", e.target.value)}
-                      disabled={isKundeLocked}
-                      placeholder="Mag., Dr., Ing."
-                    />
+                  {form.kunde_adresse && <div className="text-muted-foreground">{form.kunde_adresse}</div>}
+                  {(form.kunde_plz || form.kunde_ort) && <div className="text-muted-foreground">{form.kunde_plz} {form.kunde_ort} {form.kunde_land && form.kunde_land !== "Österreich" ? `· ${form.kunde_land}` : ""}</div>}
+                  <div className="flex gap-4 mt-1">
+                    {form.kunde_email && <span className="text-muted-foreground">{form.kunde_email}</span>}
+                    {form.kunde_telefon && <span className="text-muted-foreground">{form.kunde_telefon}</span>}
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Kundennummer</Label>
-                    <Input
-                      value={(form as any).kundennummer || ""}
-                      onChange={(e) => updateField("kundennummer" as any, e.target.value)}
-                      disabled={isKundeLocked}
-                      placeholder="—"
-                    />
-                  </div>
+                  {form.kunde_uid && <div className="text-muted-foreground">UID: {form.kunde_uid}</div>}
+                  {(form as any).kundennummer && <div className="text-muted-foreground">Kundennr.: {(form as any).kundennummer}</div>}
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Firma / Name</Label>
-                  <Input
-                    value={form.kunde_name || ""}
-                    onChange={(e) => updateField("kunde_name", e.target.value)}
-                    disabled={isKundeLocked}
-                    placeholder="Firma oder Name"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Adresse</Label>
-                  <Input
-                    value={form.kunde_adresse || ""}
-                    onChange={(e) => updateField("kunde_adresse", e.target.value)}
-                    disabled={isKundeLocked}
-                    placeholder="Straße + Hausnr."
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">PLZ</Label>
-                    <Input
-                      value={form.kunde_plz || ""}
-                      onChange={(e) => updateField("kunde_plz", e.target.value)}
-                      disabled={isKundeLocked}
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Ort</Label>
-                    <Input
-                      value={form.kunde_ort || ""}
-                      onChange={(e) => updateField("kunde_ort", e.target.value)}
-                      disabled={isKundeLocked}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">E-Mail</Label>
-                    <Input
-                      type="email"
-                      value={form.kunde_email || ""}
-                      onChange={(e) => updateField("kunde_email", e.target.value)}
-                      disabled={isKundeLocked}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Telefon</Label>
-                    <Input
-                      value={form.kunde_telefon || ""}
-                      onChange={(e) => updateField("kunde_telefon", e.target.value)}
-                      disabled={isKundeLocked}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">UID-Nummer</Label>
-                  <Input
-                    value={form.kunde_uid || ""}
-                    onChange={(e) => updateField("kunde_uid", e.target.value)}
-                    disabled={isKundeLocked}
-                    placeholder="ATU..."
-                  />
-                </div>
-                {form.customer_id && !isKundeLocked && (
-                  <div className="flex justify-between items-center pt-1">
-                    <p className="text-xs text-muted-foreground">
-                      Verknüpft mit Kundenstamm · Änderungen hier gelten nur für dieses Dokument
-                    </p>
-                    <button
-                      type="button"
-                      className="text-xs text-destructive hover:underline"
-                      onClick={() => {
-                        setForm(prev => ({
-                          ...prev,
-                          customer_id: null,
-                          kunde_name: "",
-                          kunde_adresse: "",
-                          kunde_plz: "",
-                          kunde_ort: "",
-                          kunde_land: "Österreich",
-                          kunde_email: "",
-                          kunde_telefon: "",
-                          kunde_uid: "",
-                          kunde_anrede: "",
-                          kunde_titel: "",
-                          kundennummer: "",
-                        } as any));
-                      }}
-                    >
-                      Verknüpfung lösen
-                    </button>
-                  </div>
-                )}
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
+              )}
               {/* Zahlungseinstellungen (vom Kunden) */}
               {form.typ === "rechnung" && (form.skonto_prozent > 0 || form.skonto_tage > 0 || (form as any).zahlungsbedingungen) && (
                 <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
@@ -2611,6 +2530,30 @@ export default function InvoiceDetail() {
             setItems(prev => mergeItems(prev, newItems));
             setImportTimeOpen(false);
             toast({ title: "Arbeitszeit importiert", description: `${newItems.length} Positionen hinzugefügt` });
+          }}
+        />
+
+        {/* Kunden-Bearbeiten Dialog */}
+        <CustomerEditDialog
+          open={customerEditOpen}
+          onClose={() => setCustomerEditOpen(false)}
+          customerId={form.customer_id}
+          onSaved={(cust) => {
+            // Aktualisierte Kundendaten in die Rechnung/Angebot übernehmen
+            setForm(prev => ({
+              ...prev,
+              kunde_name: cust.name,
+              kunde_anrede: cust.anrede || "",
+              kunde_titel: cust.titel || "",
+              kunde_adresse: cust.adresse || "",
+              kunde_plz: cust.plz || "",
+              kunde_ort: cust.ort || "",
+              kunde_land: cust.land || "Österreich",
+              kunde_email: cust.email || "",
+              kunde_telefon: cust.telefon || "",
+              kunde_uid: cust.uid_nummer || "",
+              kundennummer: cust.kundennummer || "",
+            } as any));
           }}
         />
 
