@@ -82,32 +82,87 @@ export function WhatsAppAdminSettings() {
   };
 
   const loadEmployees = async () => {
-    // Nur Mitarbeiter mit verknüpftem und aktivem Profil zeigen — vermeidet Karteileichen
-    const { data } = await (supabase.from("employees" as never) as any)
-      .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date, profiles:user_id!inner(is_active)")
-      .eq("aktiv", true)
-      .eq("profiles.is_active", true)
-      .order("nachname");
-    if (data) setEmployees(data as WhatsAppEmployee[]);
+    // Quelle: aktive Profile. Employees-Daten werden per user_id zusammengeführt,
+    // fehlende employees-Einträge werden on-the-fly als Platzhalter angezeigt und
+    // beim Toggle automatisch angelegt.
+    const [{ data: profs }, { data: emps }] = await Promise.all([
+      (supabase.from("profiles" as never) as any)
+        .select("id, vorname, nachname, telefon")
+        .eq("is_active", true)
+        .order("nachname"),
+      (supabase.from("employees" as never) as any)
+        .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
+        .eq("aktiv", true),
+    ]);
+    const empByUser = new Map<string, any>();
+    (emps || []).forEach((e: any) => { if (e.user_id) empByUser.set(e.user_id, e); });
+
+    const merged: WhatsAppEmployee[] = (profs || []).map((p: any) => {
+      const e = empByUser.get(p.id);
+      return e
+        ? {
+            ...e,
+            vorname: p.vorname || e.vorname,
+            nachname: p.nachname || e.nachname,
+            telefon: e.telefon || p.telefon || null,
+          }
+        : {
+            id: `profile:${p.id}`,
+            user_id: p.id,
+            vorname: p.vorname || "",
+            nachname: p.nachname || "",
+            telefon: p.telefon || null,
+            whatsapp_aktiv: false,
+            whatsapp_last_morning_date: null,
+            whatsapp_last_evening_date: null,
+          };
+    });
+    setEmployees(merged);
   };
 
   const toggleEmployeeWhatsApp = async (emp: WhatsAppEmployee) => {
     if (togglingEmp) return;
     setTogglingEmp(emp.id);
     const newVal = !emp.whatsapp_aktiv;
-    const { error } = await (supabase.from("employees" as never) as any)
-      .update({ whatsapp_aktiv: newVal })
-      .eq("id", emp.id);
-    setTogglingEmp(null);
-    if (error) {
-      toast({ variant: "destructive", title: "Fehler", description: error.message });
-      return;
+    const isPlaceholder = emp.id.startsWith("profile:");
+
+    try {
+      if (isPlaceholder) {
+        if (!emp.telefon) {
+          toast({ variant: "destructive", title: "Telefonnummer fehlt", description: "Bitte zuerst Telefonnummer in Stammdaten hinterlegen." });
+          return;
+        }
+        const { data: inserted, error } = await (supabase.from("employees" as never) as any)
+          .insert({
+            user_id: emp.user_id,
+            vorname: emp.vorname,
+            nachname: emp.nachname,
+            telefon: emp.telefon,
+            whatsapp_aktiv: newVal,
+            aktiv: true,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        setEmployees(prev => prev.map(e => e.id === emp.id
+          ? { ...e, id: inserted.id, whatsapp_aktiv: newVal }
+          : e));
+      } else {
+        const { error } = await (supabase.from("employees" as never) as any)
+          .update({ whatsapp_aktiv: newVal })
+          .eq("id", emp.id);
+        if (error) throw error;
+        setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, whatsapp_aktiv: newVal } : e));
+      }
+      toast({
+        title: newVal ? "WhatsApp aktiviert" : "WhatsApp deaktiviert",
+        description: `${emp.vorname} ${emp.nachname}`,
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler", description: err.message });
+    } finally {
+      setTogglingEmp(null);
     }
-    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, whatsapp_aktiv: newVal } : e));
-    toast({
-      title: newVal ? "WhatsApp aktiviert" : "WhatsApp deaktiviert",
-      description: `${emp.vorname} ${emp.nachname}`,
-    });
   };
 
   const sendWelcomeMessage = async (emp: WhatsAppEmployee) => {
