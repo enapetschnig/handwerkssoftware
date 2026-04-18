@@ -228,7 +228,7 @@ async function gatherContext(userId: string) {
 
   const [projectsRes, todayEntriesRes, assignmentsRes, weekEntriesRes] =
     await Promise.all([
-      supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name"),
+      supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name"),
       supabase.from("time_entries")
         .select("id, stunden, taetigkeit, project_id, projects(name), created_at")
         .eq("user_id", userId).eq("datum", today)
@@ -470,7 +470,7 @@ async function executeTool(
     const { data: matches } = await supabase
       .from("projects")
       .select("id, name")
-      .eq("status", "In Arbeit")
+      .not("status", "eq", "Abgeschlossen")
       .ilike("name", `%${searchTerm}%`)
       .limit(5);
 
@@ -480,7 +480,7 @@ async function executeTool(
       let fuzzyMatch = null;
       if (words.length > 0) {
         const { data: allProjects } = await supabase
-          .from("projects").select("id, name").eq("status", "In Arbeit");
+          .from("projects").select("id, name").not("status", "eq", "Abgeschlossen");
         fuzzyMatch = (allProjects || []).find((p: any) =>
           words.some((w: string) => p.name.toLowerCase().includes(w.toLowerCase()))
         );
@@ -488,7 +488,7 @@ async function executeTool(
       if (fuzzyMatch) {
         input.project_id = fuzzyMatch.id;
       } else {
-        const { data: allP } = await supabase.from("projects").select("name").eq("status", "In Arbeit");
+        const { data: allP } = await supabase.from("projects").select("name").not("status", "eq", "Abgeschlossen");
         const list = (allP || []).map((p: any, i: number) => `${i + 1}. ${p.name}`).join("\n");
         return `FEHLER: Kein Projekt "${searchTerm}" gefunden. Aktive Projekte:\n${list}`;
       }
@@ -618,7 +618,7 @@ async function executeTool(
 
     case "projekte_anzeigen": {
       const { data: projects } = await supabase
-        .from("projects").select("id, name").eq("status", "In Arbeit").order("name");
+        .from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name");
 
       if (!projects?.length) return "Keine aktiven Projekte.";
       return "AKTIVE PROJEKTE:\n" + projects.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
@@ -656,7 +656,7 @@ async function executeTool(
       if (args.end_time) update.end_time = args.end_time;
       if (args.neues_projekt_name) {
         const { data: projs } = await supabase
-          .from("projects").select("id, name").eq("status", "In Arbeit");
+          .from("projects").select("id, name").not("status", "eq", "Abgeschlossen");
         const needle = String(args.neues_projekt_name).toLowerCase();
         const match = (projs || []).find((p: any) => p.name.toLowerCase().includes(needle));
         if (!match) return `ERROR: Projekt "${args.neues_projekt_name}" nicht gefunden.`;
