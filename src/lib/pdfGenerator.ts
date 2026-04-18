@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceLayoutTypes";
 import { drawLetterhead, drawFooter, LETTERHEAD_MARGIN } from "./pdfLetterhead";
+import { DEFAULT_MAHNUNG_SETTINGS, renderMahnungText, type MahnungSettings } from "./mahnungSettings";
 
 const DEFAULT_BANK: BankData = {
   kontoinhaber: "",
@@ -673,9 +674,15 @@ export function generateMahnungPdf(
   mahngebuehr: number = 0,
   bank: BankData = DEFAULT_BANK,
   logoDataUri?: string,
-  layout?: InvoiceLayoutSettings
+  layout?: InvoiceLayoutSettings,
+  mahnungSettings?: MahnungSettings,
 ): Blob {
   const L = layout || DEFAULT_LAYOUT;
+  const MS = mahnungSettings || DEFAULT_MAHNUNG_SETTINGS;
+  const stufeIdx = Math.min(Math.max(mahnstufe, 1), 3) - 1;
+  const stufeConfig = MS.stufen[stufeIdx];
+  // Mahngebühr aus Config, wenn nicht explizit mitgegeben
+  const effektiveGebuehr = mahngebuehr > 0 ? mahngebuehr : stufeConfig.gebuehr;
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -704,11 +711,10 @@ export function generateMahnungPdf(
   }
   y += 10;
 
-  const stufeText = mahnstufe === 1 ? "Zahlungserinnerung" : mahnstufe === 2 ? "2. Mahnung" : "Letzte Mahnung";
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(14);
   pdf.setTextColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
-  pdf.text(stufeText, ml, y);
+  pdf.text(stufeConfig.titel, ml, y);
   y += 4;
   pdf.setDrawColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
   pdf.setLineWidth(0.8);
@@ -725,14 +731,11 @@ export function generateMahnungPdf(
   pdf.setFontSize(10);
   const offenerBetrag = invoice.brutto_summe - invoice.bezahlt_betrag;
 
-  let bodyText = "";
-  if (mahnstufe === 1) {
-    bodyText = "Sehr geehrte Damen und Herren,\n\nbei der Überprüfung unserer Konten haben wir festgestellt, dass die folgende Rechnung noch nicht beglichen wurde. Möglicherweise handelt es sich um ein Versehen.\n\nWir bitten Sie freundlich, den offenen Betrag innerhalb der nächsten 7 Tage zu überweisen.";
-  } else if (mahnstufe === 2) {
-    bodyText = "Sehr geehrte Damen und Herren,\n\ntrotz unserer Zahlungserinnerung ist die folgende Rechnung weiterhin offen. Wir bitten Sie dringend, den ausstehenden Betrag umgehend zu begleichen.";
-  } else {
-    bodyText = "Sehr geehrte Damen und Herren,\n\ntrotz wiederholter Aufforderung ist die nachstehende Rechnung noch immer unbeglichen. Wir fordern Sie hiermit letztmalig auf, den offenen Betrag innerhalb von 5 Werktagen zu überweisen.\n\nSollte die Zahlung nicht fristgerecht eingehen, sehen wir uns gezwungen, rechtliche Schritte einzuleiten.";
-  }
+  const bodyText = renderMahnungText(stufeConfig.text, {
+    tage: stufeConfig.frist_tage,
+    rechnungsnummer: invoice.nummer,
+    betrag: fmtCurrency(offenerBetrag),
+  });
 
   const bodyLines = pdf.splitTextToSize(bodyText, pageWidth - ml - mr);
   pdf.text(bodyLines, ml, y);
@@ -746,9 +749,9 @@ export function generateMahnungPdf(
   ];
   if (invoice.bezahlt_betrag > 0) detailRows.push(["Bereits bezahlt:", fmtCurrency(invoice.bezahlt_betrag)]);
   detailRows.push(["Offener Betrag:", fmtCurrency(offenerBetrag)]);
-  if (mahngebuehr > 0) {
-    detailRows.push(["Mahngebühr:", fmtCurrency(mahngebuehr)]);
-    detailRows.push(["Gesamt fällig:", fmtCurrency(offenerBetrag + mahngebuehr)]);
+  if (effektiveGebuehr > 0) {
+    detailRows.push(["Mahngebühr:", fmtCurrency(effektiveGebuehr)]);
+    detailRows.push(["Gesamt fällig:", fmtCurrency(offenerBetrag + effektiveGebuehr)]);
   }
 
   detailRows.forEach(([label, value]) => {

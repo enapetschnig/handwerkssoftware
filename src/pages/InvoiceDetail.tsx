@@ -1248,13 +1248,15 @@ export default function InvoiceDetail() {
                             if (s.key === "bank_bic") bank.bic = s.value;
                           });
                           const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                          const { loadMahnungSettings } = await import("@/lib/mahnungSettings");
+                          const mahnSettings = await loadMahnungSettings();
                           const pdfBlob = generateMahnungPdf(
                             { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
-                            mahnstufe, 0, bank, logoUri, invoiceLayout
+                            mahnstufe, 0, bank, logoUri, invoiceLayout, mahnSettings
                           );
                           const url = URL.createObjectURL(pdfBlob);
                           const a = document.createElement("a"); a.href = url;
-                          const stufeLabel = mahnstufe === 1 ? "Zahlungserinnerung" : `${mahnstufe}. Mahnung`;
+                          const stufeLabel = mahnSettings.stufen[Math.min(Math.max(mahnstufe, 1), 3) - 1].titel;
                           a.download = `${stufeLabel}_${form.nummer}.pdf`; a.click();
                           URL.revokeObjectURL(url);
                           toast({ title: `${stufeLabel} erstellt`, description: "PDF wurde heruntergeladen" });
@@ -1452,9 +1454,11 @@ export default function InvoiceDetail() {
                               if (s.key === "bank_bic") bank.bic = s.value;
                             });
                             const { generateMahnungPdf } = await import("@/lib/pdfGenerator");
+                            const { loadMahnungSettings } = await import("@/lib/mahnungSettings");
+                            const mahnSettings = await loadMahnungSettings();
                             const pdfBlob = generateMahnungPdf(
                               { nummer: form.nummer, datum: form.datum, faellig_am: form.faellig_am, kunde_name: form.kunde_name, kunde_adresse: form.kunde_adresse, kunde_plz: form.kunde_plz, kunde_ort: form.kunde_ort, brutto_summe: bruttoSumme, bezahlt_betrag: form.bezahlt_betrag },
-                              m.mahnstufe, 0, bank, logoUri, invoiceLayout
+                              m.mahnstufe, 0, bank, logoUri, invoiceLayout, mahnSettings
                             );
                             const url = URL.createObjectURL(pdfBlob);
                             const a = document.createElement("a"); a.href = url; a.download = `${label}_${form.nummer}.pdf`; a.click();

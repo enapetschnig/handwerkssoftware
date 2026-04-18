@@ -26,6 +26,7 @@ import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
+import { MahnungSettings } from "@/components/admin/MahnungSettings";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
@@ -1182,6 +1183,11 @@ export default function Admin() {
             {/* ===== NUMMERNKREISE ===== */}
             <div id="nummernkreise" className="scroll-mt-4">
               <NumberRangeSettings />
+            </div>
+
+            {/* ===== MAHNUNGEN ===== */}
+            <div id="mahnungen" className="scroll-mt-4">
+              <MahnungSettings />
             </div>
           </TabsContent>
 
