@@ -5,7 +5,7 @@ import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceL
 import { drawLetterhead, drawFooter, LETTERHEAD_MARGIN } from "./pdfLetterhead";
 
 const DEFAULT_BANK: BankData = {
-  kontoinhaber: "BKS BauKomplettService",
+  kontoinhaber: "",
   iban: "",
   bic: "",
 };

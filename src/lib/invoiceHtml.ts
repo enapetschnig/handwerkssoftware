@@ -38,7 +38,7 @@ export interface BankData {
 }
 
 export const DEFAULT_BANK: BankData = {
-  kontoinhaber: "BKS BauKomplettService",
+  kontoinhaber: "",
   iban: "",
   bic: "",
 };

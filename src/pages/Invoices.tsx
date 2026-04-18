@@ -82,7 +82,7 @@ export default function Invoices() {
   const [exportMonth, setExportMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [exportMode, setExportMode] = useState<"month" | "year">("month");
   const [exporting, setExporting] = useState(false);
-  const [bankKontoinhaber, setBankKontoinhaber] = useState("BKS BauKomplettService");
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("");
   const [bankIban, setBankIban] = useState("");
   const [bankBic, setBankBic] = useState("");
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
@@ -230,7 +230,7 @@ export default function Invoices() {
       ]);
       if (!inv) throw new Error("Rechnung nicht gefunden");
 
-      const bank = { kontoinhaber: "BKS BauKomplettService", iban: bankIban, bic: bankBic };
+      const bank = { kontoinhaber: "", iban: bankIban, bic: bankBic };
       let firmenUid = "";
       if (bankSettings) {
         bankSettings.forEach((s: any) => {

@@ -142,7 +142,7 @@ export default function Admin() {
 
   // App settings states
   const [regiereportEmail, setRegiereportEmail] = useState("");
-  const [bankKontoinhaber, setBankKontoinhaber] = useState("BKS BauKomplettService");
+  const [bankKontoinhaber, setBankKontoinhaber] = useState("");
   const [bankIban, setBankIban] = useState("");
   const [bankBic, setBankBic] = useState("");
   const [firmenUid, setFirmenUid] = useState("");
