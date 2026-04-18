@@ -49,6 +49,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       vorname, nachname, telefon, email,
       adresse, plz, ort,
       geburtsdatum, sv_nummer, eintrittsdatum, stundenlohn,
+      whatsapp_aktiv,
     } = await req.json();
 
     if (!username || !password || !vorname || !nachname) {
@@ -117,35 +118,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       role: userRole,
     }, { onConflict: "user_id" });
 
-    // Create or attach employees row (for Plantafel, WhatsApp, etc.)
-    // whatsapp_aktiv = true if telefon provided, so the bot is live from day one
+    // Create employees row (for Plantafel, WhatsApp, Zeitbuchung).
+    // WhatsApp-Chat ist nur aktiv, wenn explizit gewünscht UND Telefon vorhanden.
+    const wantsWhatsApp = whatsapp_aktiv === true && !!(telefon && String(telefon).trim());
     const employeePayload: Record<string, unknown> = {
       user_id: userId,
       vorname,
       nachname,
       email: email || null,
       telefon: telefon || null,
-      whatsapp_aktiv: !!telefon,
-      position: userRole === "vorarbeiter" ? "vorarbeiter" : "mitarbeiter",
+      whatsapp_aktiv: wantsWhatsApp,
       aktiv: true,
     };
 
-    // Try to attach an existing employee row with matching name & null user_id first
-    const { data: existingEmp } = await supabase
-      .from("employees")
-      .select("id")
-      .is("user_id", null)
-      .eq("vorname", vorname)
-      .eq("nachname", nachname)
-      .maybeSingle();
-
-    if (existingEmp) {
-      await supabase
-        .from("employees")
-        .update(employeePayload)
-        .eq("id", existingEmp.id);
-    } else {
-      await supabase.from("employees").insert(employeePayload);
+    const { error: empErr } = await supabase.from("employees").insert(employeePayload);
+    if (empErr) {
+      // Nicht kritisch — User ist trotzdem angelegt. Nur loggen, nicht abbrechen.
+      console.error("Employee insert failed (non-fatal):", empErr);
     }
 
     return new Response(JSON.stringify({

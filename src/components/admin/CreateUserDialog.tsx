@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { UserPlus, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { UserPlus, Eye, EyeOff, Copy, Check, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -78,6 +79,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [onboardingText, setOnboardingText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [whatsappAktiv, setWhatsappAktiv] = useState(true);
 
   const [form, setForm] = useState(emptyForm);
 
@@ -92,6 +94,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
 
   const resetAndClose = () => {
     setForm(emptyForm);
+    setWhatsappAktiv(true);
     setOnboardingText(null);
     setCopied(false);
     onOpenChange(false);
@@ -117,15 +120,18 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
 
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("create-user", { body: form });
+      const hasPhone = !!form.telefon.trim();
+      const enableWhatsApp = hasPhone && whatsappAktiv;
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: { ...form, whatsapp_aktiv: enableWhatsApp },
+      });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
 
-      const hasPhone = !!form.telefon.trim();
       toast({
         title: "Benutzer erstellt",
-        description: hasPhone
-          ? `${form.vorname} ${form.nachname} — WhatsApp automatisch aktiviert`
+        description: enableWhatsApp
+          ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert`
           : `${form.vorname} ${form.nachname}`,
       });
 
@@ -135,7 +141,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           username: form.username.trim().toLowerCase(),
           password: form.password,
           appUrl: window.location.origin,
-          hasWhatsApp: hasPhone,
+          hasWhatsApp: enableWhatsApp,
         }),
       );
       onCreated();
@@ -240,7 +246,17 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
                 <div>
                   <Label>Telefon</Label>
                   <Input value={form.telefon} onChange={e => update("telefon", e.target.value)} placeholder="+43..." />
-                  <p className="text-xs text-muted-foreground mt-0.5">Mit Nummer → WhatsApp-Assistent sofort aktiv</p>
+                  <label className="flex items-center justify-between gap-3 mt-2 rounded-md border px-2.5 py-1.5 bg-muted/30">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <MessageCircle className="h-3.5 w-3.5 text-green-600" />
+                      WhatsApp-Chat aktivieren
+                    </span>
+                    <Switch
+                      checked={whatsappAktiv && !!form.telefon.trim()}
+                      disabled={!form.telefon.trim()}
+                      onCheckedChange={setWhatsappAktiv}
+                    />
+                  </label>
                 </div>
                 <div>
                   <Label>E-Mail</Label>
