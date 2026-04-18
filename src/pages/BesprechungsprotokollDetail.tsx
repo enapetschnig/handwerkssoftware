@@ -276,22 +276,18 @@ const BesprechungsprotokollDetail = () => {
                 <Input value={ort} onChange={(e) => setOrt(e.target.value)} placeholder="Besprechungsort" />
               </div>
               <div>
-                <Label>Kunde</Label>
-                <CustomerSelect
-                  value={customerId}
-                  onChange={(id) => { setCustomerId(id || ""); setProjectId(""); }}
-                />
-              </div>
-              <div>
                 <Label>Projekt</Label>
                 <Select
                   value={projectId}
                   onValueChange={(id) => {
                     setProjectId(id);
-                    // Auto-Fill: Kunde aus Projekt setzen, wenn Kunde noch leer ist
-                    if (id && !customerId) {
+                    // Auto-Fill: Kunde aus Projekt setzen, wenn Kunde noch leer ist oder
+                    // ein anderer Kunde gesetzt war, der nicht zum Projekt passt.
+                    if (id) {
                       const p = projects.find((x) => x.id === id);
-                      if (p?.customer_id) setCustomerId(p.customer_id);
+                      if (p?.customer_id && p.customer_id !== customerId) {
+                        setCustomerId(p.customer_id);
+                      }
                     }
                   }}
                 >
@@ -302,6 +298,20 @@ const BesprechungsprotokollDetail = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Kunde</Label>
+                <CustomerSelect
+                  value={customerId}
+                  onChange={(id) => {
+                    setCustomerId(id || "");
+                    // Wenn der ausgewählte Kunde nicht zum aktuellen Projekt passt → Projekt zurücksetzen
+                    if (projectId) {
+                      const p = projects.find((x) => x.id === projectId);
+                      if (p && p.customer_id && p.customer_id !== id) setProjectId("");
+                    }
+                  }}
+                />
               </div>
               <div className="sm:col-span-2">
                 <Label>Protokollant</Label>
