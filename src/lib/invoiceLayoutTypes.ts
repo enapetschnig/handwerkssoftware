@@ -49,8 +49,8 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   logo: {
     enabled: true,
     position: "left",
-    width_mm: 70,
-    height_mm: 8.6,
+    width_mm: 100,
+    height_mm: 12.3,
   },
   footer: {
     line1: "",
@@ -79,9 +79,19 @@ export function parseLayoutSettings(value: string | null | undefined): InvoiceLa
     const parsed = JSON.parse(value);
     let accent = parsed.accent_color ?? DEFAULT_LAYOUT.accent_color;
     if (LEGACY_ACCENT_COLORS.has(accent)) accent = DEFAULT_LAYOUT.accent_color;
+
+    // Legacy logo width migration: alte Werte (30/50/70mm) waren zu klein
+    // für das horizontale BKS-Logo → auto-upgrade auf 100mm
+    const parsedLogo = { ...(parsed.logo || {}) };
+    const savedWidth = Number(parsedLogo.width_mm);
+    if (!savedWidth || savedWidth < 90) {
+      parsedLogo.width_mm = DEFAULT_LAYOUT.logo.width_mm;
+      parsedLogo.height_mm = DEFAULT_LAYOUT.logo.height_mm;
+    }
+
     return {
       company: { ...DEFAULT_LAYOUT.company, ...(parsed.company || {}) },
-      logo: { ...DEFAULT_LAYOUT.logo, ...(parsed.logo || {}) },
+      logo: { ...DEFAULT_LAYOUT.logo, ...parsedLogo },
       footer: { ...DEFAULT_LAYOUT.footer, ...(parsed.footer || {}) },
       sender_line: parsed.sender_line ?? DEFAULT_LAYOUT.sender_line,
       closing_text_invoice: parsed.closing_text_invoice ?? DEFAULT_LAYOUT.closing_text_invoice,

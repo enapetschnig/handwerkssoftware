@@ -232,7 +232,7 @@ export function buildInvoiceHtml(
   /* Header — logo left, company info right (first page) */
   .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid #ccc; margin-bottom: 18px; gap: 20px; }
   .header-logo { flex: 0 0 auto; }
-  .header-logo img { width: 70mm; height: auto; display: block; }
+  .header-logo img { width: 100mm; height: auto; display: block; }
   .header-info { text-align: right; font-size: 8pt; color: #555; line-height: 1.6; }
   .header-info strong { color: #1a1a1a; font-size: 9pt; font-family: "Montserrat", "Segoe UI", sans-serif; font-weight: 700; }
 
