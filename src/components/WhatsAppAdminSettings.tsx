@@ -82,9 +82,11 @@ export function WhatsAppAdminSettings() {
   };
 
   const loadEmployees = async () => {
+    // Nur Mitarbeiter mit verknüpftem und aktivem Profil zeigen — vermeidet Karteileichen
     const { data } = await (supabase.from("employees" as never) as any)
-      .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
+      .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date, profiles:user_id!inner(is_active)")
       .eq("aktiv", true)
+      .eq("profiles.is_active", true)
       .order("nachname");
     if (data) setEmployees(data as WhatsAppEmployee[]);
   };
