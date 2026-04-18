@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { MessageCircle, Send, RefreshCw, Settings, Clock, Calendar, Save } from "lucide-react";
+import { MessageCircle, Send, RefreshCw, Settings, Clock, Calendar, Save, Users, Phone, AlertCircle, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "react-router-dom";
 
 const DAY_OPTIONS = [
   { key: "mo", label: "Mo" },
@@ -25,14 +26,29 @@ interface SettingsMap {
   [key: string]: string;
 }
 
+interface WhatsAppEmployee {
+  id: string;
+  vorname: string;
+  nachname: string;
+  telefon: string | null;
+  whatsapp_aktiv: boolean;
+  user_id: string | null;
+  whatsapp_last_morning_date: string | null;
+  whatsapp_last_evening_date: string | null;
+}
+
 export function WhatsAppAdminSettings() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
   const [sendingMsg, setSendingMsg] = useState(false);
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
+  const [employees, setEmployees] = useState<WhatsAppEmployee[]>([]);
+  const [togglingEmp, setTogglingEmp] = useState<string | null>(null);
+  const [welcomingEmp, setWelcomingEmp] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<SettingsMap>({
     whatsapp_enabled: "true",
@@ -46,6 +62,7 @@ export function WhatsAppAdminSettings() {
 
   useEffect(() => {
     loadSettings();
+    loadEmployees();
   }, []);
 
   const loadSettings = async () => {
@@ -62,6 +79,51 @@ export function WhatsAppAdminSettings() {
       setSettings(map);
     }
     setLoading(false);
+  };
+
+  const loadEmployees = async () => {
+    const { data } = await (supabase.from("employees" as never) as any)
+      .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
+      .eq("aktiv", true)
+      .order("nachname");
+    if (data) setEmployees(data as WhatsAppEmployee[]);
+  };
+
+  const toggleEmployeeWhatsApp = async (emp: WhatsAppEmployee) => {
+    if (togglingEmp) return;
+    setTogglingEmp(emp.id);
+    const newVal = !emp.whatsapp_aktiv;
+    const { error } = await (supabase.from("employees" as never) as any)
+      .update({ whatsapp_aktiv: newVal })
+      .eq("id", emp.id);
+    setTogglingEmp(null);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, whatsapp_aktiv: newVal } : e));
+    toast({
+      title: newVal ? "WhatsApp aktiviert" : "WhatsApp deaktiviert",
+      description: `${emp.vorname} ${emp.nachname}`,
+    });
+  };
+
+  const sendWelcomeMessage = async (emp: WhatsAppEmployee) => {
+    if (welcomingEmp || !emp.telefon) return;
+    setWelcomingEmp(emp.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error } = await supabase.functions.invoke("whatsapp-onboarding", {
+        body: { employee_id: emp.id },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      toast({ title: "Willkommensnachricht gesendet", description: `${emp.vorname} ${emp.nachname}` });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler", description: err.message });
+    } finally {
+      setWelcomingEmp(null);
+    }
   };
 
   const saveSetting = async (key: string, value: string) => {
@@ -115,17 +177,18 @@ export function WhatsAppAdminSettings() {
   const handleTriggerReminder = async (type: "morning" | "evening") => {
     setSendingReminder(type);
     try {
-      const res = await fetch("https://xyhgckqxowqnzjtoblfs.supabase.co/functions/v1/whatsapp-daily-reminder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
+      // Statt Fetch auf hardcodete URL: supabase.functions.invoke nutzt die korrekte Projekt-URL automatisch
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("whatsapp-daily-reminder", {
+        body: { type, mode: "force" },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Status ${res.status}`);
+      if (error) throw error;
       toast({
         title: type === "morning" ? "Morgennachrichten gesendet" : "Abenderinnerungen gesendet",
-        description: `${data?.sentCount || 0} Mitarbeiter benachrichtigt`,
+        description: `${(data as any)?.sentCount || 0} Mitarbeiter benachrichtigt`,
       });
+      loadEmployees();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Fehler", description: err.message });
     } finally {
@@ -192,6 +255,99 @@ export function WhatsAppAdminSettings() {
               onChange={(e) => updateSetting("whatsapp_bot_name", e.target.value)}
               placeholder="BKS Assistent"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Aktive WhatsApp-Mitarbeiter */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">WhatsApp-Mitarbeiter</CardTitle>
+            </div>
+            <Badge variant="outline">
+              {employees.filter(e => e.whatsapp_aktiv && e.telefon).length} aktiv
+            </Badge>
+          </div>
+          <CardDescription>
+            Mitarbeiter, die Morgen-/Abendnachrichten erhalten und per WhatsApp Stunden buchen können.
+            Telefonnummern werden in den Mitarbeiter-Stammdaten verwaltet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Keine aktiven Mitarbeiter gefunden.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {employees.map((emp) => {
+                const hasPhone = !!emp.telefon?.trim();
+                const fullName = `${emp.vorname} ${emp.nachname}`.trim();
+                return (
+                  <div
+                    key={emp.id}
+                    className={`flex items-center justify-between gap-3 rounded-md border p-3 ${
+                      emp.whatsapp_aktiv && hasPhone ? "bg-primary/5 border-primary/20" : "bg-muted/30"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{fullName}</span>
+                        {!hasPhone && (
+                          <Badge variant="outline" className="text-xs text-destructive border-destructive/40">
+                            <AlertCircle className="h-3 w-3 mr-1" />Keine Nummer
+                          </Badge>
+                        )}
+                        {emp.whatsapp_aktiv && hasPhone && (
+                          <Badge variant="outline" className="text-xs text-green-600 border-green-600/40">
+                            Aktiv
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <Phone className="h-3 w-3" />
+                        {emp.telefon || "—"}
+                      </div>
+                      {emp.whatsapp_aktiv && (emp.whatsapp_last_morning_date || emp.whatsapp_last_evening_date) && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {emp.whatsapp_last_morning_date && <>☀️ zuletzt Morgen: {emp.whatsapp_last_morning_date} </>}
+                          {emp.whatsapp_last_evening_date && <>🌙 zuletzt Abend: {emp.whatsapp_last_evening_date}</>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {emp.whatsapp_aktiv && hasPhone && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => sendWelcomeMessage(emp)}
+                          disabled={welcomingEmp === emp.id}
+                          title="Willkommensnachricht senden"
+                          className="gap-1"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          {welcomingEmp === emp.id ? "..." : "Willkommen"}
+                        </Button>
+                      )}
+                      <Switch
+                        checked={emp.whatsapp_aktiv}
+                        disabled={togglingEmp === emp.id || !hasPhone}
+                        onCheckedChange={() => toggleEmployeeWhatsApp(emp)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Nummer fehlt? → Mitarbeiter-Stammdaten bearbeiten</span>
+            <Button variant="link" size="sm" onClick={() => navigate("/admin?tab=benutzer")} className="h-auto p-0 text-xs">
+              Zum Mitarbeiter-Bereich →
+            </Button>
           </div>
         </CardContent>
       </Card>
