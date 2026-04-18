@@ -7,7 +7,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -102,12 +101,6 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="p-3">
-        <Link to="/" className="flex items-center gap-2 px-1">
-          <img src="/newmontilogo.png" alt="BKS BauKomplettService" className="h-10 w-auto" />
-        </Link>
-      </SidebarHeader>
-
       <SidebarContent>
         {MENU_GROUPS.map((group) => {
           const visibleItems = group.items.filter(
