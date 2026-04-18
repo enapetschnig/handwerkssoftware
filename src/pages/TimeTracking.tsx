@@ -266,7 +266,7 @@ const TimeTracking = () => {
     const { data } = await supabase
       .from("projects")
       .select("id, name, status, plz")
-      .eq("status", "In Arbeit")
+      .not("status", "eq", "Abgeschlossen")
       .order("name");
 
     if (data) setProjects(data);

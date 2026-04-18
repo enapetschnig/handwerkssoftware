@@ -69,7 +69,7 @@ const Reports = () => {
     const { data, error } = await supabase
       .from('projects')
       .select('id, name')
-      .eq('status', 'In Arbeit')
+      .not('status', 'eq', 'Abgeschlossen')
       .order('name');
 
     if (error) {

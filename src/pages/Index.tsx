@@ -58,7 +58,7 @@ export default function Index() {
     const { data } = await supabase
       .from("projects")
       .select("id, name, status, updated_at")
-      .eq("status", "In Arbeit")
+      .not("status", "eq", "Abgeschlossen")
       .order("updated_at", { ascending: false })
       .limit(5);
 

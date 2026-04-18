@@ -282,7 +282,17 @@ const BesprechungsprotokollDetail = () => {
               </div>
               <div>
                 <Label>Projekt</Label>
-                <Select value={projectId} onValueChange={setProjectId}>
+                <Select
+                  value={projectId}
+                  onValueChange={(id) => {
+                    setProjectId(id);
+                    // Auto-Fill: Kunde aus Projekt setzen, wenn Kunde noch leer ist
+                    if (id && !customerId) {
+                      const p = projects.find((x) => x.id === id);
+                      if (p?.customer_id) setCustomerId(p.customer_id);
+                    }
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Projekt wählen..." /></SelectTrigger>
                   <SelectContent>
                     {filteredProjects.map((p) => (

@@ -321,7 +321,7 @@ export default function InvoiceDetail() {
 
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name");
+    const { data } = await supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name");
     if (data) setProjects(data);
   };
 
@@ -2755,7 +2755,7 @@ export default function InvoiceDetail() {
             const { data: projectsData } = await supabase
               .from("projects")
               .select("id, name")
-              .eq("status", "In Arbeit")
+              .not("status", "eq", "Abgeschlossen")
               .order("name");
             if (projectsData) setProjects(projectsData);
             setCreateProjectDialogOpen(false);

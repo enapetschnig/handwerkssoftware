@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { QuickUploadDialog } from "@/components/QuickUploadDialog";
 import { MobilePhotoCapture } from "@/components/MobilePhotoCapture";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useProjectStatuses, type ProjectStatus } from "@/hooks/useProjectStatuses";
 
 type Project = {
   id: string;
@@ -54,14 +55,14 @@ const Projects = () => {
     projectId: string;
     documentType: 'photos' | 'plans' | 'reports' | 'materials';
   } | null>(null);
-  const [projectToClose, setProjectToClose] = useState<{id: string, name: string} | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
   const [showCameraDialog, setShowCameraDialog] = useState(false);
-  const [closedProjectsOpen, setClosedProjectsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { statuses: projectStatuses, findByName } = useProjectStatuses();
 
   useEffect(() => {
     checkAdminStatus();
@@ -164,18 +165,6 @@ const Projects = () => {
     }
   };
 
-  const handleToggleProjectStatus = async (projectId: string, currentStatus: string, projectName: string) => {
-    if (togglingStatus) return; // Prevent double-click
-    
-    // Wenn Projekt geschlossen wird → Bestätigung anfordern
-    if (currentStatus === 'In Arbeit') {
-      setProjectToClose({ id: projectId, name: projectName });
-      return;
-    }
-    // Wiedereröffnen ohne Bestätigung
-    await updateProjectStatus(projectId, 'In Arbeit', projectName);
-  };
-
   const updateProjectStatus = async (projectId: string, newStatus: string, projectName: string) => {
     if (togglingStatus) return;
     setTogglingStatus(projectId);
@@ -194,13 +183,12 @@ const Projects = () => {
       setTogglingStatus(null);
     } else {
       toast({
-        title: newStatus === 'In Arbeit' ? 'Projekt wiedereröffnet' : 'Projekt geschlossen',
-        description: `${projectName} wurde ${newStatus === 'In Arbeit' ? 'wiedereröffnet' : 'geschlossen'}`,
+        title: "Status aktualisiert",
+        description: `${projectName} → ${newStatus}`,
       });
       fetchProjects();
       setTogglingStatus(null);
     }
-    setProjectToClose(null);
   };
 
   const handleDeleteProject = async () => {
@@ -369,302 +357,255 @@ const Projects = () => {
           </p>
         </div>
 
-        {/* Aktive Projekte Section */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-xl font-semibold">Aktive Projekte</h2>
-            <Badge variant="secondary">
-              {projects.filter(p => p.status === 'In Arbeit').length}
-            </Badge>
-          </div>
+        {/* Status-Filter + Suche */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Badge
+            variant={statusFilter === "all" ? "default" : "outline"}
+            className="cursor-pointer select-none"
+            onClick={() => setStatusFilter("all")}
+          >
+            Alle
+            <span className="ml-1.5 opacity-70">({projects.length})</span>
+          </Badge>
+          {projectStatuses.map((s) => {
+            const count = projects.filter((p) => (p.status || "").toLowerCase() === s.name.toLowerCase()).length;
+            if (count === 0 && statusFilter !== s.name) return null;
+            const isActive = statusFilter === s.name;
+            return (
+              <Badge
+                key={s.id}
+                className="cursor-pointer select-none border"
+                style={
+                  isActive
+                    ? { backgroundColor: s.farbe_bg, color: s.farbe_text, borderColor: s.farbe_bg }
+                    : { backgroundColor: "transparent", color: s.farbe_bg, borderColor: s.farbe_bg }
+                }
+                onClick={() => setStatusFilter(s.name)}
+              >
+                {s.name}
+                <span className="ml-1.5 opacity-70">({count})</span>
+              </Badge>
+            );
+          })}
+        </div>
 
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Aktive Projekte durchsuchen..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:gap-4 lg:gap-6">
-            {projects
-              .filter((project) => {
-                if (project.status !== 'In Arbeit') return false;
-                const query = searchQuery.toLowerCase();
-                return (
-                  project.name.toLowerCase().includes(query) ||
-                  project.adresse?.toLowerCase().includes(query) ||
-                  project.beschreibung?.toLowerCase().includes(query)
-                );
-              })
-              .map((project) => (
-            <Card 
-              key={project.id} 
-              className="border-2 hover:shadow-lg transition-all cursor-pointer"
-              onClick={() => navigate(`/projects/${project.id}`)}
-              
-            >
-              <CardHeader className="bg-primary/5 pb-3 sm:pb-4">
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
-                  <div className="flex gap-2 sm:gap-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      {project.status === "Abgeschlossen" ? (
-                        <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
-                      ) : (
-                        <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
-                      {project.adresse && (
-                        <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
-                      )}
-                      {(project as any).ort && !(project.adresse || "").includes((project as any).ort) && (
-                        <CardDescription className="text-xs text-muted-foreground">{(project as any).ort}</CardDescription>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
-                    {(project as any).projektart && (
-                      <Badge variant="outline" className="whitespace-nowrap text-xs">
-                        {(project as any).projektart}
-                      </Badge>
-                    )}
-                    {(project as any).prioritaet && (project as any).prioritaet !== "normal" && (
-                      <Badge
-                        variant={(project as any).prioritaet === "hoch" || (project as any).prioritaet === "dringend" ? "destructive" : "secondary"}
-                        className="whitespace-nowrap text-xs"
-                      >
-                        {(project as any).prioritaet}
-                      </Badge>
-                    )}
-                    <Badge
-                      variant={project.status === "In Arbeit" ? "default" : "secondary"}
-                      className="whitespace-nowrap"
-                    >
-                      {project.status === "In Arbeit" ? "Aktiv" : "Geschlossen"}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4 sm:pt-6">
-                {project.beschreibung && (
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
-                    {project.beschreibung}
-                  </p>
-                )}
-                
-                <div className={`flex flex-wrap gap-2 sm:gap-3 mb-4`}>
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-medium">Pläne</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-medium">Berichte</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                    <Package className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-medium">Material</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                    <Image className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-medium">Fotos</span>
-                  </div>
-                  {isAdmin && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                      <Lock className="w-4 h-4 text-primary" />
-                      <span className="text-xs font-medium">Chef</span>
-                    </div>
-                  )}
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-2 mt-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Upload className="w-4 h-4" />
-                      + Dateien hochladen
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56 bg-background z-50">
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      setQuickUploadProject({ projectId: project.id, documentType: 'photos' });
-                      setShowCameraDialog(true);
-                    }}>
-                      <Camera className="w-4 h-4 mr-2" />
-                      📸 Foto aufnehmen
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      setQuickUploadProject({ projectId: project.id, documentType: 'photos' });
-                    }}>
-                      <Camera className="w-4 h-4 mr-2" />
-                      📷 Fotos hochladen
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      setQuickUploadProject({ projectId: project.id, documentType: 'plans' });
-                    }}>
-                      <FileText className="w-4 h-4 mr-2" />
-                      📋 Pläne hochladen
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      setQuickUploadProject({ projectId: project.id, documentType: 'reports' });
-                    }}>
-                      <FileText className="w-4 h-4 mr-2" />
-                      📄 Regieberichte hochladen
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      setQuickUploadProject({ projectId: project.id, documentType: 'materials' });
-                    }}>
-                      <Package className="w-4 h-4 mr-2" />
-                      📦 Materiallisten hochladen
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <div 
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t mt-3"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <p className="text-xs text-muted-foreground">
-                    Aktualisiert: {formatDate(project.updated_at)}
-                  </p>
-                  {isAdmin && (
-                    <Button
-                      variant={project.status === 'In Arbeit' ? 'ghost' : 'default'}
-                      size="sm"
-                      className="text-xs self-end sm:self-auto"
-                      onClick={() => handleToggleProjectStatus(project.id, project.status, project.name)}
-                    >
-                      {project.status === 'In Arbeit' ? 'Projekt schließen' : 'Projekt wiedereröffnen'}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {projects.filter(p => p.status === 'In Arbeit').length === 0 && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg font-semibold mb-2">Keine aktiven Projekte</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Erstelle dein erstes Projekt
-                </p>
-                <Button onClick={() => setShowNewDialog(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Neues Projekt
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Projekte durchsuchen..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </div>
 
-        {/* Geschlossene Projekte Section */}
-        {projects.filter(p => p.status === 'Abgeschlossen').length > 0 && (
-          <Collapsible open={closedProjectsOpen} onOpenChange={setClosedProjectsOpen}>
-            <div className="mb-4">
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-between p-0 hover:bg-transparent">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-semibold">Geschlossene Projekte</h2>
-                    <Badge variant="secondary">
-                      {projects.filter(p => p.status === 'Abgeschlossen').length}
-                    </Badge>
-                  </div>
-                  <ChevronDown className={`h-5 w-5 transition-transform ${closedProjectsOpen ? 'rotate-180' : ''}`} />
-                </Button>
-              </CollapsibleTrigger>
-            </div>
+        <div className="grid gap-3 sm:gap-4 lg:gap-6">
+          {(() => {
+            const filtered = projects.filter((project) => {
+              const q = searchQuery.toLowerCase();
+              const matchesSearch =
+                project.name.toLowerCase().includes(q) ||
+                (project.adresse || "").toLowerCase().includes(q) ||
+                (project.beschreibung || "").toLowerCase().includes(q);
+              const matchesStatus =
+                statusFilter === "all" || (project.status || "").toLowerCase() === statusFilter.toLowerCase();
+              return matchesSearch && matchesStatus;
+            });
 
-            <CollapsibleContent>
-              <div className="grid gap-3 sm:gap-4 lg:gap-6">
-                {projects
-                  .filter((project) => project.status === 'Abgeschlossen')
-                  .map((project) => (
-                  <Card 
-                    key={project.id} 
-                    className="border-2 hover:shadow-lg transition-all cursor-pointer"
-                    onClick={() => navigate(`/projects/${project.id}`)}
-                  >
-                    <CardHeader className="bg-primary/5 pb-3 sm:pb-4">
-                      <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
-                        <div className="flex gap-2 sm:gap-3">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            if (filtered.length === 0) {
+              return (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg font-semibold mb-2">
+                      {statusFilter === "all"
+                        ? "Keine Projekte gefunden"
+                        : `Keine Projekte mit Status "${statusFilter}"`}
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {searchQuery ? "Kein Treffer für deine Suche" : "Erstelle dein erstes Projekt"}
+                    </p>
+                    <Button onClick={() => setShowNewDialog(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Neues Projekt
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            return filtered.map((project) => {
+              const sColor = findByName(project.status);
+              const isClosed = (project.status || "").toLowerCase() === "abgeschlossen";
+              return (
+                <Card
+                  key={project.id}
+                  className="border-2 hover:shadow-lg transition-all cursor-pointer"
+                  onClick={() => navigate(`/projects/${project.id}`)}
+                >
+                  <CardHeader className="bg-primary/5 pb-3 sm:pb-4">
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
+                      <div className="flex gap-2 sm:gap-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          {isClosed ? (
                             <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
-                            {project.adresse && (
-                              <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
-                            )}
-                          </div>
+                          ) : (
+                            <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+                          )}
                         </div>
-                        <Badge variant="secondary" className="self-start sm:self-center whitespace-nowrap">
-                          Geschlossen
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
+                          {project.adresse && (
+                            <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
+                          )}
+                          {(project as any).ort && !(project.adresse || "").includes((project as any).ort) && (
+                            <CardDescription className="text-xs text-muted-foreground">{(project as any).ort}</CardDescription>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
+                        {(project as any).projektart && (
+                          <Badge variant="outline" className="whitespace-nowrap text-xs">
+                            {(project as any).projektart}
+                          </Badge>
+                        )}
+                        {(project as any).prioritaet && (project as any).prioritaet !== "normal" && (
+                          <Badge
+                            variant={
+                              (project as any).prioritaet === "hoch" || (project as any).prioritaet === "dringend"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                            className="whitespace-nowrap text-xs"
+                          >
+                            {(project as any).prioritaet}
+                          </Badge>
+                        )}
+                        <Badge
+                          className="whitespace-nowrap border-0"
+                          style={
+                            sColor
+                              ? { backgroundColor: sColor.farbe_bg, color: sColor.farbe_text }
+                              : { backgroundColor: "#e5e7eb", color: "#374151" }
+                          }
+                        >
+                          {project.status || "–"}
                         </Badge>
                       </div>
-                    </CardHeader>
-                    <CardContent className="pt-4 sm:pt-6">
-                      {project.beschreibung && (
-                        <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
-                          {project.beschreibung}
-                        </p>
-                      )}
-                      
-                      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <span className="text-xs font-medium">Pläne</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <span className="text-xs font-medium">Berichte</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                          <Package className="w-4 h-4 text-primary" />
-                          <span className="text-xs font-medium">Material</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
-                          <Image className="w-4 h-4 text-primary" />
-                          <span className="text-xs font-medium">Fotos</span>
-                        </div>
-                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4 sm:pt-6">
+                    {project.beschreibung && (
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
+                        {project.beschreibung}
+                      </p>
+                    )}
 
-                      <div 
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t mt-3"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <p className="text-xs text-muted-foreground">
-                          Aktualisiert: {formatDate(project.updated_at)}
-                        </p>
-                        {isAdmin && (
-                          <div className="flex gap-2 self-end sm:self-auto">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="text-xs"
-                              onClick={() => handleToggleProjectStatus(project.id, project.status, project.name)}
-                              disabled={togglingStatus === project.id}
+                    <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-medium">Pläne</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-medium">Berichte</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                        <Package className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-medium">Material</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                        <Image className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-medium">Fotos</span>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5">
+                          <Lock className="w-4 h-4 text-primary" />
+                          <span className="text-xs font-medium">Chef</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isClosed && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full gap-2 mt-3"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Upload className="w-4 h-4" />
+                            + Dateien hochladen
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56 bg-background z-50">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setQuickUploadProject({ projectId: project.id, documentType: 'photos' }); setShowCameraDialog(true); }}>
+                            <Camera className="w-4 h-4 mr-2" />
+                            📸 Foto aufnehmen
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setQuickUploadProject({ projectId: project.id, documentType: 'photos' }); }}>
+                            <Camera className="w-4 h-4 mr-2" />
+                            📷 Fotos hochladen
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setQuickUploadProject({ projectId: project.id, documentType: 'plans' }); }}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            📋 Pläne hochladen
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setQuickUploadProject({ projectId: project.id, documentType: 'reports' }); }}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            📄 Regieberichte hochladen
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setQuickUploadProject({ projectId: project.id, documentType: 'materials' }); }}>
+                            <Package className="w-4 h-4 mr-2" />
+                            📦 Materiallisten hochladen
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+
+                    <div
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t mt-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        Aktualisiert: {formatDate(project.updated_at)}
+                      </p>
+                      {isAdmin && projectStatuses.length > 0 && (
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <Select
+                            value={project.status || ""}
+                            onValueChange={(val) => {
+                              if (val && val !== project.status) {
+                                updateProjectStatus(project.id, val, project.name);
+                              }
+                            }}
+                            disabled={togglingStatus === project.id}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-[160px] text-xs"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              {togglingStatus === project.id ? 'Wird geöffnet...' : 'Wiedereröffnen'}
-                            </Button>
+                              <SelectValue placeholder="Status wählen" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {projectStatuses.map((s) => (
+                                <SelectItem key={s.id} value={s.name}>
+                                  <span className="inline-flex items-center gap-2">
+                                    <span
+                                      className="h-2 w-2 rounded-full"
+                                      style={{ backgroundColor: s.farbe_bg }}
+                                    />
+                                    {s.name}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {isClosed && (
                             <Button
                               variant="destructive"
                               size="sm"
@@ -673,19 +614,19 @@ const Projects = () => {
                               disabled={deleting}
                             >
                               <Trash2 className="w-3 h-3 mr-1" />
-                              {deleting ? 'Wird gelöscht...' : 'Löschen'}
+                              {deleting ? 'Lösche...' : 'Löschen'}
                             </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-          </CollapsibleContent>
-        </Collapsible>
-        )}
-      </main>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            });
+          })()}
+        </div>
+
 
       {/* Quick Upload Dialog - Only show when NOT in camera mode */}
       {quickUploadProject && !showCameraDialog && (
@@ -710,29 +651,6 @@ const Projects = () => {
         }}
         onPhotoCapture={handlePhotoCapture}
       />
-
-      {/* AlertDialog für Projekt schließen */}
-      <AlertDialog open={!!projectToClose} onOpenChange={(open) => !open && setProjectToClose(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Projekt schließen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Bist du sicher, dass du das Projekt <strong>{projectToClose?.name}</strong> schließen möchtest?
-              <br /><br />
-              Das Projekt wird als "Geschlossen" markiert und kann später wieder geöffnet werden.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={togglingStatus !== null}>Abbrechen</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => projectToClose && updateProjectStatus(projectToClose.id, 'Abgeschlossen', projectToClose.name)}
-              disabled={togglingStatus !== null}
-            >
-              {togglingStatus ? 'Wird geschlossen...' : 'Ja, Projekt schließen'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* AlertDialog für Projekt löschen */}
       <AlertDialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>

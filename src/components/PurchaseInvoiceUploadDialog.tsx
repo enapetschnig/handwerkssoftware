@@ -68,7 +68,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
         notizen: "",
       });
       // Load projects
-      supabase.from("projects").select("id, name").eq("status", "In Arbeit").order("name").then(({ data }) => {
+      supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name").then(({ data }) => {
         if (data) setProjects(data);
       });
     }

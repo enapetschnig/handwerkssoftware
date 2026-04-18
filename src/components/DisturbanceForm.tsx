@@ -77,7 +77,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData }: Dis
 
   useEffect(() => {
     if (open) {
-      supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name")
+      supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name")
         .then(({ data }) => { if (data) setProjects(data); });
     }
   }, [open]);

@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { Badge } from "@/components/ui/badge";
 
 type DocumentCategory = {
   type: "plans" | "reports" | "photos" | "chef";
@@ -37,6 +39,8 @@ const ProjectOverview = () => {
   const [editSaving, setEditSaving] = useState(false);
   const { options: projektartOptions } = useConfigOptions("projektart");
   const { options: prioritaetOptions } = useConfigOptions("prioritaet");
+  const { statuses: projectStatuses, findByName: findStatusByName } = useProjectStatuses();
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [employees, setEmployees] = useState<{id: string, vorname: string, nachname: string}[]>([]);
   const [editForm, setEditForm] = useState({
     name: "", beschreibung: "", adresse: "", plz: "", ort: "",
@@ -280,6 +284,22 @@ const ProjectOverview = () => {
     setCustomerPopoverOpen(false);
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (!projectId || !projectData || updatingStatus || newStatus === projectData.status) return;
+    setUpdatingStatus(true);
+    const { error } = await supabase
+      .from("projects")
+      .update({ status: newStatus })
+      .eq("id", projectId);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: "Status konnte nicht gespeichert werden" });
+    } else {
+      setProjectData((prev: any) => prev ? { ...prev, status: newStatus } : prev);
+      toast({ title: "Status aktualisiert", description: `${projectName} → ${newStatus}` });
+    }
+    setUpdatingStatus(false);
+  };
+
   const fetchProjectName = async () => {
     if (!projectId) return;
 
@@ -436,7 +456,48 @@ const ProjectOverview = () => {
               </>
             )}
           </div>
-          <p className="text-muted-foreground">Dokumentation und Dateien</p>
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            <p className="text-muted-foreground text-sm">Dokumentation und Dateien</p>
+            {projectData && projectStatuses.length > 0 && (() => {
+              const curStatus = (projectData as any).status || "";
+              const sColor = findStatusByName(curStatus);
+              return (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    className="border-0"
+                    style={
+                      sColor
+                        ? { backgroundColor: sColor.farbe_bg, color: sColor.farbe_text }
+                        : { backgroundColor: "#e5e7eb", color: "#374151" }
+                    }
+                  >
+                    {curStatus || "–"}
+                  </Badge>
+                  {isAdmin && (
+                    <Select
+                      value={curStatus}
+                      onValueChange={handleStatusChange}
+                      disabled={updatingStatus}
+                    >
+                      <SelectTrigger className="h-8 w-[180px] text-xs">
+                        <SelectValue placeholder="Status ändern..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projectStatuses.map((s) => (
+                          <SelectItem key={s.id} value={s.name}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.farbe_bg }} />
+                              {s.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Projektinfos */}

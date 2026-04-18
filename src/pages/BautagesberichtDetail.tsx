@@ -90,7 +90,7 @@ const BautagesberichtDetail = () => {
 
     // Fetch projects and employees in parallel
     const [projRes, empRes] = await Promise.all([
-      supabase.from("projects").select("id, name, customer_id").eq("status", "In Arbeit").order("name"),
+      supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name"),
       (supabase.from("employees" as never) as any).select("id, vorname, nachname, user_id").order("nachname"),
     ]);
 

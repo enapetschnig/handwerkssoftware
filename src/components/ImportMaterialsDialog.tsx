@@ -81,7 +81,7 @@ export const ImportMaterialsDialog = ({
     const { data } = await supabase
       .from("projects")
       .select("id, name")
-      .eq("status", "In Arbeit")
+      .not("status", "eq", "Abgeschlossen")
       .order("name");
 
     if (data) {
