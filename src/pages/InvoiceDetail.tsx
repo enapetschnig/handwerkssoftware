@@ -523,10 +523,12 @@ export default function InvoiceDetail() {
   const canCancel = !isNew && !!invoiceId && id !== "new" && form.typ === "rechnung" && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
-    // Double-click protection
+    // Double-click protection — SOFORT setzen um Race-Condition bei schnellen Klicks zu verhindern
     if (saving) return false;
+    setSaving(true);
 
     if (!form.kunde_name.trim()) {
+      setSaving(false);
       toast({ variant: "destructive", title: "Fehler", description: "Kundenname ist erforderlich" });
       return false;
     }
@@ -609,8 +611,7 @@ export default function InvoiceDetail() {
       return false;
     }
 
-    setSaving(true);
-
+    // setSaving(true) bereits am Anfang gesetzt — kein erneuter Aufruf nötig
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast({ variant: "destructive", title: "Fehler", description: "Nicht angemeldet" });
@@ -878,9 +879,17 @@ export default function InvoiceDetail() {
   const addPayment = async () => {
     if (!invoiceId) return;
     let betrag = Math.round((Number(newPaymentAmount) || restBetrag) * 100) / 100;
-    if (betrag <= 0) return;
+    // M-7: Negative oder 0-Zahlungen ablehnen mit Toast (nicht silent)
+    if (betrag < 0) {
+      toast({ variant: "destructive", title: "Ungültiger Betrag", description: "Zahlungsbetrag darf nicht negativ sein." });
+      return;
+    }
+    if (betrag === 0) {
+      toast({ variant: "destructive", title: "Betrag fehlt", description: "Bitte einen Zahlungsbetrag eingeben." });
+      return;
+    }
 
-    // Prevent overpayment
+    // M-6: Überzahlung ablehnen mit Toast
     const maxBetrag = Math.round((bruttoSumme - form.bezahlt_betrag) * 100) / 100;
     if (betrag > maxBetrag) {
       toast({ variant: "destructive", title: "Betrag zu hoch", description: `Maximal € ${maxBetrag.toFixed(2)} offen` });

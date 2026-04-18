@@ -217,18 +217,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
 
         let scheduleInfo = "";
-        const { data: assignments } = await supabase
-          .from("worker_assignments")
-          .select("project_id, projects(name), start_time, end_time, notizen")
+        // Einsätze aus der Plantafel (einsaetze-Tabelle) für heute holen
+        const { data: einsaetze } = await supabase
+          .from("einsaetze")
+          .select("name, adresse, start_time, end_time, ganztaegig, beschreibung, projects(name)")
           .eq("user_id", emp.user_id)
-          .eq("datum", today);
+          .lte("start_date", today)
+          .gte("end_date", today)
+          .order("start_time");
 
-        if (assignments?.length) {
-          scheduleInfo = assignments
-            .map((a: any) => {
-              let line = a.projects?.name || "?";
-              if (a.start_time && a.end_time) line += ` (${a.start_time}–${a.end_time})`;
-              if (a.notizen) line += ` – ${a.notizen}`;
+        if (einsaetze?.length) {
+          scheduleInfo = einsaetze
+            .map((e: any) => {
+              const projektName = e.projects?.name || e.name || "(ohne Projekt)";
+              const zeit = e.ganztaegig
+                ? "ganztags"
+                : (e.start_time && e.end_time)
+                  ? `${(e.start_time || "").slice(0, 5)}–${(e.end_time || "").slice(0, 5)}`
+                  : "";
+              let line = `• ${projektName}`;
+              if (zeit) line += ` (${zeit})`;
+              if (e.adresse) line += `\n  📍 ${e.adresse}`;
+              if (e.beschreibung) line += `\n  ℹ️ ${e.beschreibung}`;
               return line;
             })
             .join("\n");

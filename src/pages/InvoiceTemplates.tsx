@@ -146,6 +146,14 @@ export default function InvoiceTemplates() {
       return;
     }
 
+    // H-4: Preise dürfen nicht negativ sein (DB-Constraint wirft sonst nur technische Meldung)
+    const netto = Number(form.netto_preis) || 0;
+    const brutto = Number(form.brutto_preis) || 0;
+    if (netto < 0 || brutto < 0) {
+      toast({ variant: "destructive", title: "Preis ungültig", description: "Netto- und Brutto-Preis dürfen nicht negativ sein." });
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 

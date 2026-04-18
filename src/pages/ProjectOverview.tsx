@@ -213,6 +213,27 @@ const ProjectOverview = () => {
 
   const handleEditSave = async () => {
     if (!projectId || !editForm.name.trim()) return;
+
+    // H-1: Start/Ende-Konsistenz
+    if (editForm.geplanter_start && editForm.geplantes_ende && editForm.geplantes_ende < editForm.geplanter_start) {
+      toast({ variant: "destructive", title: "Zeitraum ungültig", description: "Geplantes Ende darf nicht vor dem geplanten Start liegen." });
+      return;
+    }
+    // H-2: Budget/Auftragsvolumen nicht negativ
+    if (editForm.budget && Number(editForm.budget) < 0) {
+      toast({ variant: "destructive", title: "Budget ungültig", description: "Budget darf nicht negativ sein." });
+      return;
+    }
+    if (editForm.auftragsvolumen && Number(editForm.auftragsvolumen) < 0) {
+      toast({ variant: "destructive", title: "Auftragsvolumen ungültig", description: "Auftragsvolumen darf nicht negativ sein." });
+      return;
+    }
+    // E-Mail-Validierung wenn Kunde editiert wird
+    if (editForm.kunde_email && editForm.kunde_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.kunde_email.trim())) {
+      toast({ variant: "destructive", title: "Ungültige E-Mail" });
+      return;
+    }
+
     setEditSaving(true);
     // Update project — adresse/plz/ort = LEISTUNGSORT (NICHT die Kundenadresse!)
     await supabase.from("projects").update({

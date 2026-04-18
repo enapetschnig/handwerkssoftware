@@ -234,6 +234,32 @@ export default function Customers() {
       return;
     }
 
+    // E-Mail-Validierung
+    if (form.email && form.email.trim()) {
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+      if (!emailOk) {
+        toast({ variant: "destructive", title: "Ungültige E-Mail", description: "Bitte gültige E-Mail-Adresse eingeben (z.B. name@firma.at)" });
+        return;
+      }
+    }
+
+    // Zahlungsbedingungen-Validierung (C-1, C-3, C-4)
+    const nettofrist = Number(form.nettofrist) || 0;
+    const skontoProzent = Number(form.skonto_prozent) || 0;
+    const skontoTage = Number(form.skonto_tage) || 0;
+    if (nettofrist < 0 || nettofrist > 365) {
+      toast({ variant: "destructive", title: "Zahlungsfrist ungültig", description: "Zahlungsfrist muss zwischen 0 und 365 Tagen liegen" });
+      return;
+    }
+    if (skontoProzent < 0 || skontoProzent > 20) {
+      toast({ variant: "destructive", title: "Skonto ungültig", description: "Skonto muss zwischen 0 und 20 % liegen" });
+      return;
+    }
+    if (skontoTage < 0 || (nettofrist > 0 && skontoTage > nettofrist)) {
+      toast({ variant: "destructive", title: "Skonto-Tage ungültig", description: "Skonto-Tage müssen zwischen 0 und der Zahlungsfrist liegen" });
+      return;
+    }
+
     // Duplikat-Check Kundennummer
     if (form.kundennummer?.trim()) {
       const { data: existing } = await supabase
@@ -734,15 +760,15 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>Zahlungsfrist (Tage)</Label>
-          <Input type="number" value={form.nettofrist || ""} onChange={(e) => setForm(p => ({ ...p, nettofrist: Number(e.target.value) }))} min={0} />
+          <Input type="number" value={form.nettofrist || ""} onChange={(e) => setForm(p => ({ ...p, nettofrist: Number(e.target.value) }))} min={0} max={365} />
         </div>
         <div>
           <Label>Skonto %</Label>
-          <Input type="number" value={form.skonto_prozent || ""} onChange={(e) => setForm(p => ({ ...p, skonto_prozent: Number(e.target.value) }))} min={0} max={100} step={0.5} />
+          <Input type="number" value={form.skonto_prozent || ""} onChange={(e) => setForm(p => ({ ...p, skonto_prozent: Number(e.target.value) }))} min={0} max={20} step={0.5} />
         </div>
         <div>
           <Label>Skonto Tage</Label>
-          <Input type="number" value={form.skonto_tage || ""} onChange={(e) => setForm(p => ({ ...p, skonto_tage: Number(e.target.value) }))} min={0} />
+          <Input type="number" value={form.skonto_tage || ""} onChange={(e) => setForm(p => ({ ...p, skonto_tage: Number(e.target.value) }))} min={0} max={form.nettofrist || 365} />
         </div>
       </div>
       <div>

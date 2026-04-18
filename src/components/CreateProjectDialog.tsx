@@ -247,6 +247,34 @@ export function CreateProjectDialog({
       return;
     }
 
+    // H-1: Geplantes Ende darf nicht vor geplantem Start liegen
+    if (geplanterStart && geplantesEnde && geplantesEnde < geplanterStart) {
+      toast({ variant: "destructive", title: "Zeitraum ungültig", description: "Geplantes Ende darf nicht vor dem geplanten Start liegen." });
+      return;
+    }
+
+    // H-2: Budget + Auftragsvolumen nicht negativ
+    if (budget && Number(budget) < 0) {
+      toast({ variant: "destructive", title: "Budget ungültig", description: "Budget darf nicht negativ sein." });
+      return;
+    }
+    if (auftragsvolumen && Number(auftragsvolumen) < 0) {
+      toast({ variant: "destructive", title: "Auftragsvolumen ungültig", description: "Auftragsvolumen darf nicht negativ sein." });
+      return;
+    }
+
+    // H-3: Projekt ohne Kunde — erlaubt (z.B. interne Projekte), aber mit Hinweis
+    if (!selectedCustomerId && !customerName.trim()) {
+      const ok = window.confirm("Dieses Projekt hat keinen Kunden. Wirklich ohne Kunde anlegen?");
+      if (!ok) return;
+    }
+
+    // E-Mail-Validierung wenn gesetzt
+    if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast({ variant: "destructive", title: "Ungültige E-Mail", description: "Bitte gültige E-Mail-Adresse eingeben" });
+      return;
+    }
+
     setSaving(true);
     try {
       const {

@@ -276,6 +276,17 @@ const BautagesberichtDetail = () => {
       return;
     }
 
+    // M-4: Temperatur Min/Max konsistent
+    if (tempMin !== "" && tempMax !== "" && Number(tempMin) > Number(tempMax)) {
+      toast({ variant: "destructive", title: "Temperatur ungültig", description: "Temperatur-Min darf nicht größer als Temperatur-Max sein." });
+      return;
+    }
+    // M-5: Pause-Limit (keine 9999-Min.-Eingaben)
+    if (pause !== "" && Number(pause) > 480) {
+      toast({ variant: "destructive", title: "Pause zu lang", description: "Pause darf maximal 480 Minuten (8h) betragen." });
+      return;
+    }
+
     setSaving(true);
 
     let berichtNummer = nummer;
@@ -599,10 +610,10 @@ const BautagesberichtDetail = () => {
 
             <Separator />
 
-            {/* Ausgefuehrte Arbeiten */}
+            {/* Ausgeführte Arbeiten */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label>Ausgefuehrte Arbeiten</Label>
+                <Label>Ausgeführte Arbeiten</Label>
                 <DictateButton value={ausgefuehrteArbeiten} onResult={setAusgefuehrteArbeiten} />
               </div>
               <Textarea

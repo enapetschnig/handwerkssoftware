@@ -412,6 +412,44 @@ const tools = [
       parameters: { type: "object", properties: {} },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "buchung_bearbeiten",
+      description:
+        "Bearbeitet eine bestehende Stundenbuchung des Mitarbeiters. Datum optional (Standard: heute). Identifiziert die Buchung über Position (n-te Buchung des Tages) oder projekt-Match. Nur die übergebenen Felder werden geändert.",
+      parameters: {
+        type: "object",
+        properties: {
+          datum: { type: "string", description: "Datum YYYY-MM-DD, Standard = heute" },
+          position: { type: "number", description: "1-basierte Position der Buchung an diesem Tag (1 = erste/älteste)" },
+          project_match: { type: "string", description: "Teil des Projektnamens, um die zu bearbeitende Buchung zu finden (Alternative zu position)" },
+          stunden: { type: "number", description: "Neue Stundenzahl (optional)" },
+          taetigkeit: { type: "string", description: "Neue Tätigkeit (optional)" },
+          start_time: { type: "string", description: "Neue Startzeit HH:MM (optional)" },
+          end_time: { type: "string", description: "Neue Endzeit HH:MM (optional)" },
+          neues_projekt_name: { type: "string", description: "Falls Projekt geändert werden soll: Name oder Teil" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "einteilung_anzeigen",
+      description:
+        "Zeigt, wo/wie der Mitarbeiter laut Plantafel eingeteilt ist. Ohne Parameter: heute. Mit datum/woche: spezifisches Datum oder aktuelle/kommende Woche.",
+      parameters: {
+        type: "object",
+        properties: {
+          datum: { type: "string", description: "Datum YYYY-MM-DD (optional, Standard: heute)" },
+          woche: { type: "string", description: "'diese_woche' oder 'naechste_woche' (Alternative zu datum)" },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 // ─── Tool execution ──────────────────────────────────────
@@ -586,6 +624,84 @@ async function executeTool(
       return "AKTIVE PROJEKTE:\n" + projects.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
     }
 
+    case "buchung_bearbeiten": {
+      const datum: string = args.datum || new Date().toISOString().slice(0, 10);
+      const { data: entries } = await supabase
+        .from("time_entries")
+        .select("id, stunden, taetigkeit, start_time, end_time, project_id, projects(name)")
+        .eq("user_id", userId)
+        .eq("datum", datum)
+        .order("created_at");
+      if (!entries || entries.length === 0) {
+        return `ERROR: Keine Buchung am ${datum} gefunden.`;
+      }
+      let target: any = null;
+      if (args.position && entries[args.position - 1]) {
+        target = entries[args.position - 1];
+      } else if (args.project_match) {
+        const needle = String(args.project_match).toLowerCase();
+        target = entries.find((e: any) => (e.projects?.name || "").toLowerCase().includes(needle));
+      } else if (entries.length === 1) {
+        target = entries[0];
+      }
+      if (!target) {
+        const list = entries.map((e: any, i: number) => `${i + 1}. ${e.stunden}h ${(e.projects as any)?.name || "?"}: ${e.taetigkeit}`).join("\n");
+        return `ERROR: Konnte Buchung nicht eindeutig identifizieren. Bitte Position (1-${entries.length}) angeben:\n${list}`;
+      }
+      // Neues Projekt auflösen (falls gegeben)
+      const update: any = {};
+      if (args.stunden != null) update.stunden = args.stunden;
+      if (args.taetigkeit) update.taetigkeit = args.taetigkeit;
+      if (args.start_time) update.start_time = args.start_time;
+      if (args.end_time) update.end_time = args.end_time;
+      if (args.neues_projekt_name) {
+        const { data: projs } = await supabase
+          .from("projects").select("id, name").eq("status", "In Arbeit");
+        const needle = String(args.neues_projekt_name).toLowerCase();
+        const match = (projs || []).find((p: any) => p.name.toLowerCase().includes(needle));
+        if (!match) return `ERROR: Projekt "${args.neues_projekt_name}" nicht gefunden.`;
+        update.project_id = match.id;
+      }
+      if (Object.keys(update).length === 0) return "ERROR: Keine Änderungen angegeben.";
+
+      const { error } = await supabase.from("time_entries").update(update).eq("id", target.id);
+      if (error) return `ERROR: ${error.message}`;
+      return `ERFOLG: Buchung aktualisiert (${target.stunden}h → ${update.stunden ?? target.stunden}h).`;
+    }
+
+    case "einteilung_anzeigen": {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let fromDate = args.datum || todayStr;
+      let toDate = args.datum || todayStr;
+      if (args.woche === "diese_woche" || args.woche === "naechste_woche") {
+        const ref = new Date();
+        if (args.woche === "naechste_woche") ref.setDate(ref.getDate() + 7);
+        const dow = (ref.getDay() + 6) % 7; // Montag = 0
+        const monday = new Date(ref); monday.setDate(ref.getDate() - dow);
+        const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+        fromDate = monday.toISOString().slice(0, 10);
+        toDate = sunday.toISOString().slice(0, 10);
+      }
+      const { data: einsaetze } = await supabase
+        .from("einsaetze")
+        .select("name, adresse, start_date, end_date, ganztaegig, start_time, end_time, beschreibung, projects(name)")
+        .eq("user_id", userId)
+        .lte("start_date", toDate)
+        .gte("end_date", fromDate)
+        .order("start_date");
+      if (!einsaetze || einsaetze.length === 0) {
+        return args.datum ? `INFO: Keine Einteilung am ${fromDate}.` : "INFO: Keine Einteilung im angefragten Zeitraum.";
+      }
+      const lines = einsaetze.map((e: any) => {
+        const projektName = e.projects?.name || e.name || "(ohne Projekt)";
+        const datum = e.start_date === e.end_date ? e.start_date : `${e.start_date} - ${e.end_date}`;
+        const zeit = e.ganztaegig ? "ganztags" : `${(e.start_time || "").slice(0,5)}-${(e.end_time || "").slice(0,5)}`;
+        const ort = e.adresse ? ` (${e.adresse})` : "";
+        return `• ${datum} ${zeit}: ${projektName}${ort}`;
+      });
+      return `EINTEILUNG:\n${lines.join("\n")}`;
+    }
+
     default:
       return `FEHLER: Unbekanntes Tool ${name}`;
   }
@@ -708,9 +824,15 @@ Werden transkribiert. Transkriptionsfehler intelligent interpretieren (z.B. "Mü
 
 ═══ KORREKTUREN ═══
 "Das war falsch" / "Loesch das" → letzte_buchung_loeschen
+"Aender die Buchung auf 7h" / "Die war nur 5h" → buchung_bearbeiten
+  - Wenn mehrere Buchungen am Tag: position oder project_match nutzen
+  - Nur die zu ändernden Felder übergeben
 
 ═══ EINTEILUNG ═══
-"Wo muss ich hin?" / "Einteilung?" → Plantafel mit Zeiten zeigen
+"Wo muss ich hin?" / "Wo bin ich heute?" / "Einteilung?" → einteilung_anzeigen (ohne Args = heute)
+"Wo bin ich diese Woche?" / "Meine Woche" → einteilung_anzeigen(woche: "diese_woche")
+"Was steht nächste Woche an?" → einteilung_anzeigen(woche: "naechste_woche")
+"Wo muss ich am 22.04.?" → einteilung_anzeigen(datum: "2026-04-22")
 
 ═══ REGELN ═══
 - IMMER Deutsch, kurz, knapp

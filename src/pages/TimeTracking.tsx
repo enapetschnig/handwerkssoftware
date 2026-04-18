@@ -552,6 +552,24 @@ const TimeTracking = () => {
         return;
       }
 
+      // M-2: Pause darf nicht die Arbeitszeit übersteigen
+      const blockMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+      const pauseMin = block.pauseDuration || 0;
+      if (pauseMin >= blockMinutes) {
+        toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Pause (${pauseMin} Min.) ist länger als die Arbeitszeit (${blockMinutes} Min.)` });
+        setSaving(false);
+        return;
+      }
+
+      // H-6: Arbeitszeit-Warnung bei > 12h (AT AZG Höchstgrenze)
+      const workMinutes = blockMinutes - pauseMin;
+      if (workMinutes > 12 * 60) {
+        const ok = window.confirm(
+          `Block ${blockNum}: ${(workMinutes/60).toFixed(1)}h Arbeitszeit überschreitet die gesetzliche Höchstgrenze von 12h (AZG).\n\nTrotzdem speichern?`
+        );
+        if (!ok) { setSaving(false); return; }
+      }
+
       // Projekt ist Pflicht bei Baustelle
       if (block.locationType === "baustelle" && !block.projectId) {
         toast({ variant: "destructive", title: "Fehler", description: `Block ${blockNum}: Bitte ein Projekt auswählen` });
