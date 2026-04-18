@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.create-team-time-entries]
 verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.whatsapp-daily-reminder]
+verify_jwt = false
