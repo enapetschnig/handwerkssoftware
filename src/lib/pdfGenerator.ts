@@ -64,13 +64,22 @@ export async function generateInvoicePdf(
   // ======= HEADER (only first page) =======
   let y = 15;
 
-  // Logo
+  // Logo — preserve aspect ratio from actual image dimensions
   if (logoDataUri) {
     try {
-      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
-        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
+      let logoW = L.logo.width_mm;
+      let logoH = L.logo.height_mm;
+      try {
+        const props = pdf.getImageProperties(logoDataUri);
+        if (props.width > 0 && props.height > 0) {
+          const aspect = props.width / props.height;
+          logoH = logoW / aspect;
+        }
+      } catch {}
+      const logoX = L.logo.position === "right" ? pageWidth - mr - logoW
+        : L.logo.position === "center" ? (pageWidth - logoW) / 2
         : ml;
-      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
+      pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
     } catch {}
   }
 
@@ -588,13 +597,22 @@ export function generateStornoPdf(
 
   let y = 15;
 
-  // Logo
+  // Logo — preserve aspect ratio from actual image dimensions
   if (logoDataUri) {
     try {
-      const logoX = L.logo.position === "right" ? pageWidth - mr - L.logo.width_mm
-        : L.logo.position === "center" ? (pageWidth - L.logo.width_mm) / 2
+      let logoW = L.logo.width_mm;
+      let logoH = L.logo.height_mm;
+      try {
+        const props = pdf.getImageProperties(logoDataUri);
+        if (props.width > 0 && props.height > 0) {
+          const aspect = props.width / props.height;
+          logoH = logoW / aspect;
+        }
+      } catch {}
+      const logoX = L.logo.position === "right" ? pageWidth - mr - logoW
+        : L.logo.position === "center" ? (pageWidth - logoW) / 2
         : ml;
-      pdf.addImage(logoDataUri, "JPEG", logoX, y, L.logo.width_mm, L.logo.height_mm);
+      pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
     } catch {}
   }
 

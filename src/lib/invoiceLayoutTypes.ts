@@ -49,8 +49,8 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   logo: {
     enabled: true,
     position: "left",
-    width_mm: 50,
-    height_mm: 18,
+    width_mm: 70,
+    height_mm: 8.6,
   },
   footer: {
     line1: "",
@@ -63,14 +63,22 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   closing_text_invoice: "Wir bitten um Überweisung innerhalb von {{tage}} Tagen auf das unten angegebene Konto.",
   closing_text_angebot: "Dieses Angebot ist 30 Tage gültig. Wir freuen uns auf Ihren Auftrag!",
   danke_text: "Vielen Dank für Ihren Auftrag!",
-  accent_color: "#1F3A5F", /* BKS Dunkelblau */
+  accent_color: "#0077CC", /* BKS Blau */
 };
+
+/** Known legacy accent colors that should auto-migrate to BKS Blau */
+const LEGACY_ACCENT_COLORS = new Set([
+  "#E08A20", "#e08a20", // MONTI.PRO Orange (original)
+  "#1F3A5F", "#1f3a5f", // BKS Dunkelblau (interim)
+]);
 
 /** Safely parse layout settings JSON, merging with defaults for missing fields */
 export function parseLayoutSettings(value: string | null | undefined): InvoiceLayoutSettings {
   if (!value) return { ...DEFAULT_LAYOUT };
   try {
     const parsed = JSON.parse(value);
+    let accent = parsed.accent_color ?? DEFAULT_LAYOUT.accent_color;
+    if (LEGACY_ACCENT_COLORS.has(accent)) accent = DEFAULT_LAYOUT.accent_color;
     return {
       company: { ...DEFAULT_LAYOUT.company, ...(parsed.company || {}) },
       logo: { ...DEFAULT_LAYOUT.logo, ...(parsed.logo || {}) },
@@ -79,7 +87,7 @@ export function parseLayoutSettings(value: string | null | undefined): InvoiceLa
       closing_text_invoice: parsed.closing_text_invoice ?? DEFAULT_LAYOUT.closing_text_invoice,
       closing_text_angebot: parsed.closing_text_angebot ?? DEFAULT_LAYOUT.closing_text_angebot,
       danke_text: parsed.danke_text ?? DEFAULT_LAYOUT.danke_text,
-      accent_color: parsed.accent_color ?? DEFAULT_LAYOUT.accent_color,
+      accent_color: accent,
     };
   } catch {
     return { ...DEFAULT_LAYOUT };
@@ -101,12 +109,12 @@ export function buildFooterLines(c: InvoiceLayoutCompany): { line1: string; line
   return { line1, line2: parts2.join(" · ") };
 }
 
-/** Convert hex color to RGB tuple (default fallback: BKS Dunkelblau #1F3A5F) */
+/** Convert hex color to RGB tuple (default fallback: BKS Blau #0077CC) */
 export function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
   return [
-    parseInt(clean.slice(0, 2), 16) || 31,   // 0x1F
-    parseInt(clean.slice(2, 4), 16) || 58,   // 0x3A
-    parseInt(clean.slice(4, 6), 16) || 95,   // 0x5F
+    parseInt(clean.slice(0, 2), 16) || 0,     // 0x00
+    parseInt(clean.slice(2, 4), 16) || 119,   // 0x77
+    parseInt(clean.slice(4, 6), 16) || 204,   // 0xCC
   ];
 }
