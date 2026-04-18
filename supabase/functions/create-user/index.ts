@@ -111,12 +111,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       stundenlohn: stundenlohn ? parseFloat(stundenlohn) : null,
     }).eq("id", userId);
 
-    // Set role
+    // Set role — user_roles hat UNIQUE (user_id, role), daher erst alte Rollen
+    // löschen und dann neue einfügen (saubere 1-Rolle-pro-User-Semantik).
+    await supabase.from("user_roles").delete().eq("user_id", userId);
     const userRole = rolle || "mitarbeiter";
-    await supabase.from("user_roles").upsert({
+    const { error: roleErr } = await supabase.from("user_roles").insert({
       user_id: userId,
       role: userRole,
-    }, { onConflict: "user_id" });
+    });
+    if (roleErr) {
+      console.error("Role insert failed:", roleErr);
+      return new Response(JSON.stringify({ error: `Rolle konnte nicht gesetzt werden: ${roleErr.message}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Create employees row (for Plantafel, WhatsApp, Zeitbuchung).
     // WhatsApp-Chat ist nur aktiv, wenn explizit gewünscht UND Telefon vorhanden.

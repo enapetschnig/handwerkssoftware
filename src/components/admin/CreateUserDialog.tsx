@@ -125,7 +125,17 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       const { data, error } = await supabase.functions.invoke("create-user", {
         body: { ...form, whatsapp_aktiv: enableWhatsApp },
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        // FunctionsHttpError enthält das Response-Body mit der echten Fehlermeldung
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx?.json) { const j = await ctx.json(); if (j?.error) detail = j.error; }
+          else if (ctx?.text) { detail = await ctx.text(); }
+        } catch { /* ignore parse error */ }
+        console.error("create-user error:", error, detail);
+        throw new Error(detail);
+      }
       if (data?.error) throw new Error(data.error);
 
       toast({
