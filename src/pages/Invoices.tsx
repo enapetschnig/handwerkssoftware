@@ -52,7 +52,7 @@ const statusColors: Record<string, string> = {
   teilbezahlt: "bg-yellow-100 text-yellow-800",
   storniert: "bg-red-100 text-red-800",
   abgelehnt: "bg-red-100 text-red-800",
-  angenommen: "bg-green-100 text-green-800",
+  angenommen: "bg-[#0077CC]/10 text-[#0077CC] border border-[#0077CC]/20",
   verrechnet: "bg-purple-100 text-purple-800",
 };
 
@@ -788,7 +788,8 @@ export default function Invoices() {
                             {(() => {
                               // Status-Dot Farbe
                               const dotColor =
-                                inv.status === "bezahlt" || inv.status === "angenommen" ? "bg-green-500" :
+                                inv.status === "bezahlt" ? "bg-green-500" :
+                                inv.status === "angenommen" ? "bg-[#0077CC]" :
                                 inv.status === "storniert" || inv.status === "abgelehnt" ? "bg-red-500" :
                                 overdue ? "bg-red-500" :
                                 inv.status === "teilbezahlt" ? "bg-yellow-500" :

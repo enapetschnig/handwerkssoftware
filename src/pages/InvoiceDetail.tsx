@@ -118,7 +118,7 @@ const statusColors: Record<string, string> = {
   teilbezahlt: "bg-yellow-100 text-yellow-800",
   storniert: "bg-red-100 text-red-800",
   abgelehnt: "bg-red-100 text-red-800",
-  angenommen: "bg-green-100 text-green-800",
+  angenommen: "bg-[#0077CC]/10 text-[#0077CC] border border-[#0077CC]/20",
   verrechnet: "bg-purple-100 text-purple-800",
 };
 
@@ -1929,10 +1929,6 @@ export default function InvoiceDetail() {
                       <Button onClick={() => setImportRegieOpen(true)} variant="outline" size="sm" className="gap-1">
                         <FileText className="w-4 h-4" />
                         Aus Regiebericht
-                      </Button>
-                      <Button onClick={() => setImportProjectOpen(true)} variant="outline" size="sm" className="gap-1">
-                        <TrendingUp className="w-4 h-4" />
-                        Aus Projekt
                       </Button>
                     </>
                   )}
