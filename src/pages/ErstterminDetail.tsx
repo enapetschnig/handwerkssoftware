@@ -309,8 +309,114 @@ export default function ErstterminDetail() {
 
     setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Ersttermin wurde gespeichert" });
+
+    // PDF in den Projekt-Protokolle-Ordner erzeugen
+    if (eid) {
+      void generateErstterminPdfAndUpload(eid);
+    }
+
     if (isNew && eid) navigate(`/ersttermine/${eid}`, { replace: true });
     setSaving(false);
+  };
+
+  /** Generiert das Ersttermin-PDF (mit Briefkopf + Fotos) und legt es in
+   *  project-reports/{project_id}/protokolle/ ab. Aktualisiert pdf_path. */
+  const generateErstterminPdfAndUpload = async (eid: string) => {
+    try {
+      const [{ generateErstterminPdf }, { loadDocumentLayout }, { loadInvoiceLogo }, { uploadProjectPdf }] =
+        await Promise.all([
+          import("@/lib/pdfErsttermin"),
+          import("@/lib/loadLayout"),
+          import("@/lib/logoLoader"),
+          import("@/lib/pdfUploader"),
+        ]);
+
+      // Kunde-Name aus Selected-Customer-Data oder Nachladen
+      let kundeName: string | null = selectedCustomerData?.name || null;
+      if (!kundeName && customerId) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("name")
+          .eq("id", customerId)
+          .maybeSingle();
+        kundeName = (cust as any)?.name ?? null;
+      }
+
+      // Fotos laden
+      const { data: photoRows } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
+        .select("file_path, file_name, beschreibung")
+        .eq("ersttermin_interessent_id", eid)
+        .order("created_at", { ascending: true });
+
+      const [{ layout, firmenUid }, logoDataUri] = await Promise.all([
+        loadDocumentLayout(),
+        loadInvoiceLogo(),
+      ]);
+
+      const blob = await generateErstterminPdf(
+        {
+          nummer,
+          datum,
+          projektname,
+          kunde_name: kundeName,
+          ansprechpartner,
+          telefon,
+          email,
+          standort,
+          projektart,
+          gewerk,
+          leistungsumfang,
+          entscheidungsstatus,
+          zeitrahmen,
+          budget: budget === "" ? null : Number(budget),
+          quelle,
+          prioritaeten,
+          zufahrt,
+          infrastruktur,
+          materialien,
+          sicherheit,
+          hindernisse,
+          entsorgung,
+          genehmigungen,
+          offene_fragen: offeneFragen,
+          leistungsbeschreibung,
+          flaeche_aufmass: flaecheAufmass,
+          anmerkungen,
+          angebot_ersteller: angebotErsteller,
+          angebot_bis: angebotBis || null,
+          folgetermin_datum: folgeterminDatum || null,
+          fehlende_unterlagen: fehlendeUnterlagen,
+          bauleiter,
+        },
+        (photoRows || []).map((r: any) => ({
+          bucket: "ersttermin-photos",
+          file_path: r.file_path,
+          file_name: r.file_name,
+          beschreibung: r.beschreibung,
+        })),
+        layout,
+        logoDataUri,
+        firmenUid,
+      );
+
+      const basename = `Ersttermin-${nummer || eid.slice(0, 8)}-${datum}`;
+      const { path } = await uploadProjectPdf({
+        projectId,
+        category: "protokolle",
+        basename,
+        blob,
+      });
+
+      await (supabase.from("ersttermin_interessent" as never) as any)
+        .update({ pdf_path: path })
+        .eq("id", eid);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "PDF konnte nicht erstellt werden",
+        description: err?.message || String(err),
+      });
+    }
   };
 
   const handleDelete = async () => {

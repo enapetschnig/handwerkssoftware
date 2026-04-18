@@ -19,6 +19,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { SignaturePad } from "@/components/SignaturePad";
 import { BautagesberichtWorkers, type Worker, type Employee } from "@/components/BautagesberichtWorkers";
 import { BautagesberichtPhotos } from "@/components/BautagesberichtPhotos";
+import { generateBautagesberichtPdf } from "@/lib/pdfBautagesbericht";
+import { loadDocumentLayout } from "@/lib/loadLayout";
+import { loadInvoiceLogo } from "@/lib/logoLoader";
+import { uploadProjectPdf } from "@/lib/pdfUploader";
 
 type Project = { id: string; name: string; customer_id: string | null };
 
@@ -162,6 +166,92 @@ const BautagesberichtDetail = () => {
     }
   };
 
+  /** Lädt BTB + Abhängigkeiten aus DB, baut PDF, lädt ins project-reports Bucket hoch
+   *  und speichert den Pfad auf der BTB-Row (bautagesberichte.pdf_path). */
+  const generateBtbPdfAndUpload = async (berichtId: string) => {
+    try {
+      // Projekt-Name + Kunde laden
+      const proj = projects.find((p) => p.id === projectId);
+      let kundeName: string | null = null;
+      if (proj?.customer_id) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("name")
+          .eq("id", proj.customer_id)
+          .maybeSingle();
+        kundeName = (cust as any)?.name ?? null;
+      }
+
+      // Fotos aus DB lesen
+      const { data: photoRows } = await (supabase.from("bautagesbericht_photos" as never) as any)
+        .select("file_path, file_name, beschreibung")
+        .eq("bautagesbericht_id", berichtId)
+        .order("created_at", { ascending: true });
+
+      // Workers mit Namen auflösen
+      const resolvedWorkers = workers
+        .filter((w) => w.employee_id)
+        .map((w) => {
+          const emp = employees.find((e) => e.id === w.employee_id);
+          const name = emp ? `${emp.vorname || ""} ${emp.nachname || ""}`.trim() : "";
+          return { name, stunden: Number(w.stunden) || 0, taetigkeit: w.taetigkeit || "" };
+        });
+
+      const [{ layout, firmenUid }, logoDataUri] = await Promise.all([
+        loadDocumentLayout(),
+        loadInvoiceLogo(),
+      ]);
+
+      const blob = await generateBautagesberichtPdf(
+        {
+          nummer,
+          datum,
+          project_name: proj?.name || "",
+          kunde_name: kundeName,
+          bauleiter,
+          wetter,
+          temperatur_min: tempMin === "" ? null : Number(tempMin),
+          temperatur_max: tempMax === "" ? null : Number(tempMax),
+          arbeitszeit_von: arbeitszeitVon,
+          arbeitszeit_bis: arbeitszeitBis,
+          pause: pause === "" ? null : Number(pause),
+          workers: resolvedWorkers,
+          ausgefuehrte_arbeiten: ausgefuehrteArbeiten,
+          besondere_vorkommnisse: besondereVorkommnisse,
+          unterschrift_bauleiter: signaturBauleiter,
+          unterschrift_kunde: signaturKunde,
+        },
+        (photoRows || []).map((r: any) => ({
+          bucket: "bautagesbericht-photos",
+          file_path: r.file_path,
+          file_name: r.file_name,
+          beschreibung: r.beschreibung,
+        })),
+        layout,
+        logoDataUri,
+        firmenUid,
+      );
+
+      const basename = `BTB-${nummer || berichtId.slice(0, 8)}-${datum}`;
+      const { path } = await uploadProjectPdf({
+        projectId,
+        category: "berichte",
+        basename,
+        blob,
+      });
+
+      await (supabase.from("bautagesberichte" as never) as any)
+        .update({ pdf_path: path })
+        .eq("id", berichtId);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "PDF konnte nicht erstellt werden",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
   const handleSave = async () => {
     if (saving) return; // Doppelklick-Schutz
     if (!projectId) {
@@ -259,6 +349,12 @@ const BautagesberichtDetail = () => {
 
     setHasUnsavedChanges(false);
     toast({ title: "Gespeichert", description: "Bautagesbericht wurde gespeichert" });
+
+    // PDF erzeugen + in Projektordner hochladen (non-blocking für den User-Flow,
+    // aber wir warten kurz damit Fehler gemeldet werden können)
+    if (berichtId) {
+      void generateBtbPdfAndUpload(berichtId);
+    }
 
     // Navigate to detail view if was new
     if (isNew && berichtId) {

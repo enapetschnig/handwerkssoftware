@@ -16,6 +16,7 @@ import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { PageHeader } from "@/components/PageHeader";
 import { ProtokollMassnahmen, type Massnahme } from "@/components/ProtokollMassnahmen";
 import { CustomerSelect } from "@/components/CustomerSelect";
+import { BesprechungsprotokollPhotos } from "@/components/BesprechungsprotokollPhotos";
 
 type Project = { id: string; name: string; customer_id: string | null };
 
@@ -182,8 +183,104 @@ const BesprechungsprotokollDetail = () => {
     }
 
     toast({ title: "Gespeichert", description: "Protokoll wurde gespeichert" });
+
+    // PDF erzeugen + in project-reports/{project_id}/protokolle/ ablegen
+    if (protokollId) {
+      void generateProtokollPdfAndUpload(protokollId);
+    }
+
     if (isNew && protokollId) navigate(`/besprechungsprotokolle/${protokollId}`, { replace: true });
     setSaving(false);
+  };
+
+  const generateProtokollPdfAndUpload = async (pid: string) => {
+    try {
+      const [{ generateBesprechungsprotokollPdf }, { loadDocumentLayout }, { loadInvoiceLogo }, { uploadProjectPdf }] =
+        await Promise.all([
+          import("@/lib/pdfBesprechungsprotokoll"),
+          import("@/lib/loadLayout"),
+          import("@/lib/logoLoader"),
+          import("@/lib/pdfUploader"),
+        ]);
+
+      // Kunde-Name laden
+      let kundeName: string | null = null;
+      if (customerId) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("name")
+          .eq("id", customerId)
+          .maybeSingle();
+        kundeName = (cust as any)?.name ?? null;
+      }
+
+      // Projekt-Name
+      const proj = projects.find((p) => p.id === projectId);
+      const projektName = proj?.name || null;
+
+      // Fotos
+      const { data: photoRows } = await (supabase.from("besprechungsprotokoll_photos" as never) as any)
+        .select("file_path, file_name, beschreibung")
+        .eq("besprechungsprotokoll_id", pid)
+        .order("created_at", { ascending: true });
+
+      const [{ layout, firmenUid }, logoDataUri] = await Promise.all([
+        loadDocumentLayout(),
+        loadInvoiceLogo(),
+      ]);
+
+      const blob = await generateBesprechungsprotokollPdf(
+        {
+          nummer,
+          typ,
+          datum,
+          zeit_von: zeitVon || null,
+          zeit_bis: zeitBis || null,
+          ort: ort || null,
+          kunde_name: kundeName,
+          projekt_name: projektName,
+          protokollant: protokollant || null,
+          teilnehmer: teilnehmer || null,
+          inhalt: inhalt || null,
+          vereinbarungen: vereinbarungen || null,
+          massnahmen: massnahmen
+            .filter((m) => m.aufgabe)
+            .map((m) => ({
+              beschreibung: m.aufgabe,
+              verantwortlich: m.verantwortlich || null,
+              faellig_am: m.frist || null,
+              erledigt: !!m.erledigt,
+            })),
+        },
+        (photoRows || []).map((r: any) => ({
+          bucket: "besprechungsprotokoll-photos",
+          file_path: r.file_path,
+          file_name: r.file_name,
+          beschreibung: r.beschreibung,
+        })),
+        layout,
+        logoDataUri,
+        firmenUid,
+      );
+
+      const basename = `Protokoll-${nummer || pid.slice(0, 8)}-${datum || "datum"}`;
+      const { path } = await uploadProjectPdf({
+        projectId: projectId || null,
+        category: "protokolle",
+        basename,
+        blob,
+      });
+
+      await (supabase.from("besprechungsprotokolle" as never) as any)
+        .update({ pdf_path: path })
+        .eq("id", pid);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "PDF konnte nicht erstellt werden",
+        description: err?.message || String(err),
+      });
+    }
   };
 
   const handleDelete = async () => {
@@ -369,6 +466,9 @@ const BesprechungsprotokollDetail = () => {
 
         {/* Massnahmen */}
         <ProtokollMassnahmen massnahmen={massnahmen} onChange={setMassnahmen} />
+
+        {/* Fotos — nur nach erstem Speichern verfügbar */}
+        {savedId && <BesprechungsprotokollPhotos protokollId={savedId} />}
       </main>
     </div>
   );
