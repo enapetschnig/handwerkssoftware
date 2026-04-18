@@ -29,12 +29,6 @@ export function PageHeader({ title, showBackButton = true, backPath }: PageHeade
               <span className="hidden sm:inline">Zurück</span>
             </Button>
           )}
-          <img
-            src="/newmontilogo.png"
-            alt="BKS BauKomplettService"
-            className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-            onClick={() => navigate("/")}
-          />
           {title && (
             <h1 className="text-lg sm:text-2xl font-bold truncate">{title}</h1>
           )}

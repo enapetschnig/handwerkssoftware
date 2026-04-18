@@ -157,12 +157,6 @@ const MyHours = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="h-4 w-4 mr-2" />Zurück
             </Button>
-            <img
-              src="/newmontilogo.png"
-              alt="BKS BauKomplettService"
-              className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-              onClick={() => navigate("/")}
-            />
           </div>
         </div>
       </header>

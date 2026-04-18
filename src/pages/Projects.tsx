@@ -343,12 +343,7 @@ const Projects = () => {
               <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
                 <Home className="h-5 w-5" />
               </Button>
-              <img
-                src="/newmontilogo.png"
-                alt="BKS BauKomplettService"
-                className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-                onClick={() => navigate("/")}
-              />
+              <h1 className="text-lg sm:text-xl font-bold">Projekte</h1>
             </div>
             <Button size="sm" className="gap-1 sm:gap-2" onClick={() => setShowNewDialog(true)}>
               <Plus className="h-3 w-3 sm:h-4 sm:w-4" />

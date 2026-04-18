@@ -337,12 +337,7 @@ export default function ScheduleBoard() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <img
-            src="/newmontilogo.png"
-            alt="BKS BauKomplettService"
-            className="h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-            onClick={() => navigate("/")}
-          />
+          <h1 className="text-base sm:text-lg font-bold">Plantafel</h1>
           <div className="flex-1" />
           {canManageHolidays && (
             <CompanyHolidayManager

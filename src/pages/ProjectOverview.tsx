@@ -412,12 +412,6 @@ const ProjectOverview = () => {
               <ArrowLeft className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Zurück</span>
             </Button>
-            <img
-              src="/newmontilogo.png"
-              alt="BKS BauKomplettService"
-              className="h-10 sm:h-12 w-auto cursor-pointer hover:opacity-80 transition-opacity object-contain"
-              onClick={() => navigate("/projects")}
-            />
           </div>
         </div>
       </header>
