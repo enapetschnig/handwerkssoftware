@@ -1088,11 +1088,57 @@ Deno.serve(async (req: Request): Promise<Response> => {
           // Caption = project name → process now with the photo
           userMessage = `[Foto gesendet] ${msg.caption}`;
         } else {
-          // No caption → just acknowledge, wait for project name
+          // No caption → smart reply: lade Projekt-Liste mit Einteilung als Vorschlag
           await saveMsg(phone, "incoming", "[Foto empfangen]", emp.id, userId);
-          await sendWhatsApp(phone, "📸 Foto erhalten! Auf welches Projekt soll ich es hochladen?");
-          await saveMsg(phone, "outgoing", "📸 Foto erhalten! Auf welches Projekt soll ich es hochladen?", emp.id, userId);
-          continue; // Don't process through GPT
+
+          // Wo ist der Mitarbeiter heute laut Plantafel? → als Vorschlag anbieten
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const { data: einsaetze } = await supabase
+            .from("einsaetze")
+            .select("projects(id, name)")
+            .eq("user_id", userId)
+            .lte("start_date", todayStr)
+            .gte("end_date", todayStr);
+
+          // Alle aktiven Projekte (nicht "Abgeschlossen") für die Nummern-Liste
+          const { data: projList } = await supabase
+            .from("projects")
+            .select("id, name")
+            .not("status", "eq", "Abgeschlossen")
+            .order("name");
+
+          const heutigeProjektIds = new Set(
+            ((einsaetze as any[]) || [])
+              .map((e) => e.projects?.id).filter(Boolean)
+          );
+          const heutigeProjekte = (projList || []).filter((p: any) => heutigeProjektIds.has(p.id));
+          const andereProjekte = (projList || []).filter((p: any) => !heutigeProjektIds.has(p.id));
+
+          let reply = "📸 Foto erhalten!\n\n";
+          if (heutigeProjekte.length > 0) {
+            reply += "*Heute eingeteilt:*\n";
+            heutigeProjekte.forEach((p: any, i: number) => {
+              reply += `${i + 1}. ${p.name}\n`;
+            });
+            if (andereProjekte.length > 0) {
+              reply += "\n*Andere aktive Projekte:*\n";
+              andereProjekte.slice(0, 10).forEach((p: any, i: number) => {
+                reply += `${heutigeProjekte.length + i + 1}. ${p.name}\n`;
+              });
+            }
+          } else if (projList && projList.length > 0) {
+            reply += "*Auf welches Projekt?*\n";
+            projList.slice(0, 10).forEach((p: any, i: number) => {
+              reply += `${i + 1}. ${p.name}\n`;
+            });
+          } else {
+            reply += "Keine aktiven Projekte gefunden.";
+          }
+          reply += "\n_Antworte mit Nummer oder Projektname._";
+
+          await sendWhatsApp(phone, reply);
+          await saveMsg(phone, "outgoing", reply, emp.id, userId);
+          continue;
         }
       } else {
         userMessage = msg.body || "";
