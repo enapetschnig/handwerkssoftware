@@ -33,9 +33,19 @@ function formatPhone(phone: string): string {
   return cleaned;
 }
 
-function buildOnboardingMessage(vorname: string, projectList: string): string {
-  return `Hey ${vorname}! 👋 Ich bin der *BKS Assistent**.
+function buildOnboardingMessage(
+  vorname: string,
+  projectList: string,
+  creds?: { username?: string; password?: string; appUrl?: string }
+): string {
+  const credsBlock = creds?.username && creds?.password
+    ? `\n🔐 *Deine Zugangsdaten zur App:*\n${creds.appUrl ? `🌐 ${creds.appUrl}\n` : ""}👤 Benutzer: *${creds.username}*\n🔑 Passwort: *${creds.password}*\n_Beim ersten Login musst du das Passwort ändern._\n`
+    : "";
 
+  return `Hey ${vorname}! 👋 Ich bin der *BKS Assistent*.
+
+Willkommen bei *BKS BauKomplettService*!
+${credsBlock}
 Ab jetzt kannst du deine Stunden einfach hier per WhatsApp schreiben – kein Zettel, keine App nötig.
 
 *So geht's:*
@@ -91,7 +101,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    const { employee_id } = await req.json();
+    const { employee_id, username, password, app_url } = await req.json();
     if (!employee_id) {
       return new Response(
         JSON.stringify({ error: "employee_id required" }),
@@ -129,11 +139,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Fetch active projects for the project list
+    // Fetch active projects for the project list (alle außer Abgeschlossen)
     const { data: projects } = await supabase
       .from("projects")
       .select("name")
-      .eq("status", "In Arbeit")
+      .not("status", "eq", "Abgeschlossen")
       .order("name");
 
     let projectList = "*Deine Projekte:*\n";
@@ -146,7 +156,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const waPhone = formatPhone(emp.telefon);
-    const message = buildOnboardingMessage(emp.vorname, projectList);
+    const message = buildOnboardingMessage(emp.vorname, projectList, {
+      username,
+      password,
+      appUrl: app_url,
+    });
 
     // Send onboarding message
     const result = await sendWhatsApp(waPhone, message);

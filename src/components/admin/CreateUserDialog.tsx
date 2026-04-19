@@ -151,12 +151,18 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       }
       if (data?.error) throw new Error(data.error);
 
-      // Willkommensnachricht per WhatsApp automatisch senden, wenn gewünscht
+      // Willkommensnachricht per WhatsApp automatisch senden, wenn gewünscht —
+      // inkl. Zugangsdaten zur App, damit der Mitarbeiter sofort loslegen kann.
       let welcomeSent = false;
       if (enableWhatsApp && sendWelcome && data?.employee_id) {
         try {
           const { data: wData, error: wErr } = await supabase.functions.invoke("whatsapp-onboarding", {
-            body: { employee_id: data.employee_id },
+            body: {
+              employee_id: data.employee_id,
+              username: form.username.trim().toLowerCase(),
+              password: form.password,
+              app_url: window.location.origin,
+            },
           });
           if (wErr || wData?.error) {
             console.error("Welcome send failed:", wErr || wData?.error);
