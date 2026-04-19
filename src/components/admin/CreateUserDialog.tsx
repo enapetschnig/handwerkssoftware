@@ -126,14 +126,25 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
         body: { ...form, whatsapp_aktiv: enableWhatsApp },
       });
       if (error) {
-        // FunctionsHttpError enthält das Response-Body mit der echten Fehlermeldung
+        // FunctionsHttpError.context ist eine Response → Body explizit lesen
         let detail = error.message;
         try {
           const ctx: any = (error as any).context;
-          if (ctx?.json) { const j = await ctx.json(); if (j?.error) detail = j.error; }
-          else if (ctx?.text) { detail = await ctx.text(); }
-        } catch { /* ignore parse error */ }
-        console.error("create-user error:", error, detail);
+          if (ctx && typeof ctx.clone === "function") {
+            const bodyText = await ctx.clone().text();
+            console.error("create-user raw response:", ctx.status, bodyText);
+            try {
+              const j = JSON.parse(bodyText);
+              if (j?.error) detail = j.error;
+              else if (bodyText) detail = bodyText;
+            } catch {
+              if (bodyText) detail = bodyText;
+            }
+          }
+        } catch (parseErr) {
+          console.error("Error parsing function error:", parseErr);
+        }
+        console.error("create-user error:", error, "detail:", detail);
         throw new Error(detail);
       }
       if (data?.error) throw new Error(data.error);
