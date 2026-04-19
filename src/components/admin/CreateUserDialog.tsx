@@ -154,24 +154,45 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       // Willkommensnachricht per WhatsApp automatisch senden, wenn gewünscht —
       // inkl. Zugangsdaten zur App, damit der Mitarbeiter sofort loslegen kann.
       let welcomeSent = false;
-      if (enableWhatsApp && sendWelcome && data?.employee_id) {
-        try {
-          const { data: wData, error: wErr } = await supabase.functions.invoke("whatsapp-onboarding", {
-            body: {
-              employee_id: data.employee_id,
-              username: form.username.trim().toLowerCase(),
-              password: form.password,
-              app_url: window.location.origin,
-            },
-          });
-          if (wErr || wData?.error) {
-            console.error("Welcome send failed:", wErr || wData?.error);
-          } else {
-            welcomeSent = true;
+      let welcomeError: string | null = null;
+      if (enableWhatsApp && sendWelcome) {
+        if (!data?.employee_id) {
+          welcomeError = "employee_id fehlt (Mitarbeiter-Datensatz konnte nicht angelegt werden)";
+        } else {
+          try {
+            const { data: wData, error: wErr } = await supabase.functions.invoke("whatsapp-onboarding", {
+              body: {
+                employee_id: data.employee_id,
+                username: form.username.trim().toLowerCase(),
+                password: form.password,
+                app_url: window.location.origin,
+              },
+            });
+            if (wErr) {
+              let detail = wErr.message;
+              try {
+                const ctx: any = (wErr as any).context;
+                if (ctx && typeof ctx.clone === "function") {
+                  const body = await ctx.clone().text();
+                  console.error("onboarding raw:", ctx.status, body);
+                  try {
+                    const j = JSON.parse(body);
+                    detail = j?.error || body || detail;
+                  } catch { detail = body || detail; }
+                }
+              } catch { /* ignore */ }
+              welcomeError = detail;
+            } else if (wData?.error) {
+              welcomeError = wData.error;
+            } else {
+              welcomeSent = true;
+            }
+          } catch (e: any) {
+            welcomeError = e.message || String(e);
+            console.error("Welcome send exception:", e);
           }
-        } catch (e) {
-          console.error("Welcome send exception:", e);
         }
+        if (welcomeError) console.error("Welcome failed:", welcomeError);
       }
 
       toast({
@@ -180,7 +201,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           ? welcomeSent
             ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert, Willkommensnachricht gesendet`
             : sendWelcome
-              ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert (Willkommensnachricht fehlgeschlagen)`
+              ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert (Fehler: ${welcomeError})`
               : `${form.vorname} ${form.nachname} — WhatsApp aktiviert`
           : `${form.vorname} ${form.nachname}`,
       });

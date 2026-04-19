@@ -185,11 +185,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Employee insert failed (non-fatal):", empErr);
     }
 
+    // Fallback: wenn insert kein id zurückgab, per user_id nachschauen
+    let employeeId: string | null = newEmp?.id ?? null;
+    if (!employeeId) {
+      const { data: existing } = await supabase
+        .from("employees").select("id").eq("user_id", userId).maybeSingle();
+      employeeId = existing?.id ?? null;
+    }
+
     return new Response(JSON.stringify({
       success: true,
       user_id: userId,
       username: username.toLowerCase().trim(),
-      employee_id: newEmp?.id || null,
+      employee_id: employeeId,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

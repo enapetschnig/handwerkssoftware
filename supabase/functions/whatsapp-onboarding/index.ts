@@ -24,7 +24,12 @@ async function sendWhatsApp(to: string, message: string) {
     },
     body: JSON.stringify({ to: recipient, body: message }),
   });
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body?.sent === false || body?.error) {
+    const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(`WAPI: ${msg}`);
+  }
+  return body;
 }
 
 function formatPhone(phone: string): string {
@@ -162,8 +167,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
       appUrl: app_url,
     });
 
+    if (!WAPI_TOKEN) {
+      return new Response(JSON.stringify({ error: "WAPI_TOKEN nicht konfiguriert" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Send onboarding message
-    const result = await sendWhatsApp(waPhone, message);
+    try {
+      await sendWhatsApp(waPhone, message);
+    } catch (sendErr: any) {
+      console.error("WAPI send failed:", sendErr);
+      return new Response(JSON.stringify({
+        error: sendErr.message || "WhatsApp konnte nicht gesendet werden",
+        phone: waPhone,
+      }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // Log the message
     await supabase.from("whatsapp_messages").insert({
