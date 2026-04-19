@@ -175,7 +175,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       aktiv: true,
     };
 
-    const { error: empErr } = await supabase.from("employees").insert(employeePayload);
+    const { data: newEmp, error: empErr } = await supabase
+      .from("employees")
+      .insert(employeePayload)
+      .select("id")
+      .single();
     if (empErr) {
       // Nicht kritisch — User ist trotzdem angelegt. Nur loggen, nicht abbrechen.
       console.error("Employee insert failed (non-fatal):", empErr);
@@ -185,6 +189,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       success: true,
       user_id: userId,
       username: username.toLowerCase().trim(),
+      employee_id: newEmp?.id || null,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -80,6 +80,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
   const [onboardingText, setOnboardingText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [whatsappAktiv, setWhatsappAktiv] = useState(true);
+  const [sendWelcome, setSendWelcome] = useState(true);
 
   const [form, setForm] = useState(emptyForm);
 
@@ -95,6 +96,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
   const resetAndClose = () => {
     setForm(emptyForm);
     setWhatsappAktiv(true);
+    setSendWelcome(true);
     setOnboardingText(null);
     setCopied(false);
     onOpenChange(false);
@@ -149,10 +151,31 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       }
       if (data?.error) throw new Error(data.error);
 
+      // Willkommensnachricht per WhatsApp automatisch senden, wenn gewünscht
+      let welcomeSent = false;
+      if (enableWhatsApp && sendWelcome && data?.employee_id) {
+        try {
+          const { data: wData, error: wErr } = await supabase.functions.invoke("whatsapp-onboarding", {
+            body: { employee_id: data.employee_id },
+          });
+          if (wErr || wData?.error) {
+            console.error("Welcome send failed:", wErr || wData?.error);
+          } else {
+            welcomeSent = true;
+          }
+        } catch (e) {
+          console.error("Welcome send exception:", e);
+        }
+      }
+
       toast({
         title: "Benutzer erstellt",
         description: enableWhatsApp
-          ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert`
+          ? welcomeSent
+            ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert, Willkommensnachricht gesendet`
+            : sendWelcome
+              ? `${form.vorname} ${form.nachname} — WhatsApp aktiviert (Willkommensnachricht fehlgeschlagen)`
+              : `${form.vorname} ${form.nachname} — WhatsApp aktiviert`
           : `${form.vorname} ${form.nachname}`,
       });
 
@@ -276,6 +299,17 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
                       checked={whatsappAktiv && !!form.telefon.trim()}
                       disabled={!form.telefon.trim()}
                       onCheckedChange={setWhatsappAktiv}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-3 mt-1.5 rounded-md border px-2.5 py-1.5 bg-muted/30">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <MessageCircle className="h-3.5 w-3.5 text-blue-600" />
+                      Willkommensnachricht senden
+                    </span>
+                    <Switch
+                      checked={sendWelcome && whatsappAktiv && !!form.telefon.trim()}
+                      disabled={!form.telefon.trim() || !whatsappAktiv}
+                      onCheckedChange={setSendWelcome}
                     />
                   </label>
                 </div>
