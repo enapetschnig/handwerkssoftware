@@ -71,33 +71,61 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Create auth user with internal email
-    const internalEmail = `${username.toLowerCase().trim()}@app.monti.pro`;
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Create auth user with internal email.
+    // Wenn ein vorheriger Versuch mittendrin gecrashed ist, existiert evtl. schon
+    // ein Auth-User mit genau dieser Email → wir räumen ihn auf und legen neu an.
+    const cleanUser = username.toLowerCase().trim();
+    const internalEmail = `${cleanUser}@app.monti.pro`;
+
+    let { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: internalEmail,
       password,
-      email_confirm: true, // skip email verification
-      user_metadata: {
-        vorname,
-        nachname,
-        username: username.toLowerCase().trim(),
-      },
+      email_confirm: true,
+      user_metadata: { vorname, nachname, username: cleanUser },
     });
 
-    if (authError) {
+    // Orphan-Cleanup: User existiert schon in auth, aber nicht vollständig aktiviert
+    if (authError && /already|exists|registered/i.test(authError.message || "")) {
+      console.warn("Auth user exists — attempting orphan cleanup:", internalEmail);
+      const { data: listed } = await supabase.auth.admin.listUsers();
+      const orphan = listed?.users?.find((u: any) => u.email === internalEmail);
+      if (orphan) {
+        // Nur löschen, wenn kein aktives Profil dran hängt — sonst Konflikt melden
+        const { data: prof } = await supabase
+          .from("profiles").select("is_active").eq("id", orphan.id).maybeSingle();
+        if (!prof || prof.is_active !== true) {
+          await supabase.auth.admin.deleteUser(orphan.id);
+          console.log("Orphan deleted, retrying createUser");
+          const retry = await supabase.auth.admin.createUser({
+            email: internalEmail,
+            password,
+            email_confirm: true,
+            user_metadata: { vorname, nachname, username: cleanUser },
+          });
+          authData = retry.data;
+          authError = retry.error;
+        } else {
+          return new Response(JSON.stringify({
+            error: `Benutzername "${cleanUser}" ist bereits vergeben (aktiver User).`,
+          }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+    }
+
+    if (authError || !authData?.user) {
       console.error("Auth error:", authError);
-      return new Response(JSON.stringify({ error: authError.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({
+        error: `Auth-User konnte nicht erstellt werden: ${authError?.message || "unbekannt"}`,
+      }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const userId = authData.user.id;
 
     // Update profile with all data
-    await supabase.from("profiles").update({
+    const { error: profErr } = await supabase.from("profiles").update({
       vorname,
       nachname,
-      username: username.toLowerCase().trim(),
+      username: cleanUser,
       must_change_password: true,
       is_active: true,
       telefon: telefon || null,
@@ -110,6 +138,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       eintrittsdatum: eintrittsdatum || null,
       stundenlohn: stundenlohn ? parseFloat(stundenlohn) : null,
     }).eq("id", userId);
+    if (profErr) {
+      console.error("Profile update failed:", profErr);
+      // Rollback: Auth-User wieder entfernen, damit kein halber Datensatz bleibt
+      await supabase.auth.admin.deleteUser(userId);
+      return new Response(JSON.stringify({ error: `Profil: ${profErr.message}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Set role — user_roles hat UNIQUE (user_id, role), daher erst alte Rollen
     // löschen und dann neue einfügen (saubere 1-Rolle-pro-User-Semantik).
