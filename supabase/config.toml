@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.delete-user]
 verify_jwt = false
+
+[functions.forgot-password-whatsapp]
+verify_jwt = false
+
+[functions.sync-assignment-to-calendar]
+verify_jwt = false

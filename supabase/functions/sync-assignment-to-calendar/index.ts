@@ -133,7 +133,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { action, assignment_id, einsatz_id } = await req.json();
+    // Auth: cron_webhook_secret (DB-Trigger), Service-Role-Key ODER Admin/Vorarbeiter-JWT
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const { data: secretRow } = await supabase
+      .from("app_settings").select("value").eq("key", "cron_webhook_secret").maybeSingle();
+    const dbCronSecret = secretRow?.value as string | undefined;
+
+    let isAuthorized =
+      (serviceKey && token === serviceKey) ||
+      (dbCronSecret && token === dbCronSecret);
+
+    if (!isAuthorized && token) {
+      const { data: { user: caller } } = await supabase.auth.getUser(token);
+      if (caller) {
+        const { data: roleRow } = await supabase
+          .from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
+        if (roleRow?.role === "administrator" || roleRow?.role === "vorarbeiter") {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json();
+    const { action, assignment_id, einsatz_id } = body;
+    const payloadGoogleEventId: string | undefined = body.google_event_id;
 
     if (!action) {
       return new Response(JSON.stringify({ error: "action required (sync/delete)" }), {
@@ -354,10 +385,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    if (action === "delete_einsatz" && einsatz_id) {
-      const { data: einsatz } = await supabase.from("einsaetze").select("google_event_id").eq("id", einsatz_id).maybeSingle();
-      if (einsatz?.google_event_id) {
-        try { await deleteEvent(accessToken, einsatz.google_event_id); } catch {}
+    if (action === "delete_einsatz") {
+      // google_event_id kann mitgegeben werden (falls die einsaetze-Zeile schon
+      // gelöscht ist, z. B. wenn der DB-Trigger nach DELETE aufruft). Fallback:
+      // aus der DB lesen, solange sie noch existiert.
+      let gid = payloadGoogleEventId;
+      if (!gid && einsatz_id) {
+        const { data: einsatz } = await supabase
+          .from("einsaetze").select("google_event_id").eq("id", einsatz_id).maybeSingle();
+        gid = einsatz?.google_event_id || undefined;
+      }
+      if (gid) {
+        try { await deleteEvent(accessToken, gid); } catch (e) { console.error("Google delete failed:", e); }
       }
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

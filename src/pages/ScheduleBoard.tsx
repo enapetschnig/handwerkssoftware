@@ -163,17 +163,11 @@ export default function ScheduleBoard() {
     // Get all team member user_ids
     const memberUserIds = teamMembers.filter(tm => tm.team_id === teamId).map(tm => tm.user_id);
 
-    // Delete all einsaetze for these members and clean up Google Calendar
+    // Einsätze dieser Mitarbeiter löschen — der DB-Trigger sync't automatisch
+    // den Google-Kalender, kein manueller Function-Call mehr nötig.
     for (const uid of memberUserIds) {
       const userEinsaetze = einsaetze.filter(e => e.user_id === uid);
       for (const e of userEinsaetze) {
-        if (e.google_event_id) {
-          try {
-            await supabase.functions.invoke("sync-assignment-to-calendar", {
-              body: { action: "delete_einsatz", einsatz_id: e.id },
-            });
-          } catch {}
-        }
         await supabase.from("einsaetze").delete().eq("id", e.id);
       }
     }
@@ -242,20 +236,12 @@ export default function ScheduleBoard() {
       end_time: data.ganztaegig ? "16:00" : (data.end_time || "16:00"),
     };
 
+    // Google-Calendar-Sync läuft automatisch via DB-Trigger bei INSERT/UPDATE.
     if (data.id) {
-      // Update
       const { error } = await supabase.from("einsaetze").update(payload).eq("id", data.id);
       if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
       setEinsaetze((prev) => prev.map((e) => e.id === data.id ? { ...e, ...payload } as Einsatz : e));
-
-      // Sync to Google Calendar
-      try {
-        await supabase.functions.invoke("sync-assignment-to-calendar", {
-          body: { action: "sync_einsatz", einsatz_id: data.id },
-        });
-      } catch {}
     } else {
-      // Create — for multiple users if multi-select
       const usersToCreate = prefillUserIds.length > 1 ? prefillUserIds : [payload.user_id];
       for (const uid of usersToCreate) {
         const { data: created, error } = await supabase
@@ -264,14 +250,7 @@ export default function ScheduleBoard() {
           .select()
           .single();
         if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); continue; }
-        if (created) {
-          setEinsaetze((prev) => [...prev, created as Einsatz]);
-          try {
-            await supabase.functions.invoke("sync-assignment-to-calendar", {
-              body: { action: "sync_einsatz", einsatz_id: created.id },
-            });
-          } catch {}
-        }
+        if (created) setEinsaetze((prev) => [...prev, created as Einsatz]);
       }
     }
 
@@ -283,14 +262,7 @@ export default function ScheduleBoard() {
   };
 
   const handleDeleteEinsatz = async (id: string) => {
-    const einsatz = einsaetze.find((e) => e.id === id);
-    if (einsatz?.google_event_id) {
-      try {
-        await supabase.functions.invoke("sync-assignment-to-calendar", {
-          body: { action: "delete_einsatz", einsatz_id: id },
-        });
-      } catch {}
-    }
+    // Google-Calendar-Sync (Löschen) läuft automatisch via DB-Trigger BEFORE DELETE.
     await supabase.from("einsaetze").delete().eq("id", id);
     setEinsaetze((prev) => prev.filter((e) => e.id !== id));
     setEinsatzDialogOpen(false);

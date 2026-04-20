@@ -68,24 +68,24 @@ export default function Auth() {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("reset-email") as string;
+    const username = (formData.get("reset-username") as string).trim().toLowerCase();
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth`,
-    });
-
-    if (error) {
+    try {
+      const { data, error } = await supabase.functions.invoke("forgot-password-whatsapp", {
+        body: { username },
+      });
+      if (error) throw error;
+      toast({
+        title: "Anfrage verschickt",
+        description: data?.message || "Falls der Benutzer existiert, wurde ein neues Passwort per WhatsApp geschickt.",
+      });
+      setShowPasswordReset(false);
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Fehler",
-        description: error.message,
+        description: err.message || "Konnte die Anfrage nicht senden. Bitte Admin kontaktieren.",
       });
-    } else {
-      toast({
-        title: "E-Mail gesendet",
-        description: "Prüfen Sie Ihr Postfach für den Passwort-Reset-Link.",
-      });
-      setShowPasswordReset(false);
     }
     setLoading(false);
   };
@@ -105,24 +105,25 @@ export default function Auth() {
               <div>
                 <h3 className="text-lg font-semibold">Passwort zurücksetzen</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Geben Sie Ihre E-Mail-Adresse ein, um einen Reset-Link zu erhalten.
+                  Gib deinen Benutzernamen ein — du bekommst ein neues Passwort per WhatsApp zugeschickt.
                 </p>
               </div>
 
               <form onSubmit={handlePasswordReset} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="reset-email">E-Mail</Label>
+                  <Label htmlFor="reset-username">Benutzername</Label>
                   <Input
-                    id="reset-email"
-                    name="reset-email"
-                    type="email"
-                    placeholder="ihre@email.at"
+                    id="reset-username"
+                    name="reset-username"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="z.B. max.m"
                     required
                   />
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Lädt..." : "Reset-Link senden"}
+                  {loading ? "Sende..." : "Neues Passwort per WhatsApp"}
                 </Button>
 
                 <Button
