@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Camera, Trash2, X, ZoomIn, Upload } from "lucide-react";
+import { Camera, Trash2, ZoomIn, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { PhotoLightbox } from "@/components/PhotoLightbox";
 
 interface BerichtPhoto {
   id: string;
@@ -24,7 +24,7 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
   const [photos, setPhotos] = useState<BerichtPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -206,21 +206,21 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {photos.map((photo) => (
+              {photos.map((photo, idx) => (
                 <div key={photo.id} className="space-y-1">
                   <div className="relative group aspect-square">
                     <img
                       src={getPublicUrl(photo.file_path)}
                       alt={photo.file_name}
                       className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => setSelectedPhoto(getPublicUrl(photo.file_path))}
+                      onClick={() => setLightboxIndex(idx)}
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg pointer-events-none" />
                     <Button
                       variant="ghost"
                       size="icon"
                       className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                      onClick={() => setSelectedPhoto(getPublicUrl(photo.file_path))}
+                      onClick={() => setLightboxIndex(idx)}
                     >
                       <ZoomIn className="h-4 w-4" />
                     </Button>
@@ -246,21 +246,16 @@ export const BautagesberichtPhotos = ({ berichtId }: BautagesberichtPhotosProps)
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-hidden">
-          <DialogClose className="absolute right-4 top-4 z-10 rounded-sm bg-black/50 p-2 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-            <X className="h-5 w-5 text-white" />
-            <span className="sr-only">Close</span>
-          </DialogClose>
-          {selectedPhoto && (
-            <img
-              src={selectedPhoto}
-              alt="Vollbild"
-              className="w-full h-full object-contain max-h-[90vh]"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <PhotoLightbox
+        photos={photos.map((p) => ({
+          url: getPublicUrl(p.file_path),
+          alt: p.file_name,
+          caption: p.beschreibung || undefined,
+        }))}
+        initialIndex={lightboxIndex ?? 0}
+        open={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+      />
     </>
   );
 };

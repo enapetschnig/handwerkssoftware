@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { PhotoLightbox } from "@/components/PhotoLightbox";
+import { copyErstterminPhotosToProject } from "@/lib/copyErstterminPhotos";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -137,7 +139,7 @@ export default function ErstterminDetail() {
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { init(); }, [id]);
@@ -471,6 +473,19 @@ export default function ErstterminDetail() {
           .update({ project_id: pid })
           .eq("id", eid);
         setProjectId(pid);
+
+        // Fotos aus dem Ersttermin in den Projekt-Ordner kopieren (best effort)
+        try {
+          const res = await copyErstterminPhotosToProject(eid, pid);
+          if (res.copied > 0) {
+            toast({
+              title: "Fotos übernommen",
+              description: `${res.copied} Foto${res.copied === 1 ? "" : "s"} ins Projekt kopiert${res.skipped ? ` (${res.skipped} bereits vorhanden)` : ""}.`,
+            });
+          }
+        } catch (e) {
+          console.error("Foto-Kopie in Projekt fehlgeschlagen:", e);
+        }
       }
       return pid;
     } catch {
@@ -910,11 +925,30 @@ export default function ErstterminDetail() {
           className="transition-all"
         >
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos <span className="text-xs font-normal text-muted-foreground">(Dateien hier ablegen oder Button klicken)</span></CardTitle>
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
-                <Upload className="h-4 w-4" />{uploading ? "Lädt..." : "Foto hinzufügen"}
-              </Button>
+              <div className="flex gap-2">
+                {projectId && photos.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!id || !projectId) return;
+                      const res = await copyErstterminPhotosToProject(id, projectId);
+                      toast({
+                        title: "Fotos-Übernahme abgeschlossen",
+                        description: `${res.copied} kopiert · ${res.skipped} übersprungen${res.failed ? ` · ${res.failed} fehlgeschlagen` : ""}`,
+                      });
+                    }}
+                    className="gap-2"
+                  >
+                    <FolderPlus className="h-4 w-4" /> Ins Projekt übernehmen
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
+                  <Upload className="h-4 w-4" />{uploading ? "Lädt..." : "Foto hinzufügen"}
+                </Button>
+              </div>
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
           </CardHeader>
@@ -943,11 +977,11 @@ export default function ErstterminDetail() {
               <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {photos.map((photo) => (
+                {photos.map((photo, idx) => (
                   <div key={photo.id} className="space-y-1">
                     <div className="relative group aspect-square">
-                      <img src={getPhotoUrl(photo.file_path)} alt={photo.file_name} className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))} />
-                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70" onClick={() => setSelectedPhoto(getPhotoUrl(photo.file_path))}><ZoomIn className="h-4 w-4" /></Button>
+                      <img src={getPhotoUrl(photo.file_path)} alt={photo.file_name} className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLightboxIndex(idx)} />
+                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70" onClick={() => setLightboxIndex(idx)}><ZoomIn className="h-4 w-4" /></Button>
                       <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handlePhotoDelete(photo)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
@@ -1027,13 +1061,13 @@ export default function ErstterminDetail() {
           <Button onClick={handleSave} disabled={saving} className="gap-2"><Save className="h-4 w-4" />{saving ? "Speichert..." : "Speichern"}</Button>
         </div>
 
-        {/* Photo lightbox */}
-        <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-hidden">
-            <DialogClose className="absolute right-4 top-4 z-10 rounded-sm bg-black/50 p-2 opacity-70 hover:opacity-100"><X className="h-5 w-5 text-white" /></DialogClose>
-            {selectedPhoto && <img src={selectedPhoto} alt="Vollbild" className="w-full h-full object-contain max-h-[90vh]" />}
-          </DialogContent>
-        </Dialog>
+        {/* Photo lightbox mit Prev/Next */}
+        <PhotoLightbox
+          photos={photos.map((p) => ({ url: getPhotoUrl(p.file_path), alt: p.file_name || undefined }))}
+          initialIndex={lightboxIndex ?? 0}
+          open={lightboxIndex !== null}
+          onClose={() => setLightboxIndex(null)}
+        />
 
         {/* "Projekt jetzt anlegen?" — Bestätigungsdialog nach Speichern */}
         <AlertDialog open={askProjectOpen} onOpenChange={setAskProjectOpen}>
