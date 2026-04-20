@@ -176,7 +176,6 @@ export default function InvoiceDetail() {
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
-  const [importTimeOpen, setImportTimeOpen] = useState(false);
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [stornoDialogOpen, setStornoDialogOpen] = useState(false);
   const [stornoGrund, setStornoGrund] = useState("");
