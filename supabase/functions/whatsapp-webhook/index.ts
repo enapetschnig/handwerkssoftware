@@ -497,6 +497,22 @@ const tools = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "krankmeldung_eintragen",
+      description:
+        "Trägt einen Krankenstand in die Zeiterfassung ein. Beispiele: 'bin heute krank', 'war gestern krank', 'krank von Montag bis Freitag'. Erstellt für jeden Werktag einen time_entry mit taetigkeit='Krankenstand' und dem jeweiligen Tagessoll als stunden (Mo-Do 8,5h, Fr 5h). Überspringt Wochenenden und österreichische Feiertage.",
+      parameters: {
+        type: "object",
+        properties: {
+          von_datum: { type: "string", description: "Start-Datum YYYY-MM-DD (Standard: heute)" },
+          bis_datum: { type: "string", description: "Ende-Datum YYYY-MM-DD (Standard: wie von_datum)" },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 // ─── Tool execution ──────────────────────────────────────
@@ -696,18 +712,33 @@ async function executeTool(
           jobs.push({ buffer: cachedImageBuffer, hash });
         }
 
-        // Pending-Fotos aus temp-storage nachladen (deduped via hash)
+        // Pending-Fotos aus temp-storage nachladen (deduped via hash).
+        // Primär via Storage-Download (umgeht Cache/CDN/Expiry-Probleme),
+        // Fallback auf die Public-URL via fetch.
         let loadFailures = 0;
         for (const p of (pendings || []) as any[]) {
           if (jobs.some((j) => j.hash === p.photo_hash)) continue;
+          let buf: ArrayBuffer | null = null;
           try {
-            const res = await fetch(p.message_body);
-            if (!res.ok) {
-              console.error(`[foto_hochladen] temp fetch failed: HTTP ${res.status} for ${p.message_body}`);
-              loadFailures++;
-              continue;
+            // Pfad aus der Public-URL extrahieren: .../project-photos/whatsapp-temp/...
+            const m = /project-photos\/(whatsapp-temp\/[^?]+)/.exec(p.message_body || "");
+            if (m) {
+              const { data: blob, error: dlErr } = await supabase.storage
+                .from("project-photos")
+                .download(m[1]);
+              if (!dlErr && blob) buf = await blob.arrayBuffer();
+              else console.error(`[foto_hochladen] storage download failed: ${dlErr?.message}`);
             }
-            const buf = await res.arrayBuffer();
+            // Fallback auf public HTTP-fetch
+            if (!buf) {
+              const res = await fetch(p.message_body);
+              if (!res.ok) {
+                console.error(`[foto_hochladen] temp fetch failed: HTTP ${res.status}`);
+                loadFailures++;
+                continue;
+              }
+              buf = await res.arrayBuffer();
+            }
             const hash = p.photo_hash || (await sha256Hex(buf));
             if (jobs.some((j) => j.hash === hash)) continue;
             jobs.push({ buffer: buf, hash, pendingRowId: p.id });
@@ -912,6 +943,78 @@ async function executeTool(
       return `EINTEILUNG:\n${lines.join("\n")}`;
     }
 
+    case "krankmeldung_eintragen": {
+      const vonDatum = input.von_datum || today;
+      const bisDatum = input.bis_datum || vonDatum;
+
+      const start = new Date(vonDatum + "T12:00:00");
+      const end = new Date(bisDatum + "T12:00:00");
+      if (end.getTime() < start.getTime()) {
+        return "FEHLER: bis_datum liegt vor von_datum.";
+      }
+
+      // Österreichische Feiertage für den Zeitraum holen
+      const { data: feiertage } = await supabase
+        .from("austrian_holidays")
+        .select("datum")
+        .gte("datum", vonDatum)
+        .lte("datum", bisDatum);
+      const feiertagSet = new Set(((feiertage as any[]) || []).map((f: any) => f.datum));
+
+      const created: string[] = [];
+      const skipped: string[] = [];
+      for (
+        let d = new Date(start);
+        d.getTime() <= end.getTime();
+        d.setDate(d.getDate() + 1)
+      ) {
+        const iso = d.toISOString().slice(0, 10);
+        const dow = d.getDay(); // 0=So, 6=Sa
+        if (dow === 0 || dow === 6) { skipped.push(`${iso} (Wochenende)`); continue; }
+        if (feiertagSet.has(iso)) { skipped.push(`${iso} (Feiertag)`); continue; }
+
+        // Schon ein Eintrag für diesen Tag?
+        const { data: existing } = await supabase
+          .from("time_entries")
+          .select("id, taetigkeit")
+          .eq("user_id", userId)
+          .eq("datum", iso)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          skipped.push(`${iso} (bereits ${(existing[0] as any).taetigkeit || "Eintrag"})`);
+          continue;
+        }
+
+        const soll = getRegelarbeitszeit(d);
+        const startTime = dow === 5 ? "07:00" : "07:00";
+        const endTime = dow === 5 ? "12:00" : "16:00";
+        const { error } = await supabase.from("time_entries").insert({
+          user_id: userId, datum: iso,
+          stunden: soll,
+          taetigkeit: "Krankenstand",
+          project_id: null,
+          location_type: "werkstatt",
+          start_time: startTime,
+          end_time: endTime,
+          pause_minutes: 0,
+          notizen: `Krankmeldung via WhatsApp-Bot von ${senderName}`,
+        });
+        if (error) { skipped.push(`${iso} (Fehler: ${error.message})`); continue; }
+        created.push(iso);
+      }
+
+      if (created.length === 0 && skipped.length === 0) {
+        return "INFO: Kein Werktag im Zeitraum.";
+      }
+      let result = `ERFOLG: Krankmeldung eingetragen für ${created.length} Tag${created.length === 1 ? "" : "e"}`;
+      if (created.length > 0) result += `: ${created.join(", ")}`;
+      if (skipped.length > 0) {
+        result += `. Übersprungen: ${skipped.slice(0, 5).join(", ")}`;
+        if (skipped.length > 5) result += ` +${skipped.length - 5} weitere`;
+      }
+      return result;
+    }
+
     default:
       return `FEHLER: Unbekanntes Tool ${name}`;
   }
@@ -1073,6 +1176,15 @@ Werden transkribiert. Transkriptionsfehler intelligent interpretieren (z.B. "Mü
 "Wo muss ich hin?" / "Wo bin ich heute?" / "Einteilung?" → einteilung_anzeigen (ohne Args = heute)
 "Wo bin ich diese Woche?" / "Meine Woche" → einteilung_anzeigen(woche: "diese_woche")
 "Was steht nächste Woche an?" → einteilung_anzeigen(woche: "naechste_woche")
+
+═══ KRANKMELDUNG ═══
+"Bin heute krank" / "melde mich krank" → krankmeldung_eintragen() (heute)
+"War gestern krank" → krankmeldung_eintragen(von_datum=gestern)
+"Bin bis Freitag krank" → krankmeldung_eintragen(von_datum=heute, bis_datum=Freitag)
+"Krank von Montag bis Mittwoch" → von/bis ableiten und eintragen
+Das Tool erstellt für jeden Werktag einen time_entry (Krankenstand) mit dem
+Tagessoll. Wochenenden und Feiertage werden übersprungen. Falls an einem
+Tag bereits ein Eintrag existiert, wird er übersprungen (nicht überschrieben).
 "Wo muss ich am 22.04.?" → einteilung_anzeigen(datum: "2026-04-22")
 
 ═══ REGELN ═══
@@ -1299,10 +1411,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       let cachedImageBuffer: ArrayBuffer | null = null;
 
       if (msg.audioUrl) {
-        // Voice message → transcribe with Whisper
+        // Voice message → transcribe with Whisper. Robuster Fallback:
+        // leer/zu kurz/nur Geräusch → klar nachfragen, nicht erraten.
         try {
           const transcription = await transcribeAudio(msg.audioUrl);
-          userMessage = `[Sprachnachricht] ${transcription}`;
+          const clean = (transcription || "").trim();
+          // Whisper liefert bei Rausch manchmal nur "Bitte abonnieren." o.ä. —
+          // als Heuristik: <3 Wörter UND keine Zahlen UND keine Projekt-
+          // Stichworte → nachfragen.
+          const wordCount = clean.split(/\s+/).filter(Boolean).length;
+          const tooShort = clean.length < 3 || wordCount < 2;
+          if (tooShort) {
+            await sendWhatsApp(phone,
+              "Sorry, ich konnte deine Sprachnachricht nicht gut verstehen 🙏 Kannst du's bitte kurz als Text schreiben? Oder nochmal langsam und ohne viel Hintergrundgeräusch einsprechen."
+            );
+            continue;
+          }
+          userMessage = `[Sprachnachricht] ${clean}`;
         } catch (e: any) {
           console.error("Transcription failed:", e);
           await sendWhatsApp(phone,

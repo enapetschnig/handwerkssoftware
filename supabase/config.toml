@@ -24,6 +24,12 @@ verify_jwt = false
 [functions.whatsapp-onboarding]
 verify_jwt = false
 
+[functions.whatsapp-cleanup]
+verify_jwt = false
+
+[functions.daily-error-digest]
+verify_jwt = false
+
 [functions.delete-user]
 verify_jwt = false
 

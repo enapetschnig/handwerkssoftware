@@ -55,4 +55,21 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Größere schwere Libs in eigene Chunks → kleinerer First-Load.
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("jspdf") || id.includes("html2canvas") || id.includes("pdfjs-dist")) return "pdf";
+          if (id.includes("xlsx") || id.includes("xlsx-js-style")) return "xlsx";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("recharts") || id.includes("d3-")) return "charts";
+          if (id.includes("date-fns")) return "date-fns";
+          return undefined;
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
+  },
 }));
