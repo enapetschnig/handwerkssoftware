@@ -47,12 +47,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Reihenfolge: abhängige Datensätze zuerst, dann Auth (cascade räumt Rest weg)
+    // ── Foreign-Key-Referenzen auf auth.users auflösen ──
+    // Viele Tabellen haben FKs auf auth.users ohne ON DELETE-Regel. Vor dem
+    // Auth-Delete müssen alle dieser Referenzen auf NULL gesetzt werden,
+    // sonst schlägt der Delete mit FK-Violation fehl. Historische Daten
+    // bleiben erhalten (nur der User-Bezug wird anonymisiert).
+    const nullifyRefs: Array<[string, string]> = [
+      ["projects", "user_id"],
+      ["projects", "erfasst_von"],
+      ["time_entries", "approved_by"],
+      ["invitation_logs", "gesendet_von"],
+      ["whatsapp_messages", "user_id"],
+      ["contact_history", "erstellt_von"],
+      ["bautagesberichte", "erstellt_von"],
+      ["bautagesbericht_photos", "user_id"],
+      ["ersttermin_interessent", "erstellt_von"],
+      ["ersttermin_interessent_photos", "user_id"],
+      ["ersttermin_projekt", "erstellt_von"],
+      ["besprechungsprotokolle", "erstellt_von"],
+      ["teams", "created_by"],
+      ["board_projects", "created_by"],
+      ["einsaetze", "created_by"],
+      ["audit_log", "user_id"],
+    ];
+    for (const [tab, col] of nullifyRefs) {
+      const { error } = await (supabase.from(tab as never) as any)
+        .update({ [col]: null })
+        .eq(col, user_id);
+      if (error) console.error(`nullify ${tab}.${col} failed: ${error.message}`);
+    }
+
+    // Jetzt abhängige Datensätze löschen (Cascade übernimmt anderes).
     await supabase.from("employees").delete().eq("user_id", user_id);
     await supabase.from("user_roles").delete().eq("user_id", user_id);
     await supabase.from("profiles").delete().eq("id", user_id);
 
-    // Auth-User löschen (cascade löscht auch profiles wenn noch vorhanden)
+    // Auth-User löschen — sollte jetzt sauber durchgehen.
     const { error: authErr } = await supabase.auth.admin.deleteUser(user_id);
     if (authErr) {
       console.error("Auth delete error:", authErr);
