@@ -1315,47 +1315,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       if (!userMessage.trim()) continue;
 
-      // Check if there's a pending photo for this user (photo sent earlier, now project name comes)
-      if (!cachedImageBuffer) {
-        const { data: pendingPhoto } = await supabase
-          .from("whatsapp_messages")
-          .select("id, message_body")
-          .eq("phone", phone)
-          .eq("message_type", "pending_photo")
-          .eq("processed", false)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      // Pending-Foto-Info: NUR als Info im Kontext, nicht als Text-Zuordnung.
+      // Der GPT-Agent entscheidet dann selbst, ob er foto_hochladen aufruft
+      // oder die Frage anders beantwortet. So werden Fragen wie "wo bin ich
+      // heute" nicht mehr als Projekt-Zuordnung missverstanden.
+      const expiryIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: pendingPhotos } = await supabase
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("message_type", "pending_photo")
+        .eq("processed", false)
+        .gte("created_at", expiryIso);
+      const pendingCount = (pendingPhotos || []).length;
 
-        if (pendingPhoto) {
-          // There's a CURRENT photo waiting → download it from temp storage
-          userMessage = `[Foto wartet auf Zuordnung] ${userMessage}`;
-          try {
-            const tempRes = await fetch(pendingPhoto.message_body);
-            if (tempRes.ok) {
-              cachedImageBuffer = await tempRes.arrayBuffer();
-              console.log("Loaded pending photo:", cachedImageBuffer.byteLength, "bytes");
-            }
-          } catch (e) {
-            console.error("Failed to load pending photo:", e);
-          }
-          // Delete ALL pending photos for this user (clean slate)
-          await supabase.from("whatsapp_messages")
-            .delete()
-            .eq("phone", phone)
-            .eq("message_type", "pending_photo");
-        }
-      }
-
-      await saveMsg(phone, "incoming", userMessage, emp.id, userId);
+      await saveMsg(phone, "incoming", userMessage, emp.id, userId, msg.messageId);
 
       const [ctxData, history] = await Promise.all([
         gatherContext(userId),
         loadHistory(phone, 6),
       ]);
 
+      // Pending-Fotos-Hinweis an den Context anhängen, damit GPT es sieht
+      let contextWithPhotos = ctxData.context;
+      if (pendingCount > 0) {
+        contextWithPhotos += `\n\n═══ PENDING FOTOS ═══\n`;
+        contextWithPhotos += `Der Mitarbeiter hat ${pendingCount} Foto${pendingCount === 1 ? "" : "s"} geschickt, die noch keinem Projekt zugeordnet sind.\n`;
+        contextWithPhotos += `Wenn seine Antwort eine Projekt-Nummer, einen Projektnamen oder eindeutig auf Foto-Zuordnung hindeutet ("1", "Müller", "für das Müller-Projekt") → foto_hochladen aufrufen (alle ${pendingCount} Fotos werden automatisch zugewiesen).\n`;
+        contextWithPhotos += `Wenn er eine andere Frage stellt (Einteilung, Stunden, Info) → normale Antwort geben, Fotos warten weiter.\n`;
+      }
+
       const systemPrompt = buildSystemPrompt(
-        name, ctxData.context, ctxData.todayHours, ctxData.remainingHours,
+        name, contextWithPhotos, ctxData.todayHours, ctxData.remainingHours,
         ctxData.dailyTarget, ctxData.missingDays
       );
 
