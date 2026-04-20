@@ -1434,13 +1434,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
         loadHistory(phone, 6),
       ]);
 
-      // Pending-Fotos-Hinweis an den Context anhängen, damit GPT es sieht
+      // Pending-Fotos-Hinweis + letzte an den Mitarbeiter geschickte
+      // Projektliste als Kontext an GPT geben. So kann GPT eine Nummer-
+      // Antwort wie "6" korrekt auf die passende Liste mappen.
       let contextWithPhotos = ctxData.context;
       if (pendingCount > 0) {
+        // Letzte outgoing-Projektliste finden (mit 📸 + Nummerierung)
+        const { data: lastPrompt } = await supabase
+          .from("whatsapp_messages")
+          .select("message_body")
+          .eq("phone", phone)
+          .eq("direction", "outgoing")
+          .like("message_body", "%📸%")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         contextWithPhotos += `\n\n═══ PENDING FOTOS ═══\n`;
         contextWithPhotos += `Der Mitarbeiter hat ${pendingCount} Foto${pendingCount === 1 ? "" : "s"} geschickt, die noch keinem Projekt zugeordnet sind.\n`;
-        contextWithPhotos += `Wenn seine Antwort eine Projekt-Nummer, einen Projektnamen oder eindeutig auf Foto-Zuordnung hindeutet ("1", "Müller", "für das Müller-Projekt") → foto_hochladen aufrufen (alle ${pendingCount} Fotos werden automatisch zugewiesen).\n`;
-        contextWithPhotos += `Wenn er eine andere Frage stellt (Einteilung, Stunden, Info) → normale Antwort geben, Fotos warten weiter.\n`;
+        if (lastPrompt?.message_body) {
+          contextWithPhotos += `\nDIESE PROJEKT-LISTE hast du ihm zuletzt geschickt (die Nummern beziehen sich GENAU auf diese Liste, NICHT auf die allgemeine AKTIVE PROJEKTE-Nummerierung):\n`;
+          contextWithPhotos += lastPrompt.message_body + `\n`;
+        }
+        contextWithPhotos += `\nWENN die Antwort eine Nummer oder ein Projektname ist (z.B. "6", "Hörmann", "für Rene") → foto_hochladen mit dem Projekt aus der Liste oben aufrufen. NUMMER BEZIEHT SICH AUF DIE LETZTE LISTE. Alle ${pendingCount} Fotos werden automatisch zugewiesen.\n`;
+        contextWithPhotos += `WENN er eine andere Frage stellt (Einteilung, Stunden) → normal antworten, Fotos warten weiter.\n`;
       }
 
       const systemPrompt = buildSystemPrompt(
