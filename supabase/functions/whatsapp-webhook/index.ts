@@ -367,19 +367,25 @@ const tools = [
     function: {
       name: "stunden_buchen",
       description:
-        "Bucht Arbeitsstunden auf ein Projekt. Kann entweder project_id (UUID) ODER project_name (Suchbegriff) verwenden. Bei project_name wird serverseitig das passende Projekt gesucht.",
+        "Bucht Arbeitsstunden. arbeitsort = 'baustelle' (auf Projekt), 'werkstatt' (Firma/Büro — KEIN Projekt nötig), oder 'regie' (Regiearbeit — ohne Projekt). Bei arbeitsort='baustelle' ist project_id ODER project_name Pflicht.",
       parameters: {
         type: "object",
         properties: {
-          project_id: { type: "string", description: "UUID des Projekts aus der Projektliste (bevorzugt)" },
-          project_name: { type: "string", description: "Projektname oder Teilname zum Suchen (Alternative zu project_id)" },
-          stunden: { type: "number", description: "Stundenanzahl" },
-          taetigkeit: { type: "string", description: "Beschreibung der Taetigkeit" },
+          arbeitsort: {
+            type: "string",
+            enum: ["baustelle", "werkstatt", "regie"],
+            description: "baustelle = auf Projekt, werkstatt = Firma/Büro/Werkstatt (ohne Projekt), regie = Regiearbeit (ohne Projekt). Standard: baustelle wenn Projekt angegeben, sonst fragen.",
+          },
+          project_id: { type: "string", description: "UUID des Projekts (nur bei arbeitsort=baustelle)" },
+          project_name: { type: "string", description: "Projektname/Teilname zum Suchen (nur bei arbeitsort=baustelle)" },
+          stunden: { type: "number", description: "Stundenanzahl (wird bei start_time+end_time automatisch berechnet)" },
+          taetigkeit: { type: "string", description: "Beschreibung der Tätigkeit (z.B. Montage, Kabel verlegen, Aufräumen)" },
           datum: { type: "string", description: "Datum YYYY-MM-DD, Standard = heute" },
-          start_time: { type: "string", description: "Startzeit HH:MM (optional)" },
+          start_time: { type: "string", description: "Startzeit HH:MM (optional, für genaue Zeiterfassung)" },
           end_time: { type: "string", description: "Endzeit HH:MM (optional)" },
+          pause_minuten: { type: "number", description: "Pausenzeit in Minuten (optional, Standard 0 oder 30 bei ganztägig Mo-Do)" },
         },
-        required: ["stunden", "taetigkeit", "datum"],
+        required: ["taetigkeit", "datum"],
       },
     },
   },
@@ -473,8 +479,17 @@ async function executeTool(
 ): Promise<string> {
   const today = new Date().toISOString().split("T")[0];
 
-  // Resolve project_name to project_id if needed
-  if (!input.project_id && input.project_name) {
+  // arbeitsort normalisieren: Aliase erlauben
+  if (input.arbeitsort) {
+    const a = String(input.arbeitsort).toLowerCase().trim();
+    if (["firma", "werkstatt", "büro", "buero", "office"].includes(a)) input.arbeitsort = "werkstatt";
+    else if (["regie", "regiearbeit", "stoerung", "störung"].includes(a)) input.arbeitsort = "regie";
+    else if (["baustelle", "projekt"].includes(a)) input.arbeitsort = "baustelle";
+  }
+
+  // Resolve project_name to project_id if needed (nur relevant bei baustelle)
+  if ((input.arbeitsort === undefined || input.arbeitsort === "baustelle")
+      && !input.project_id && input.project_name) {
     const searchTerm = input.project_name.trim();
     const { data: matches } = await supabase
       .from("projects")
@@ -512,12 +527,36 @@ async function executeTool(
 
   switch (name) {
     case "stunden_buchen": {
-      if (!input.project_id) return "FEHLER: Kein Projekt angegeben.";
-      const h = input.stunden;
       const datum = input.datum || today;
+      const arbeitsort = input.arbeitsort || (input.project_id ? "baustelle" : undefined);
 
-      if (h <= 0 || h > 24)
-        return "FEHLER: Stunden muessen zwischen 0.25 und 24 liegen.";
+      if (!arbeitsort) {
+        return "FEHLER: Bitte angeben ob Baustelle (mit Projekt), Firma/Werkstatt oder Regiearbeit.";
+      }
+      if (arbeitsort === "baustelle" && !input.project_id) {
+        return "FEHLER: Für Baustelle ist ein Projekt nötig. Schreibe z.B. 'Projektname 8h' oder nutze Arbeitsort Firma.";
+      }
+
+      // Stunden: aus start/end ableiten, falls nicht direkt angegeben
+      const parseHHMM = (s: string) => {
+        const [h, m] = s.split(":").map((x: string) => parseInt(x, 10));
+        return (h || 0) * 60 + (m || 0);
+      };
+      const pauseMin = typeof input.pause_minuten === "number" ? input.pause_minuten : undefined;
+      let h = input.stunden as number | undefined;
+
+      if ((!h || h <= 0) && input.start_time && input.end_time) {
+        const diff = parseHHMM(input.end_time) - parseHHMM(input.start_time);
+        if (diff > 0) {
+          // Default-Pause übernehmen: 30min bei >6h Block, sonst 0 — analog Web-App
+          const p = pauseMin != null ? pauseMin : (diff > 6 * 60 ? 30 : 0);
+          h = Math.max(0, (diff - p) / 60);
+          h = Math.round(h * 4) / 4; // auf 0.25 runden
+        }
+      }
+
+      if (!h || h <= 0 || h > 24)
+        return "FEHLER: Stunden muessen zwischen 0.25 und 24 liegen. Gib Stunden oder Start- und Endzeit an.";
 
       // Check total hours for this day
       const { data: existingEntries } = await supabase
@@ -541,30 +580,44 @@ async function executeTool(
       const startTime = input.start_time || "07:00";
       let endTime = input.end_time;
       if (!endTime) {
-        const startMins = parseInt(startTime.split(":")[0]) * 60 + parseInt(startTime.split(":")[1] || "0");
+        const startMins = parseHHMM(startTime);
         const totalMins = startMins + h * 60 + (h > 6 ? 30 : 0);
         endTime = `${String(Math.floor(totalMins / 60)).padStart(2, "0")}:${String(Math.round(totalMins % 60)).padStart(2, "0")}`;
       }
+
+      // DB-location_type: Web-App speichert "regie" als "baustelle" mit null project_id
+      const dbLocationType = arbeitsort === "werkstatt" ? "werkstatt" : "baustelle";
+      const projectIdForInsert = arbeitsort === "baustelle" ? input.project_id : null;
+      const notizen = arbeitsort === "regie" ? "Regiearbeit" : null;
 
       const { error } = await supabase.from("time_entries").insert({
         user_id: userId,
         datum,
         stunden: h,
         taetigkeit: input.taetigkeit,
-        project_id: input.project_id,
-        location_type: "baustelle",
+        project_id: projectIdForInsert,
+        location_type: dbLocationType,
         start_time: startTime,
         end_time: endTime,
-        pause_minutes: h > 6 ? 30 : 0,
+        pause_minutes: pauseMin != null ? pauseMin : (h > 6 ? 30 : 0),
+        notizen,
       });
 
       if (error) return `FEHLER: ${error.message}`;
 
-      const { data: proj } = await supabase
-        .from("projects").select("name").eq("id", input.project_id).maybeSingle();
+      let ortLabel = "";
+      if (arbeitsort === "baustelle") {
+        const { data: proj } = await supabase
+          .from("projects").select("name").eq("id", projectIdForInsert).maybeSingle();
+        ortLabel = `"${proj?.name || "Projekt"}"`;
+      } else if (arbeitsort === "werkstatt") {
+        ortLabel = "Firma/Werkstatt";
+      } else {
+        ortLabel = "Regiearbeit";
+      }
 
       const remaining = dailyTarget - totalAfter;
-      let result = `ERFOLG: ${h}h auf "${proj?.name}" am ${datum} gebucht. Taetigkeit: ${input.taetigkeit}. Tagesgesamt: ${totalAfter}h von ${dailyTarget}h.`;
+      let result = `ERFOLG: ${h}h auf ${ortLabel} am ${datum} gebucht. Taetigkeit: ${input.taetigkeit}. Tagesgesamt: ${totalAfter}h von ${dailyTarget}h.`;
       if (remaining > 0.25) {
         result += ` HINWEIS: Noch ${remaining}h offen fuer heute (Soll: ${dailyTarget}h).`;
       } else if (remaining >= 0) {
@@ -796,14 +849,33 @@ Du hast oben den KOMPLETTEN Wochenueberblick dieses Mitarbeiters. Nutze dieses W
 6. Wenn Tagessoll erreicht → kurz bestaetigen: "Heute komplett ✓ Schoenen Feierabend!"
 
 ═══ ARBEITSZEITEN ═══
-Mo–Do: 8,5h | Fr: 5,0h | Wochensoll: 39h
+Mo–Do: 8,5h (07:00–16:00, Pause 12:00–12:30) | Fr: 5,0h (07:00–12:00, keine Pause) | Wochensoll: 39h
 Nicht mehr als Tagessoll buchen (Ueberstunden nur wenn ausdruecklich bestaetigt).
 
 ═══ STUNDENBUCHUNG (WICHTIGSTE FUNKTION) ═══
 
 Du bist ein INTELLIGENTER Agent. Du verstehst natuerliche Sprache und ordnest Projekte automatisch zu.
 
-PROJEKTERKENNUNG – so gehst du vor:
+ARBEITSORT — drei Möglichkeiten (arbeitsort-Parameter):
+• *baustelle* → klassisch auf einem Projekt (project_id oder project_name Pflicht)
+• *werkstatt* (auch "Firma", "Büro") → Arbeit in der Firma/Werkstatt, KEIN Projekt nötig
+• *regie* ("Regiearbeit") → Regiearbeit ohne Projektzuordnung
+
+Beispiele für Firma/Werkstatt:
+- "Heute 8h in der Firma, Material sortiert" → arbeitsort=werkstatt, 8h, "Material sortiert"
+- "Werkstatt 4h Aufräumen" → arbeitsort=werkstatt, 4h, "Aufräumen"
+- "7-16 Firma Lager" → arbeitsort=werkstatt, start=07:00, end=16:00
+
+Beispiele für Regie:
+- "Regiearbeit 3h Störung Müller" → arbeitsort=regie, 3h
+- "2h Regie Kundenanruf" → arbeitsort=regie, 2h
+
+ZEITERFASSUNG:
+- Wenn Start/End gegeben ("7 bis 16", "von 8-17") → start_time + end_time, Stunden werden automatisch berechnet (Pause standardmäßig 30min bei >6h Block)
+- Wenn nur Stunden genannt ("8h") → stunden direkt, Zeiten werden angenommen
+- Pause explizit: "30min Pause" → pause_minuten: 30
+
+PROJEKTERKENNUNG (nur bei arbeitsort=baustelle) – so gehst du vor:
 - "4h auf Müller" → matche "Müller" gegen die Projektliste → "Bauvorhaben Müller" → DIREKT buchen
 - "8h Sonnenhof Kabel verlegt" → "Wohnanlage Sonnenhof" → buchen
 - "6 Stunden Industriehalle" → "Industriehalle Graz-Süd" → buchen
