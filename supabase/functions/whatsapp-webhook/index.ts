@@ -50,6 +50,14 @@ async function sendWhatsApp(to: string, message: string) {
   return result;
 }
 
+// SHA-256-Hash eines Bildes → Content-basierter Fingerprint für Duplikat-Erkennung
+async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
+  const hashBuf = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function downloadMedia(mediaRef: string, messageId?: string): Promise<ArrayBuffer> {
   console.log("Downloading media, ref:", mediaRef, "msgId:", messageId);
 
@@ -182,7 +190,8 @@ async function saveMsg(
   direction: "incoming" | "outgoing",
   body: string,
   employeeId?: string,
-  userId?: string
+  userId?: string,
+  wapiMessageId?: string
 ) {
   await supabase.from("whatsapp_messages").insert({
     phone,
@@ -192,6 +201,7 @@ async function saveMsg(
     employee_id: employeeId || null,
     user_id: userId || null,
     processed: true,
+    wapi_message_id: wapiMessageId || null,
   });
 }
 
@@ -643,34 +653,110 @@ async function executeTool(
 
     case "foto_hochladen": {
       if (!input.project_id) return "FEHLER: Kein Projekt angegeben. Bitte Projektname nennen.";
-      if (!cachedImageBuffer) return "FEHLER: Kein Foto vorhanden.";
       try {
-        const buf = cachedImageBuffer;
-        const ts = Date.now();
-        const fileName = `${input.project_id}/whatsapp_${ts}.jpg`;
+        // ALLE pending Fotos des Users einholen (max 30min alt, nicht verarbeitet)
+        // + das ggf. aktuell im Call empfangene (cachedImageBuffer).
+        const expiryIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data: pendings } = await supabase
+          .from("whatsapp_messages")
+          .select("id, message_body, photo_hash, created_at")
+          .eq("user_id", userId)
+          .eq("message_type", "pending_photo")
+          .eq("processed", false)
+          .gte("created_at", expiryIso)
+          .order("created_at", { ascending: true });
 
-        const { error: upErr } = await supabase.storage
-          .from("project-photos")
-          .upload(fileName, buf, { contentType: "image/jpeg", upsert: false });
-        if (upErr) throw upErr;
+        type Job = { buffer: ArrayBuffer; hash: string; pendingRowId?: string };
+        const jobs: Job[] = [];
 
-        const { data: urlData } = supabase.storage
-          .from("project-photos").getPublicUrl(fileName);
+        // Aktuell im Webhook mitgegebenes Foto (Caption-Fall)
+        if (cachedImageBuffer) {
+          const hash = await sha256Hex(cachedImageBuffer);
+          // Kein Duplikat in jobs → direkt anfügen
+          jobs.push({ buffer: cachedImageBuffer, hash });
+        }
 
-        const { error: docErr } = await supabase.from("documents").insert({
-          name: `WhatsApp Foto – ${senderName} – ${new Date().toLocaleDateString("de-AT")}`,
-          file_url: urlData.publicUrl,
-          typ: "foto",
-          beschreibung: input.beschreibung || `WhatsApp-Upload von ${senderName}`,
-          project_id: input.project_id,
-          user_id: userId,
-        });
-        if (docErr) console.error("Doc insert error:", docErr);
+        // Pending-Fotos aus temp-storage nachladen (deduped via hash)
+        for (const p of (pendings || []) as any[]) {
+          if (jobs.some((j) => j.hash === p.photo_hash)) continue;
+          try {
+            const res = await fetch(p.message_body);
+            if (!res.ok) continue;
+            const buf = await res.arrayBuffer();
+            const hash = p.photo_hash || (await sha256Hex(buf));
+            if (jobs.some((j) => j.hash === hash)) continue;
+            jobs.push({ buffer: buf, hash, pendingRowId: p.id });
+          } catch (e) {
+            console.error("pending photo load failed:", e);
+          }
+        }
+
+        if (jobs.length === 0) return "FEHLER: Kein Foto vorhanden.";
+
+        // Schon im Projekt vorhandene Hashes nachschlagen → Duplikat-Skip
+        const hashList = jobs.map((j) => j.hash);
+        const { data: existingDocs } = await supabase
+          .from("documents")
+          .select("file_hash")
+          .eq("project_id", input.project_id)
+          .in("file_hash", hashList);
+        const alreadyUploadedHashes = new Set(
+          ((existingDocs as any[]) || []).map((d: any) => d.file_hash).filter(Boolean)
+        );
+
+        let uploaded = 0;
+        let skippedDuplicate = 0;
+        let failed = 0;
+
+        for (let i = 0; i < jobs.length; i++) {
+          const job = jobs[i];
+          if (alreadyUploadedHashes.has(job.hash)) {
+            skippedDuplicate++;
+            if (job.pendingRowId) {
+              await supabase.from("whatsapp_messages").delete().eq("id", job.pendingRowId);
+            }
+            continue;
+          }
+          try {
+            const ts = Date.now();
+            const fileName = `${input.project_id}/whatsapp_${ts}_${i}_${job.hash.slice(0, 8)}.jpg`;
+            const { error: upErr } = await supabase.storage
+              .from("project-photos")
+              .upload(fileName, job.buffer, { contentType: "image/jpeg", upsert: false });
+            if (upErr) throw upErr;
+
+            const { data: urlData } = supabase.storage
+              .from("project-photos").getPublicUrl(fileName);
+
+            await supabase.from("documents").insert({
+              name: `WhatsApp Foto – ${senderName} – ${new Date().toLocaleDateString("de-AT")}`,
+              file_url: urlData.publicUrl,
+              typ: "foto",
+              beschreibung: input.beschreibung || `WhatsApp-Upload von ${senderName}`,
+              project_id: input.project_id,
+              user_id: userId,
+              file_hash: job.hash,
+            });
+            uploaded++;
+            alreadyUploadedHashes.add(job.hash);
+            if (job.pendingRowId) {
+              await supabase.from("whatsapp_messages").delete().eq("id", job.pendingRowId);
+            }
+          } catch (e: any) {
+            console.error("Photo upload failed:", e);
+            failed++;
+          }
+        }
 
         const { data: proj } = await supabase
           .from("projects").select("name").eq("id", input.project_id).maybeSingle();
 
-        return `ERFOLG: Foto auf Projekt "${proj?.name}" hochgeladen.`;
+        const parts: string[] = [];
+        if (uploaded > 0) parts.push(`${uploaded} ${uploaded === 1 ? "Foto" : "Fotos"} hochgeladen`);
+        if (skippedDuplicate > 0) parts.push(`${skippedDuplicate} war${skippedDuplicate === 1 ? "" : "en"} schon im Projekt (übersprungen)`);
+        if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
+        const summary = parts.length ? parts.join(", ") : "Nichts zu tun";
+        return `ERFOLG: ${summary} auf Projekt "${proj?.name}".`;
       } catch (e: any) {
         console.error("Photo upload error:", e);
         return `FEHLER: ${e.message}`;
@@ -916,9 +1002,16 @@ ABLAUF:
 5. Vergangene Tage: "gestern 8h Werkstatt" → korrektes Datum berechnen und buchen
 
 ═══ FOTOS ═══
-- Mit Beschreibung → Projektname erkennen → hochladen
-- "Foto fuer Müller" → "Bauvorhaben Müller" → hochladen
-- Ohne Beschreibung → nach Projekt fragen
+WICHTIG: Mehrere Fotos werden als Batch behandelt — beim foto_hochladen werden
+AUTOMATISCH ALLE aktuell wartenden Fotos des Mitarbeiters hochgeladen (nicht nur eines).
+Du musst foto_hochladen also nur EINMAL aufrufen, egal wie viele Fotos offen sind.
+
+- Foto(s) mit Beschreibung → Projektname erkennen → foto_hochladen
+- "Foto fuer Müller" / "ans Müller" / "für Hinterleitenweg" → Projekt erkennen → foto_hochladen
+- Antwort nur mit Nummer ("1") → Projekt aus der letzten Liste im Kontext wählen → foto_hochladen
+- Antwort nur mit Projektname → foto_hochladen mit project_name
+- Der Upload-Mechanismus erkennt automatisch Duplikate (gleicher Bildinhalt) und überspringt sie still.
+- Melde dem Mitarbeiter KURZ wie viele Fotos hochgeladen / übersprungen wurden (der Tool-Return-Wert nennt die Zahl).
 
 ═══ SPRACHNACHRICHTEN ═══
 Werden transkribiert. Transkriptionsfehler intelligent interpretieren (z.B. "Mühler" = "Müller").
@@ -1095,18 +1188,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return p.slice(0, 5) + "****" + p.slice(-3);
     };
 
+    // Tracker pro phone-Nummer: wie viele NEUE Fotos wurden in diesem Webhook-Call
+    // ohne Caption hinzugefügt — für eine einmalige Batch-Antwort am Ende.
+    const batchPhotoCount = new Map<string, number>();
+    const batchEmp = new Map<string, any>();
+
     for (const msg of incoming) {
       const phone = msg.from;
       console.log(`WhatsApp von ${maskPhone(phone)} (id: ${msg.messageId})`);
 
-      // Skip if this exact message was already processed (cross-request dedup)
+      // Robustes Dedup: die eindeutige WAPI-Message-ID in der DB prüfen.
+      // Dadurch werden z.B. gleichartige Bilder im selben Batch nicht mehr
+      // fälschlicherweise als Duplikate verworfen.
       if (msg.messageId) {
         const { data: existing } = await supabase
           .from("whatsapp_messages")
           .select("id")
-          .eq("phone", phone)
-          .eq("message_body", msg.body || msg.caption || `[${msg.type}]`)
-          .gte("created_at", new Date(Date.now() - 30000).toISOString()) // within last 30 sec
+          .eq("wapi_message_id", msg.messageId)
           .limit(1);
         if (existing && existing.length > 0) {
           console.log(`Duplicate message skipped: ${msg.messageId}`);
@@ -1149,96 +1247,66 @@ Deno.serve(async (req: Request): Promise<Response> => {
           continue;
         }
       } else if (msg.type === "image" || msg.mediaUrl) {
-        // Download image IMMEDIATELY and store in temp storage
+        // Bild downloaden + als pending_photo speichern. Mehrere Fotos im Batch
+        // werden ALLE gesammelt (keine delete-all-before-insert-Logik mehr).
         const mediaRef = msg.mediaUrl || msg.messageId;
-        let tempUrl = "";
+        let photoHash = "";
         if (mediaRef) {
           try {
             cachedImageBuffer = await downloadMedia(mediaRef, msg.messageId);
-            console.log(`Image downloaded: ${cachedImageBuffer.byteLength} bytes`);
+            photoHash = await sha256Hex(cachedImageBuffer);
+            console.log(`Image downloaded: ${cachedImageBuffer.byteLength} bytes, hash=${photoHash.slice(0, 12)}`);
 
-            // Store immediately in temp storage so it persists across messages
-            const tempPath = `whatsapp-temp/${phone}/${Date.now()}.jpg`;
+            // Temp-Storage: Dateiname mit Hash-Prefix, damit identischer Inhalt
+            // in 5 Sekunden nicht zweimal abgelegt wird.
+            const tempPath = `whatsapp-temp/${phone}/${photoHash.slice(0, 16)}.jpg`;
             await supabase.storage
               .from("project-photos")
               .upload(tempPath, cachedImageBuffer, { contentType: "image/jpeg", upsert: true });
             const { data: urlData } = supabase.storage
               .from("project-photos")
               .getPublicUrl(tempPath);
-            tempUrl = urlData.publicUrl;
+            const tempUrl = urlData.publicUrl;
 
-            // Clear ALL old pending photos for this user first
-            await supabase.from("whatsapp_messages")
-              .delete()
+            // Abgelaufene pending (>30min alt) aufräumen — aber aktuelle behalten
+            const expireBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+            await supabase.from("whatsapp_messages").delete()
               .eq("phone", phone)
-              .eq("message_type", "pending_photo");
+              .eq("message_type", "pending_photo")
+              .lt("created_at", expireBefore);
 
-            // Save ONLY this photo as pending
-            await supabase.from("whatsapp_messages").insert({
-              phone, direction: "incoming",
-              message_body: tempUrl,
-              message_type: "pending_photo",
-              employee_id: emp.id, user_id: userId, processed: false,
-            });
+            // Nur einfügen wenn kein pending mit gleichem Hash existiert (Dup-Schutz)
+            const { data: dupe } = await supabase.from("whatsapp_messages")
+              .select("id")
+              .eq("user_id", userId)
+              .eq("message_type", "pending_photo")
+              .eq("processed", false)
+              .eq("photo_hash", photoHash)
+              .limit(1);
+            if (!dupe || dupe.length === 0) {
+              await supabase.from("whatsapp_messages").insert({
+                phone, direction: "incoming",
+                message_body: tempUrl,
+                message_type: "pending_photo",
+                employee_id: emp.id, user_id: userId, processed: false,
+                wapi_message_id: msg.messageId || null,
+                photo_hash: photoHash,
+              });
+            }
           } catch (e: any) {
             console.error("Image download failed:", e.message);
           }
         }
 
         if (msg.caption) {
-          // Caption = project name → process now with the photo
+          // Caption = Projekt/Anweisung → ganz normal als Text-Input verarbeiten
           userMessage = `[Foto gesendet] ${msg.caption}`;
         } else {
-          // No caption → smart reply: lade Projekt-Liste mit Einteilung als Vorschlag
-          await saveMsg(phone, "incoming", "[Foto empfangen]", emp.id, userId);
-
-          // Wo ist der Mitarbeiter heute laut Plantafel? → als Vorschlag anbieten
-          const todayStr = new Date().toISOString().slice(0, 10);
-          const { data: einsaetze } = await supabase
-            .from("einsaetze")
-            .select("projects(id, name)")
-            .eq("user_id", userId)
-            .lte("start_date", todayStr)
-            .gte("end_date", todayStr);
-
-          // Alle aktiven Projekte (nicht "Abgeschlossen") für die Nummern-Liste
-          const { data: projList } = await supabase
-            .from("projects")
-            .select("id, name")
-            .not("status", "eq", "Abgeschlossen")
-            .order("name");
-
-          const heutigeProjektIds = new Set(
-            ((einsaetze as any[]) || [])
-              .map((e) => e.projects?.id).filter(Boolean)
-          );
-          const heutigeProjekte = (projList || []).filter((p: any) => heutigeProjektIds.has(p.id));
-          const andereProjekte = (projList || []).filter((p: any) => !heutigeProjektIds.has(p.id));
-
-          let reply = "📸 Foto erhalten!\n\n";
-          if (heutigeProjekte.length > 0) {
-            reply += "*Heute eingeteilt:*\n";
-            heutigeProjekte.forEach((p: any, i: number) => {
-              reply += `${i + 1}. ${p.name}\n`;
-            });
-            if (andereProjekte.length > 0) {
-              reply += "\n*Andere aktive Projekte:*\n";
-              andereProjekte.slice(0, 10).forEach((p: any, i: number) => {
-                reply += `${heutigeProjekte.length + i + 1}. ${p.name}\n`;
-              });
-            }
-          } else if (projList && projList.length > 0) {
-            reply += "*Auf welches Projekt?*\n";
-            projList.slice(0, 10).forEach((p: any, i: number) => {
-              reply += `${i + 1}. ${p.name}\n`;
-            });
-          } else {
-            reply += "Keine aktiven Projekte gefunden.";
-          }
-          reply += "\n_Antworte mit Nummer oder Projektname._";
-
-          await sendWhatsApp(phone, reply);
-          await saveMsg(phone, "outgoing", reply, emp.id, userId);
+          // Keine Caption → merken für Batch-Antwort am Ende des Webhook-Calls.
+          // Keine sofortige Reply pro Foto mehr → das war das Multi-Spam-Problem.
+          await saveMsg(phone, "incoming", "[Foto empfangen]", emp.id, userId, msg.messageId);
+          batchPhotoCount.set(phone, (batchPhotoCount.get(phone) || 0) + 1);
+          batchEmp.set(phone, { emp, userId });
           continue;
         }
       } else {
@@ -1299,6 +1367,92 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       await saveMsg(phone, "outgoing", reply, emp.id, userId);
       await sendWhatsApp(phone, reply);
+    }
+
+    // ── Batch-Antwort für caption-lose Fotos ──
+    // Egal ob 1 oder 10 Fotos in diesem Webhook-Call: genau EINE smarte
+    // Nachricht mit Projekt-Vorschlägen. Wenn aber in den letzten 60s schon
+    // eine Projekt-Liste geschickt wurde (Spam-Schutz), keine erneute.
+    for (const [phone, count] of batchPhotoCount.entries()) {
+      const ctx = batchEmp.get(phone);
+      if (!ctx) continue;
+      const { emp, userId } = ctx;
+
+      // Spam-Schutz: letzte outgoing-Nachricht <60s? → nicht erneut
+      const sixtySecAgo = new Date(Date.now() - 60 * 1000).toISOString();
+      const { data: recent } = await supabase
+        .from("whatsapp_messages")
+        .select("id, message_body, created_at")
+        .eq("phone", phone)
+        .eq("direction", "outgoing")
+        .gte("created_at", sixtySecAgo)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const lastWasPrompt = recent?.[0]?.message_body?.includes("📸") || false;
+      if (lastWasPrompt) {
+        console.log(`Skipping batch prompt (spam-protection) for ${phone.slice(0, 5)}`);
+        continue;
+      }
+
+      // Anzahl aller aktuell noch zugeordneten pending Fotos (inkl. ggf. älteren)
+      const expiryIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: totalPending } = await supabase
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("message_type", "pending_photo")
+        .eq("processed", false)
+        .gte("created_at", expiryIso);
+      const totalCount = (totalPending || []).length;
+
+      // Projekt-Liste: heute eingeteilte oben, danach Rest
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const { data: einsaetze } = await supabase
+        .from("einsaetze")
+        .select("projects(id, name)")
+        .eq("user_id", userId)
+        .lte("start_date", todayStr)
+        .gte("end_date", todayStr);
+      const { data: projList } = await supabase
+        .from("projects")
+        .select("id, name")
+        .not("status", "eq", "Abgeschlossen")
+        .order("name");
+
+      const heutigeIds = new Set(
+        ((einsaetze as any[]) || []).map((e) => e.projects?.id).filter(Boolean)
+      );
+      const heutige = (projList || []).filter((p: any) => heutigeIds.has(p.id));
+      const andere = (projList || []).filter((p: any) => !heutigeIds.has(p.id));
+
+      const heading = totalCount > 1
+        ? `📸 ${totalCount} Fotos erhalten!`
+        : "📸 Foto erhalten!";
+
+      let reply = `${heading}\n\n`;
+      if (heutige.length > 0) {
+        reply += "*Heute eingeteilt:*\n";
+        heutige.forEach((p: any, i: number) => { reply += `${i + 1}. ${p.name}\n`; });
+        if (andere.length > 0) {
+          reply += "\n*Andere aktive Projekte:*\n";
+          andere.slice(0, 10).forEach((p: any, i: number) => {
+            reply += `${heutige.length + i + 1}. ${p.name}\n`;
+          });
+        }
+      } else if (projList && projList.length > 0) {
+        reply += "*Auf welches Projekt?*\n";
+        projList.slice(0, 10).forEach((p: any, i: number) => {
+          reply += `${i + 1}. ${p.name}\n`;
+        });
+      } else {
+        reply += "Keine aktiven Projekte gefunden.";
+      }
+      reply += totalCount > 1
+        ? "\n_Antworte mit Nummer oder Projektname — alle Fotos kommen ins gleiche Projekt._"
+        : "\n_Antworte mit Nummer oder Projektname._";
+
+      await sendWhatsApp(phone, reply);
+      await saveMsg(phone, "outgoing", reply, emp.id, userId);
     }
 
     return new Response(JSON.stringify({ ok: true }), {
