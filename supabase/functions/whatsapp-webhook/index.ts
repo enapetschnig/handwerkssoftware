@@ -1310,6 +1310,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
               .eq("message_type", "pending_photo")
               .lt("created_at", expireBefore);
 
+            // Wie viele pending Fotos existieren BEREITS (vor dem neuen Insert)?
+            // Wenn > 0, wurde der User schon mal gefragt → kein neuer Prompt.
+            const { count: existingPendingCount } = await supabase
+              .from("whatsapp_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", userId)
+              .eq("message_type", "pending_photo")
+              .eq("processed", false)
+              .gte("created_at", expireBefore);
+            const hadPendingBefore = (existingPendingCount || 0) > 0;
+
             // Nur einfügen wenn kein pending mit gleichem Hash existiert (Dup-Schutz)
             const { data: dupe } = await supabase.from("whatsapp_messages")
               .select("id")
@@ -1328,6 +1339,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 photo_hash: photoHash,
               });
             }
+
+            // Marker für Batch-Logik weiter unten: nur beim ERSTEN Foto
+            // einen Prompt senden. Alle folgenden Fotos (egal ob im selben
+            // Webhook-Call oder in separaten Calls danach) bleiben still.
+            (msg as any).__hadPendingBefore = hadPendingBefore;
           } catch (e: any) {
             console.error("Image download failed:", e.message);
           }
@@ -1338,10 +1354,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
           userMessage = `[Foto gesendet] ${msg.caption}`;
         } else {
           // Keine Caption → merken für Batch-Antwort am Ende des Webhook-Calls.
-          // Keine sofortige Reply pro Foto mehr → das war das Multi-Spam-Problem.
-          // (incoming ist bereits früh als Audit gespeichert)
-          batchPhotoCount.set(phone, (batchPhotoCount.get(phone) || 0) + 1);
-          batchEmp.set(phone, { emp, userId });
+          // ABER nur triggern wenn DAVOR noch keine pending Fotos lagen
+          // (sonst gäb's bei jedem einzelnen Foto-Webhook-Call eine neue
+          // Projekt-Liste → genau das Spam-Problem, das wir vermeiden wollen).
+          if (!(msg as any).__hadPendingBefore) {
+            batchPhotoCount.set(phone, (batchPhotoCount.get(phone) || 0) + 1);
+            batchEmp.set(phone, { emp, userId });
+          } else {
+            console.log(`Photo added to existing batch (no new prompt)`);
+          }
           continue;
         }
       } else {
