@@ -557,8 +557,27 @@ export default function Admin() {
 
       if (error) throw error;
 
+      // Namen auch auf profiles spiegeln (die "Registrierte Benutzer"-Liste
+      // liest aus profiles, sonst ändert sich der angezeigte Name nicht).
+      const nameChanged =
+        selectedEmployee.user_id && (
+          formData.vorname !== selectedEmployee.vorname ||
+          formData.nachname !== selectedEmployee.nachname
+        );
+      if (nameChanged) {
+        const { error: profErr } = await supabase
+          .from("profiles")
+          .update({
+            vorname: formData.vorname,
+            nachname: formData.nachname,
+          })
+          .eq("id", selectedEmployee.user_id);
+        if (profErr) console.error("Profile name sync failed:", profErr);
+      }
+
       toast({ title: "Erfolg", description: "Änderungen gespeichert" });
       fetchEmployees();
+      if (nameChanged) fetchUsers({ silent: true });
       setSelectedEmployee(null);
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
