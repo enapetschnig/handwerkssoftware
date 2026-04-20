@@ -20,6 +20,7 @@ interface TimeEntryData {
   location_type: string;
   notizen?: string | null;
   week_type?: string | null;
+  wetterschicht_stunden?: number | null;
 }
 
 interface TeamTimeEntriesRequest {
@@ -169,6 +170,7 @@ Deno.serve(async (req: Request) => {
           location_type: mainEntry.location_type,
           notizen: mainEntry.notizen || null,
           week_type: mainEntry.week_type || null,
+          wetterschicht_stunden: mainEntry.wetterschicht_stunden ?? null,
         })
         .select()
         .single();
@@ -206,6 +208,7 @@ Deno.serve(async (req: Request) => {
           location_type: teamEntry.location_type,
           notizen: teamEntry.notizen || null,
           week_type: teamEntry.week_type || null,
+          wetterschicht_stunden: teamEntry.wetterschicht_stunden ?? null,
         })
         .select()
         .single();

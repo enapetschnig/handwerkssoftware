@@ -384,6 +384,10 @@ const tools = [
           start_time: { type: "string", description: "Startzeit HH:MM (optional, für genaue Zeiterfassung)" },
           end_time: { type: "string", description: "Endzeit HH:MM (optional)" },
           pause_minuten: { type: "number", description: "Pausenzeit in Minuten (optional, Standard 0 oder 30 bei ganztägig Mo-Do)" },
+          wetterschicht_stunden: {
+            type: "number",
+            description: "Optional: Regenstunden dieser Schicht (nur informativ, hat keinen Einfluss auf die gebuchten Arbeitsstunden). Nur bei arbeitsort=baustelle sinnvoll. Beispiele: 'davon 2h Regen', '3 Stunden Wetterschicht'.",
+          },
         },
         required: ["taetigkeit", "datum"],
       },
@@ -590,6 +594,13 @@ async function executeTool(
       const projectIdForInsert = arbeitsort === "baustelle" ? input.project_id : null;
       const notizen = arbeitsort === "regie" ? "Regiearbeit" : null;
 
+      // Wetterschicht: nur informativ, nur bei Baustelle, 0–24h
+      let wetterschicht: number | null = null;
+      if (arbeitsort === "baustelle" && typeof input.wetterschicht_stunden === "number") {
+        const w = Number(input.wetterschicht_stunden);
+        if (w > 0 && w <= 24) wetterschicht = Math.round(w * 4) / 4;
+      }
+
       const { error } = await supabase.from("time_entries").insert({
         user_id: userId,
         datum,
@@ -601,6 +612,7 @@ async function executeTool(
         end_time: endTime,
         pause_minutes: pauseMin != null ? pauseMin : (h > 6 ? 30 : 0),
         notizen,
+        wetterschicht_stunden: wetterschicht,
       });
 
       if (error) return `FEHLER: ${error.message}`;
@@ -618,6 +630,9 @@ async function executeTool(
 
       const remaining = dailyTarget - totalAfter;
       let result = `ERFOLG: ${h}h auf ${ortLabel} am ${datum} gebucht. Taetigkeit: ${input.taetigkeit}. Tagesgesamt: ${totalAfter}h von ${dailyTarget}h.`;
+      if (wetterschicht && wetterschicht > 0) {
+        result += ` ☔ Wetterschicht: ${wetterschicht}h vermerkt.`;
+      }
       if (remaining > 0.25) {
         result += ` HINWEIS: Noch ${remaining}h offen fuer heute (Soll: ${dailyTarget}h).`;
       } else if (remaining >= 0) {
@@ -874,6 +889,11 @@ ZEITERFASSUNG:
 - Wenn Start/End gegeben ("7 bis 16", "von 8-17") → start_time + end_time, Stunden werden automatisch berechnet (Pause standardmäßig 30min bei >6h Block)
 - Wenn nur Stunden genannt ("8h") → stunden direkt, Zeiten werden angenommen
 - Pause explizit: "30min Pause" → pause_minuten: 30
+
+WETTERSCHICHT (nur bei Baustelle):
+- Wenn der Mitarbeiter Regenstunden erwähnt ("2h Wetterschicht", "davon 3h Regen", "war 4h Regen heute") → wetterschicht_stunden setzen
+- Nur informativ — zieht NICHTS von den Arbeitsstunden ab. Der Mitarbeiter bucht normal seine 8h und kann zusätzlich melden, wieviel davon im Regen war.
+- Beispiel: "8h Müller, davon 3h Wetterschicht" → stunden=8, wetterschicht_stunden=3
 
 PROJEKTERKENNUNG (nur bei arbeitsort=baustelle) – so gehst du vor:
 - "4h auf Müller" → matche "Müller" gegen die Projektliste → "Bauvorhaben Müller" → DIREKT buchen

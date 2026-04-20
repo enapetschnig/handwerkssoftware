@@ -56,6 +56,7 @@ interface TimeBlock {
   manualHours: string;
   disturbanceId: string;
   selectedDisturbanceIds: string[];
+  wetterschichtStunden: string; // Regenstunden, nur Info — leer wenn nicht relevant
 }
 
 type Disturbance = {
@@ -79,6 +80,7 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   manualHours: "",
   disturbanceId: "",
   selectedDisturbanceIds: [],
+  wetterschichtStunden: "",
 });
 
 const HIDDEN_USER_ID = "1a4f9721-52ff-44ac-a9f4-9405351feab5"; // Christoph Napetschnig - hidden from lists
@@ -662,6 +664,13 @@ const TimeTracking = () => {
         ? `Regie-Zuordnung: ${block.selectedDisturbanceIds.join(",")}`
         : null;
 
+      // Wetterschicht: nur bei Baustelle sinnvoll — bei Werkstatt/Regie ignorieren
+      const wetterschichtVal = (() => {
+        if (block.locationType !== "baustelle") return null;
+        const v = parseFloat(block.wetterschichtStunden || "");
+        return isNaN(v) || v <= 0 ? null : v;
+      })();
+
       // Prepare main entry for current user
       const mainEntry = {
         user_id: user.id,
@@ -678,6 +687,7 @@ const TimeTracking = () => {
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
+        wetterschicht_stunden: wetterschichtVal,
       };
 
       // Prepare team entries
@@ -695,6 +705,7 @@ const TimeTracking = () => {
         location_type: dbLocationType,
         notizen: regieNotizen,
         week_type: null,
+        wetterschicht_stunden: wetterschichtVal,
       }));
 
       // Call Edge Function to create entries (bypasses RLS for team members)
@@ -1071,6 +1082,32 @@ const TimeTracking = () => {
                           <Sun className="w-3 h-3 mr-1" />
                           Regelarbeitszeit einfüllen
                         </Button>
+
+                        {/* Wetterschicht — nur bei Baustelle, rein informativ */}
+                        {block.locationType === "baustelle" && (
+                          <div className="flex items-center gap-2 rounded-md border border-dashed border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 px-3 py-2">
+                            <Label
+                              htmlFor={`wetter-${block.id}`}
+                              className="text-xs font-normal text-muted-foreground flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer"
+                            >
+                              <span aria-hidden>☔</span>
+                              <span className="truncate">Wetterschicht (Regenstunden)</span>
+                            </Label>
+                            <Input
+                              id={`wetter-${block.id}`}
+                              type="number"
+                              step="0.25"
+                              min="0"
+                              max="24"
+                              inputMode="decimal"
+                              placeholder="0"
+                              value={block.wetterschichtStunden}
+                              onChange={(e) => updateBlock(block.id, { wetterschichtStunden: e.target.value })}
+                              className="h-8 w-20 text-sm"
+                            />
+                            <span className="text-xs text-muted-foreground">h</span>
+                          </div>
+                        )}
 
                         {/* Block hours */}
                         <div className="bg-muted/50 rounded px-3 py-2 flex items-center justify-between text-sm">

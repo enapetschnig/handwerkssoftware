@@ -40,6 +40,7 @@ interface TimeEntry {
   taetigkeit: string;
   week_type?: string | null;
   disturbance_id?: string | null;
+  wetterschicht_stunden?: number | null;
 }
 
 interface Profile {
@@ -683,7 +684,7 @@ export default function HoursReport() {
               {selectedUserId && (
                 <>
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                         <p className="text-2xl font-bold">{totalHours.toFixed(2)} h</p>
@@ -691,6 +692,14 @@ export default function HoursReport() {
                       <div>
                         <p className="text-sm text-muted-foreground">Überstunden</p>
                         <p className="text-2xl font-bold">{totalOvertime.toFixed(2)} h</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <span aria-hidden>☔</span> Wetterschicht
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {timeEntries.reduce((s, e) => s + (e.wetterschicht_stunden || 0), 0).toFixed(2)} h
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -705,6 +714,7 @@ export default function HoursReport() {
                           <TableHead>Pause</TableHead>
                           <TableHead className="text-right">Stunden</TableHead>
                           <TableHead className="text-right">Überstunden</TableHead>
+                          <TableHead className="text-right" title="Wetterschicht (Regenstunden)">☔ h</TableHead>
                           <TableHead>Ort</TableHead>
                           <TableHead>Projekt</TableHead>
                           <TableHead>Tätigkeit</TableHead>
@@ -714,13 +724,13 @@ export default function HoursReport() {
                       <TableBody>
                         {loading ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center">
+                            <TableCell colSpan={10} className="text-center">
                               Lade...
                             </TableCell>
                           </TableRow>
                         ) : monthDays.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center">
+                            <TableCell colSpan={10} className="text-center">
                               Keine Daten verfügbar
                             </TableCell>
                           </TableRow>
@@ -745,7 +755,7 @@ export default function HoursReport() {
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={isAdmin ? 9 : 8}></TableCell>
+                                  <TableCell colSpan={isAdmin ? 10 : 9}></TableCell>
                                 </TableRow>
                               );
                             }
@@ -798,6 +808,15 @@ export default function HoursReport() {
                                       </span>
                                     )}
                                   </TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    {entry.wetterschicht_stunden && entry.wetterschicht_stunden > 0 ? (
+                                      <span className="text-blue-600 font-medium">
+                                        {entry.wetterschicht_stunden.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
                                   <TableCell>
                                     <span className="flex items-center gap-1">
                                       <span>{ortIcon}</span>
@@ -833,6 +852,9 @@ export default function HoursReport() {
                           </TableCell>
                           <TableCell className="text-right font-bold text-orange-600">
                             {totalOvertime.toFixed(2)} h
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-blue-600">
+                            {timeEntries.reduce((s, e) => s + (e.wetterschicht_stunden || 0), 0).toFixed(2)}
                           </TableCell>
                           <TableCell colSpan={isAdmin ? 4 : 3}></TableCell>
                         </TableRow>
