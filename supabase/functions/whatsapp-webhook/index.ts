@@ -672,6 +672,7 @@ async function executeTool(
     case "foto_hochladen": {
       if (!input.project_id) return "FEHLER: Kein Projekt angegeben. Bitte Projektname nennen.";
       try {
+        console.log(`[foto_hochladen] Start user=${userId} project=${input.project_id}`);
         // ALLE pending Fotos des Users einholen (max 30min alt, nicht verarbeitet)
         // + das ggf. aktuell im Call empfangene (cachedImageBuffer).
         const expiryIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -684,32 +685,45 @@ async function executeTool(
           .gte("created_at", expiryIso)
           .order("created_at", { ascending: true });
 
+        console.log(`[foto_hochladen] pending rows found: ${(pendings || []).length}`);
+
         type Job = { buffer: ArrayBuffer; hash: string; pendingRowId?: string };
         const jobs: Job[] = [];
 
         // Aktuell im Webhook mitgegebenes Foto (Caption-Fall)
         if (cachedImageBuffer) {
           const hash = await sha256Hex(cachedImageBuffer);
-          // Kein Duplikat in jobs → direkt anfügen
           jobs.push({ buffer: cachedImageBuffer, hash });
         }
 
         // Pending-Fotos aus temp-storage nachladen (deduped via hash)
+        let loadFailures = 0;
         for (const p of (pendings || []) as any[]) {
           if (jobs.some((j) => j.hash === p.photo_hash)) continue;
           try {
             const res = await fetch(p.message_body);
-            if (!res.ok) continue;
+            if (!res.ok) {
+              console.error(`[foto_hochladen] temp fetch failed: HTTP ${res.status} for ${p.message_body}`);
+              loadFailures++;
+              continue;
+            }
             const buf = await res.arrayBuffer();
             const hash = p.photo_hash || (await sha256Hex(buf));
             if (jobs.some((j) => j.hash === hash)) continue;
             jobs.push({ buffer: buf, hash, pendingRowId: p.id });
-          } catch (e) {
-            console.error("pending photo load failed:", e);
+          } catch (e: any) {
+            console.error(`[foto_hochladen] pending photo load failed: ${e?.message}`);
+            loadFailures++;
           }
         }
 
-        if (jobs.length === 0) return "FEHLER: Kein Foto vorhanden.";
+        console.log(`[foto_hochladen] jobs queued: ${jobs.length}, load failures: ${loadFailures}`);
+
+        if (jobs.length === 0) {
+          return loadFailures > 0
+            ? `FEHLER: ${loadFailures} Foto${loadFailures === 1 ? "" : "s"} konnten nicht aus dem Zwischenspeicher geladen werden. Bitte noch einmal senden.`
+            : "FEHLER: Kein Foto gefunden. Bitte Foto(s) noch einmal senden und dann das Projekt nennen.";
+        }
 
         // Schon im Projekt vorhandene Hashes nachschlagen → Duplikat-Skip
         const hashList = jobs.map((j) => j.hash);
@@ -741,12 +755,15 @@ async function executeTool(
             const { error: upErr } = await supabase.storage
               .from("project-photos")
               .upload(fileName, job.buffer, { contentType: "image/jpeg", upsert: false });
-            if (upErr) throw upErr;
+            if (upErr) {
+              console.error(`[foto_hochladen] storage upload failed: ${upErr.message}`);
+              throw upErr;
+            }
 
             const { data: urlData } = supabase.storage
               .from("project-photos").getPublicUrl(fileName);
 
-            await supabase.from("documents").insert({
+            const { error: docErr } = await supabase.from("documents").insert({
               name: `WhatsApp Foto – ${senderName} – ${new Date().toLocaleDateString("de-AT")}`,
               file_url: urlData.publicUrl,
               typ: "foto",
@@ -755,6 +772,10 @@ async function executeTool(
               user_id: userId,
               file_hash: job.hash,
             });
+            if (docErr) {
+              console.error(`[foto_hochladen] document insert failed: ${docErr.message}`);
+              throw docErr;
+            }
             uploaded++;
             alreadyUploadedHashes.add(job.hash);
             if (job.pendingRowId) {
@@ -1498,10 +1519,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const andere = (projList || []).filter((p: any) => !heutigeIds.has(p.id));
 
       const heading = totalCount > 1
-        ? `📸 ${totalCount} Fotos erhalten!`
-        : "📸 Foto erhalten!";
+        ? `📸 ${totalCount} Fotos erhalten`
+        : "📸 Foto erhalten";
 
-      let reply = `${heading}\n\n`;
+      const question = totalCount > 1
+        ? `👉 *Auf welches Projekt sollen die ${totalCount} Fotos?*`
+        : "👉 *Auf welches Projekt soll das Foto?*";
+
+      let reply = `${heading}\n\n${question}\n\n`;
       if (heutige.length > 0) {
         reply += "*Heute eingeteilt:*\n";
         heutige.forEach((p: any, i: number) => { reply += `${i + 1}. ${p.name}\n`; });
@@ -1512,7 +1537,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
           });
         }
       } else if (projList && projList.length > 0) {
-        reply += "*Auf welches Projekt?*\n";
         projList.slice(0, 10).forEach((p: any, i: number) => {
           reply += `${i + 1}. ${p.name}\n`;
         });
@@ -1520,8 +1544,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         reply += "Keine aktiven Projekte gefunden.";
       }
       reply += totalCount > 1
-        ? "\n_Antworte mit Nummer oder Projektname — alle Fotos kommen ins gleiche Projekt._"
-        : "\n_Antworte mit Nummer oder Projektname._";
+        ? "\n➡️ Antworte kurz mit *Nummer* oder *Projektname* — alle Fotos kommen ins gleiche Projekt."
+        : "\n➡️ Antworte kurz mit *Nummer* oder *Projektname*.";
 
       await sendWhatsApp(phone, reply);
       await saveMsg(phone, "outgoing", reply, emp.id, userId);
