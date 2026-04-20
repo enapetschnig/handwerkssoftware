@@ -790,6 +790,14 @@ async function executeTool(
         const { data: proj } = await supabase
           .from("projects").select("name").eq("id", input.project_id).maybeSingle();
 
+        // Prompt-Lock freigeben — nächste Foto-Welle darf wieder einen
+        // frischen Prompt auslösen.
+        try {
+          await supabase.from("photo_prompt_locks").delete().eq("user_id", userId);
+        } catch (e) {
+          console.error("Lock release failed:", e);
+        }
+
         const parts: string[] = [];
         if (uploaded > 0) parts.push(`${uploaded} ${uploaded === 1 ? "Foto" : "Fotos"} hochgeladen`);
         if (skippedDuplicate > 0) parts.push(`${skippedDuplicate} war${skippedDuplicate === 1 ? "" : "en"} schon im Projekt (übersprungen)`);
@@ -1466,20 +1474,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const { emp, userId } = ctx;
 
       // ATOMIC CLAIM: nur die erste parallele Instanz kriegt true zurück,
-      // alle anderen false. TTL 120s — danach darf wieder geprompted werden.
+      // alle anderen false. TTL 5 Min als Sicherheits-Fallback — aber der
+      // Lock wird im foto_hochladen explizit freigegeben sobald der User
+      // geantwortet hat. Damit kann danach wieder eine neue Foto-Welle
+      // einen Prompt auslösen.
       const { data: claimed } = await (supabase.rpc as any)(
         "try_claim_photo_prompt",
-        { p_user_id: userId, p_ttl_seconds: 120 }
+        { p_user_id: userId, p_ttl_seconds: 300 }
       );
       if (!claimed) {
-        console.log(`Prompt claim denied (another instance already sent it) for user ${userId}`);
+        console.log(`Prompt claim denied (already prompted, still waiting for reply) user=${userId}`);
         continue;
       }
 
       // Pause, damit parallel laufende Webhook-Instanzen ihre
       // pending_photo-Inserts abschließen können. Bei 5-6 Fotos können
-      // die über mehrere Sekunden reinlaufen — darum 3s, das reicht
-      // praktisch immer.
+      // die über mehrere Sekunden reinlaufen — darum 3s.
       await new Promise((r) => setTimeout(r, 3000));
 
       // Zusätzlicher Safety-Net-Spam-Schutz: letzte outgoing-Nachricht <60s?
