@@ -1476,10 +1476,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         continue;
       }
 
-      // Kurze Pause, damit parallel laufende Webhook-Instanzen ihre
-      // pending_photo-Inserts noch abschließen können, bevor wir zählen.
-      // Ohne diese Pause zählen wir evtl. nur 2 von 4 Fotos.
-      await new Promise((r) => setTimeout(r, 1500));
+      // Pause, damit parallel laufende Webhook-Instanzen ihre
+      // pending_photo-Inserts abschließen können. Bei 5-6 Fotos können
+      // die über mehrere Sekunden reinlaufen — darum 3s, das reicht
+      // praktisch immer.
+      await new Promise((r) => setTimeout(r, 3000));
 
       // Zusätzlicher Safety-Net-Spam-Schutz: letzte outgoing-Nachricht <60s?
       const sixtySecAgo = new Date(Date.now() - 60 * 1000).toISOString();
@@ -1528,12 +1529,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const heutige = (projList || []).filter((p: any) => heutigeIds.has(p.id));
       const andere = (projList || []).filter((p: any) => !heutigeIds.has(p.id));
 
-      const heading = totalCount > 1
-        ? `📸 ${totalCount} Fotos erhalten`
-        : "📸 Foto erhalten";
-
+      // Keine Zahl im Text — die kann bei parallelen Webhook-Calls
+      // unter-oder übertrieben sein. Die echte Zählung passiert erst
+      // beim foto_hochladen, wenn der User das Projekt genannt hat.
+      const heading = totalCount > 1 ? "📸 Fotos erhalten" : "📸 Foto erhalten";
       const question = totalCount > 1
-        ? `👉 *Auf welches Projekt sollen die ${totalCount} Fotos?*`
+        ? "👉 *Auf welches Projekt sollen die Fotos?*"
         : "👉 *Auf welches Projekt soll das Foto?*";
 
       let reply = `${heading}\n\n${question}\n\n`;
@@ -1554,7 +1555,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         reply += "Keine aktiven Projekte gefunden.";
       }
       reply += totalCount > 1
-        ? "\n➡️ Antworte kurz mit *Nummer* oder *Projektname* — alle Fotos kommen ins gleiche Projekt."
+        ? "\n➡️ Antworte kurz mit *Nummer* oder *Projektname* — alle aktuellen Fotos werden ins gleiche Projekt geladen."
         : "\n➡️ Antworte kurz mit *Nummer* oder *Projektname*.";
 
       await sendWhatsApp(phone, reply);
