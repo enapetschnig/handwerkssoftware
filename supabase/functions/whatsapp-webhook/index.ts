@@ -1351,14 +1351,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
               .eq("photo_hash", photoHash)
               .limit(1);
             if (!dupe || dupe.length === 0) {
-              await supabase.from("whatsapp_messages").insert({
+              // wapi_message_id bewusst NICHT setzen — die hat bereits der
+              // early-audit-Eintrag (message_type="image_in") belegt. UNIQUE-
+              // Constraint würde sonst den pending_photo-Insert abwürgen.
+              const { error: pendErr } = await supabase.from("whatsapp_messages").insert({
                 phone, direction: "incoming",
                 message_body: tempUrl,
                 message_type: "pending_photo",
                 employee_id: emp.id, user_id: userId, processed: false,
-                wapi_message_id: msg.messageId || null,
                 photo_hash: photoHash,
               });
+              if (pendErr) {
+                console.error(`[pending_photo] insert failed: ${pendErr.message}`);
+              }
             }
 
             // Marker für Batch-Logik weiter unten: nur beim ERSTEN Foto
