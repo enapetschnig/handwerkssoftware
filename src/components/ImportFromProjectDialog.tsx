@@ -77,25 +77,29 @@ export function ImportFromProjectDialog({
 
     const userIds = [...new Set(data.map(e => e.user_id))];
     const [{ data: profiles }, { data: employees }] = await Promise.all([
-      supabase.from("profiles").select("id, vorname, nachname").in("id", userIds),
+      (supabase.from("profiles" as never) as any).select("id, vorname, nachname, hidden").in("id", userIds),
       supabase.from("employees").select("user_id, stundenlohn, position").in("user_id", userIds),
     ]);
+    // Hidden User (Admin/Inhaber) nicht als Position aufführen
+    const visibleProfiles = ((profiles as any[]) || []).filter((p: any) => !p.hidden);
 
     const empMap = new Map(
       (employees || []).map((e: any) => [e.user_id, { satz: Number(e.stundenlohn) || 45, rolle: e.position || "Monteur" }])
     );
 
     const profileMap = new Map(
-      (profiles || []).map((p: any) => {
+      visibleProfiles.map((p: any) => {
         const emp = empMap.get(p.id) || { satz: 45, rolle: "Monteur" };
         return [p.id, { name: `${p.vorname} ${p.nachname}`, satz: emp.satz, rolle: emp.rolle }];
       })
     );
 
-    // Group by user
+    // Group by user (hidden User werden ausgefiltert)
+    const visibleIds = new Set(visibleProfiles.map((p: any) => p.id));
     const groups = new Map<string, { stunden: number; taetigkeiten: Set<string> }>();
     data.forEach(e => {
       const uid = e.user_id;
+      if (!visibleIds.has(uid)) return; // hidden User überspringen
       if (!groups.has(uid)) groups.set(uid, { stunden: 0, taetigkeiten: new Set() });
       const g = groups.get(uid)!;
       g.stunden += Number(e.stunden);

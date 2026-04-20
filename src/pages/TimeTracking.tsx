@@ -83,8 +83,6 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   wetterschichtStunden: "",
 });
 
-const HIDDEN_USER_ID = "1a4f9721-52ff-44ac-a9f4-9405351feab5"; // Christoph Napetschnig - hidden from lists
-
 const TimeTracking = () => {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);

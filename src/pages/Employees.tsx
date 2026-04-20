@@ -78,15 +78,16 @@ export default function Employees() {
 
   const fetchEmployees = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .order("nachname");
+    const [{ data, error }, { data: hiddenProfs }] = await Promise.all([
+      supabase.from("employees").select("*").order("nachname"),
+      (supabase.from("profiles" as never) as any).select("id").eq("hidden", true),
+    ]);
 
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setEmployees(data || []);
+      const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
+      setEmployees((data || []).filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
     }
     setLoading(false);
   };

@@ -245,9 +245,9 @@ export default function Admin() {
     const silent = options?.silent ?? false;
     if (!silent) setLoading(true);
 
-    const { data: profilesData } = await supabase
-      .from("profiles")
+    const { data: profilesData } = await (supabase.from("profiles" as never) as any)
       .select("id, vorname, nachname, is_active")
+      .eq("hidden", false)
       .order("nachname");
 
     const { data: rolesData } = await supabase
@@ -335,15 +335,17 @@ export default function Admin() {
   };
 
   const fetchEmployees = async () => {
-    const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .order("nachname");
+    const [{ data, error }, { data: hiddenProfs }] = await Promise.all([
+      supabase.from("employees").select("*").order("nachname"),
+      (supabase.from("profiles" as never) as any).select("id").eq("hidden", true),
+    ]);
 
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setEmployees((data || []) as Employee[]);
+      const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
+      const visible = ((data || []) as Employee[]).filter((e) => !e.user_id || !hiddenIds.has(e.user_id));
+      setEmployees(visible);
     }
   };
 

@@ -115,7 +115,9 @@ export default function HoursReport() {
   };
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from("profiles").select("id, vorname, nachname");
+    const { data } = await (supabase.from("profiles" as never) as any)
+      .select("id, vorname, nachname")
+      .eq("hidden", false);
     if (data) {
       const profileMap: Record<string, Profile> = {};
       data.forEach((p) => {

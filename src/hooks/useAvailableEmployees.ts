@@ -25,19 +25,17 @@ export const useAvailableEmployees = (excludeCurrentUser = true) => {
       setCurrentUserId(user.id);
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
+    // Hidden-Flag in Profilen: Admin/Inhaber überall ausblenden
+    const { data, error } = await (supabase.from("profiles" as never) as any)
       .select("id, vorname, nachname, is_active")
       .eq("is_active", true)
+      .eq("hidden", false)
       .order("nachname");
 
-    // Hidden user: Christoph Napetschnig (owner) — invisible in all employee lists
-    const HIDDEN_USER_ID = "1a4f9721-52ff-44ac-a9f4-9405351feab5";
-
     if (!error && data) {
-      let filteredEmployees = data.filter(e => e.id !== HIDDEN_USER_ID);
+      let filteredEmployees = data as Employee[];
       if (excludeCurrentUser && user) {
-        filteredEmployees = filteredEmployees.filter(e => e.id !== user.id);
+        filteredEmployees = filteredEmployees.filter((e) => e.id !== user.id);
       }
       setEmployees(filteredEmployees);
     }

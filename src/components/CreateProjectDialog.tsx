@@ -186,15 +186,16 @@ export function CreateProjectDialog({
           if (data) setCustomers(data);
         });
 
-      // Load employees
-      supabase
-        .from("employees")
-        .select("id, vorname, nachname")
-        .eq("aktiv", true)
-        .order("nachname")
-        .then(({ data }) => {
-          if (data) setEmployees(data);
-        });
+      // Load employees (hidden Profile ausblenden)
+      (async () => {
+        const [{ data: emps }, { data: hiddenProfs }] = await Promise.all([
+          (supabase.from("employees" as never) as any)
+            .select("id, vorname, nachname, user_id").eq("aktiv", true).order("nachname"),
+          (supabase.from("profiles" as never) as any).select("id").eq("hidden", true),
+        ]);
+        const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
+        if (emps) setEmployees((emps as any[]).filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
+      })();
 
       // Load project statuses
       (supabase.from("project_statuses" as never) as any)

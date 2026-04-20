@@ -63,10 +63,10 @@ export function useScheduleData() {
         { data: holidays },
         { data: colors },
       ] = await Promise.all([
-        supabase
-          .from("profiles")
+        (supabase.from("profiles" as never) as any)
           .select("id, vorname, nachname")
           .eq("is_active", true)
+          .eq("hidden", false)
           .order("nachname"),
         supabase
           .from("projects")

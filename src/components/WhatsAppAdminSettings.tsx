@@ -97,6 +97,7 @@ export function WhatsAppAdminSettings() {
       (supabase.from("profiles" as never) as any)
         .select("id, vorname, nachname, telefon")
         .eq("is_active", true)
+        .eq("hidden", false)
         .order("nachname"),
       (supabase.from("employees" as never) as any)
         .select("id, vorname, nachname, telefon, whatsapp_aktiv, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")

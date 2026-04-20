@@ -150,12 +150,20 @@ const ProjectOverview = () => {
 
         const userIds = Object.keys(grouped);
         if (userIds.length > 0) {
-          const { data: profiles } = await supabase.from("profiles").select("id, vorname, nachname").in("id", userIds);
+          const { data: profiles } = await (supabase.from("profiles" as never) as any)
+            .select("id, vorname, nachname, hidden").in("id", userIds);
 
-          setProjectHours(userIds.map(uid => {
-            const p = profiles?.find((pr: any) => pr.id === uid);
-            return { user_id: uid, name: p ? `${p.vorname} ${p.nachname}` : "Unbekannt", total: grouped[uid] };
-          }).sort((a, b) => b.total - a.total));
+          setProjectHours(
+            userIds
+              .filter((uid) => {
+                const p = (profiles as any[])?.find((pr: any) => pr.id === uid);
+                return !p || !p.hidden; // hidden User nicht in der Projekt-Stundenliste
+              })
+              .map(uid => {
+                const p = (profiles as any[])?.find((pr: any) => pr.id === uid);
+                return { user_id: uid, name: p ? `${p.vorname} ${p.nachname}` : "Unbekannt", total: grouped[uid] };
+              }).sort((a, b) => b.total - a.total)
+          );
         }
       }
     }
@@ -175,12 +183,14 @@ const ProjectOverview = () => {
       if (c) kunde = c;
     }
     // Load customer list + employees
-    const [{ data: custs }, { data: emps }] = await Promise.all([
+    const [{ data: custs }, { data: emps }, { data: hiddenProfs }] = await Promise.all([
       supabase.from("customers").select("id, name, plz, ort").order("name"),
-      supabase.from("employees").select("id, vorname, nachname").eq("aktiv", true).order("nachname"),
+      (supabase.from("employees" as never) as any).select("id, vorname, nachname, user_id").eq("aktiv", true).order("nachname"),
+      (supabase.from("profiles" as never) as any).select("id").eq("hidden", true),
     ]);
+    const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
     setCustomers(custs || []);
-    setEmployees(emps || []);
+    setEmployees(((emps as any[]) || []).filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
     setEditForm({
       name: proj.name || "",
       beschreibung: proj.beschreibung || "",

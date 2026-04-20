@@ -57,18 +57,21 @@ export function ImportTimeDialog({ open, onClose, projectId, onImport }: ImportT
       return;
     }
 
-    // Get profile names
+    // Get profile names (hidden User werden ignoriert)
     const userIds = [...new Set(data.map(e => e.user_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, vorname, nachname")
+    const { data: profiles } = await (supabase.from("profiles" as never) as any)
+      .select("id, vorname, nachname, hidden")
       .in("id", userIds);
 
-    const profileMap = new Map(profiles?.map(p => [p.id, `${p.vorname} ${p.nachname}`]) || []);
+    const visibleIds = new Set(((profiles as any[]) || []).filter((p: any) => !p.hidden).map((p: any) => p.id));
+    const profileMap = new Map(
+      ((profiles as any[]) || []).filter((p: any) => !p.hidden).map((p: any) => [p.id, `${p.vorname} ${p.nachname}`])
+    );
 
-    // Group by user
+    // Group by user (hidden User ausfiltern)
     const userGroups = new Map<string, { stunden: number; taetigkeiten: Set<string> }>();
     data.forEach(e => {
+      if (!visibleIds.has(e.user_id)) return;
       const name = profileMap.get(e.user_id) || "Unbekannt";
       if (!userGroups.has(name)) {
         userGroups.set(name, { stunden: 0, taetigkeiten: new Set() });

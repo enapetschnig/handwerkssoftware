@@ -43,12 +43,16 @@ export function EmployeeColorSettings() {
   }, []);
 
   async function loadData() {
-    const [empRes, colorRes] = await Promise.all([
-      supabase.from("employees").select("id, vorname, nachname").eq("aktiv", true).order("nachname"),
+    const [empRes, colorRes, hiddenRes] = await Promise.all([
+      (supabase.from("employees" as never) as any).select("id, vorname, nachname, user_id").eq("aktiv", true).order("nachname"),
       supabase.from("employee_schedule_colors").select("*"),
+      (supabase.from("profiles" as never) as any).select("id").eq("hidden", true),
     ]);
 
-    if (empRes.data) setEmployees(empRes.data);
+    if (empRes.data) {
+      const hiddenIds = new Set(((hiddenRes.data as any[]) || []).map((p: any) => p.id));
+      setEmployees(empRes.data.filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
+    }
     if (colorRes.data) {
       const map: Record<string, EmployeeColor> = {};
       colorRes.data.forEach((c: any) => {
