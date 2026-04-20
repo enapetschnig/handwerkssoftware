@@ -680,6 +680,17 @@ export default function Admin() {
                             <Button onClick={() => handleActivateUser(profile.id, true)}>
                               Freischalten
                             </Button>
+                            <Button
+                              variant="outline"
+                              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                              onClick={() => {
+                                setUserToDelete(profile);
+                                setDeleteConfirmOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Ablehnen
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -1643,13 +1654,8 @@ export default function Admin() {
                 if (!userToDelete) return;
 
                 try {
-                  // Preserve user name in time_entries before deletion
-                  // (user_id will become NULL after cascade, so store name in notizen)
+                  // Zeiteinträge: Namen in Notizen sichern bevor user_id null wird
                   const userName = `${userToDelete.vorname} ${userToDelete.nachname}`;
-                  await supabase.from("time_entries")
-                    .update({ notizen: supabase.rpc ? undefined : undefined })
-                    .eq("user_id", userToDelete.id);
-                  // Actually: update notizen to include user name for orphaned entries
                   const { data: existingEntries } = await supabase.from("time_entries")
                     .select("id, notizen").eq("user_id", userToDelete.id);
                   if (existingEntries?.length) {
@@ -1659,34 +1665,27 @@ export default function Admin() {
                     }
                   }
 
-                  // Delete the employee record if exists
-                  const { error: empError } = await supabase
-                    .from("employees")
-                    .delete()
-                    .eq("user_id", userToDelete.id);
-
-                  if (empError) console.error("Employee delete error:", empError);
-
-                  // Delete user roles
-                  const { error: roleError } = await supabase
-                    .from("user_roles")
-                    .delete()
-                    .eq("user_id", userToDelete.id);
-
-                  if (roleError) console.error("Role delete error:", roleError);
-
-                  // Delete the profile (cascades to auth.users)
-                  // time_entries, documents, reports → user_id becomes NULL (preserved)
-                  const { error: profileError } = await supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", userToDelete.id);
-
-                  if (profileError) throw profileError;
+                  // Edge Function räumt employees, user_roles, profiles UND auth.users auf
+                  const { data: dData, error: dErr } = await supabase.functions.invoke("delete-user", {
+                    body: { user_id: userToDelete.id },
+                  });
+                  if (dErr) {
+                    let detail = dErr.message;
+                    try {
+                      const ctx: any = (dErr as any).context;
+                      if (ctx && typeof ctx.clone === "function") {
+                        const body = await ctx.clone().text();
+                        try { detail = JSON.parse(body)?.error || body || detail; }
+                        catch { detail = body || detail; }
+                      }
+                    } catch { /* ignore */ }
+                    throw new Error(detail);
+                  }
+                  if (dData?.error) throw new Error(dData.error);
 
                   toast({
                     title: "Benutzer gelöscht",
-                    description: `${userToDelete.vorname} ${userToDelete.nachname} wurde erfolgreich gelöscht.`,
+                    description: `${userName} wurde erfolgreich gelöscht.`,
                   });
 
                   fetchUsers({ silent: true });
@@ -1698,7 +1697,7 @@ export default function Admin() {
                     description: error.message || "Benutzer konnte nicht gelöscht werden",
                   });
                 }
-                
+
                 setDeleteConfirmOpen(false);
                 setUserToDelete(null);
               }}
