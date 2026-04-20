@@ -1339,16 +1339,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
               .eq("message_type", "pending_photo")
               .lt("created_at", expireBefore);
 
-            // Wie viele pending Fotos existieren BEREITS (vor dem neuen Insert)?
-            // Wenn > 0, wurde der User schon mal gefragt → kein neuer Prompt.
-            const { count: existingPendingCount } = await supabase
+            // Gibt es pending Fotos die erst vor kurzem (<60s) reingekommen sind?
+            // Nur dann gilt das als "aktuell laufende Welle" → kein neuer Prompt.
+            // Alles ältere ist eine vergessene/ignorierte Welle → neue Welle
+            // bekommt ruhig einen frischen Prompt (atomic claim verhindert Spam).
+            const recentWindowIso = new Date(Date.now() - 60 * 1000).toISOString();
+            const { count: recentPendingCount } = await supabase
               .from("whatsapp_messages")
               .select("id", { count: "exact", head: true })
               .eq("user_id", userId)
               .eq("message_type", "pending_photo")
               .eq("processed", false)
-              .gte("created_at", expireBefore);
-            const hadPendingBefore = (existingPendingCount || 0) > 0;
+              .gte("created_at", recentWindowIso);
+            const hadPendingBefore = (recentPendingCount || 0) > 0;
 
             // Nur einfügen wenn kein pending mit gleichem Hash existiert (Dup-Schutz)
             const { data: dupe } = await supabase.from("whatsapp_messages")
@@ -1474,13 +1477,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const { emp, userId } = ctx;
 
       // ATOMIC CLAIM: nur die erste parallele Instanz kriegt true zurück,
-      // alle anderen false. TTL 5 Min als Sicherheits-Fallback — aber der
-      // Lock wird im foto_hochladen explizit freigegeben sobald der User
-      // geantwortet hat. Damit kann danach wieder eine neue Foto-Welle
-      // einen Prompt auslösen.
+      // alle anderen false. TTL 90s — ab da darf eine neue Welle wieder
+      // einen Prompt triggern, auch wenn der User nicht geantwortet hat.
+      // Normalerweise wird der Lock im foto_hochladen explizit freigegeben.
       const { data: claimed } = await (supabase.rpc as any)(
         "try_claim_photo_prompt",
-        { p_user_id: userId, p_ttl_seconds: 300 }
+        { p_user_id: userId, p_ttl_seconds: 90 }
       );
       if (!claimed) {
         console.log(`Prompt claim denied (already prompted, still waiting for reply) user=${userId}`);
