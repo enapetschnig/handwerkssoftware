@@ -155,21 +155,32 @@ async function findEmployeeByPhone(phone: string) {
     .replace(/^0+/, "");
   const last8 = cleaned.slice(-8);
 
-  // Nur Einträge mit aktivem und verknüpftem Profil — das gleiche Kriterium,
-  // das auch die WhatsApp-Admin-Liste verwendet. So werden Karteileichen
-  // (employees-Zeilen mit user_id auf nicht mehr existierende Profile, oder
-  // ganz ohne user_id) zuverlässig ignoriert.
-  const { data: candidates } = await (supabase.from("employees" as never) as any)
-    .select("id, vorname, nachname, user_id, telefon, whatsapp_aktiv, aktiv, profiles:user_id!inner(is_active)")
+  // Schritt 1: alle employees mit matching Telefon + active + whatsapp_aktiv
+  const { data: candidates } = await supabase
+    .from("employees")
+    .select("id, vorname, nachname, user_id, telefon, whatsapp_aktiv, aktiv")
     .eq("aktiv", true)
     .eq("whatsapp_aktiv", true)
-    .eq("profiles.is_active", true)
     .ilike("telefon", `%${last8}%`);
 
   if (!candidates?.length) return null;
-  // Bei mehreren Treffern: exaktes Telefon-Match bevorzugen
+
+  // Schritt 2: Profile-Status separat nachschlagen (kein !inner, robuster)
+  const userIds = candidates.map((c: any) => c.user_id).filter(Boolean);
+  const activeProfileIds = new Set<string>();
+  if (userIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, is_active")
+      .in("id", userIds);
+    (profs || []).forEach((p: any) => { if (p.is_active) activeProfileIds.add(p.id); });
+  }
+
+  const valid = candidates.filter((c: any) => c.user_id && activeProfileIds.has(c.user_id));
+  if (!valid.length) return null;
+
   const cleanedMatch = `+${cleaned}`;
-  return candidates.find((c: any) => c.telefon === cleanedMatch) || candidates[0];
+  return valid.find((c: any) => c.telefon === cleanedMatch) || valid[0];
 }
 
 // ─── Conversation persistence ────────────────────────────
@@ -795,7 +806,7 @@ async function executeTool(
     }
 
     case "buchung_bearbeiten": {
-      const datum: string = args.datum || new Date().toISOString().slice(0, 10);
+      const datum: string = input.datum || new Date().toISOString().slice(0, 10);
       const { data: entries } = await supabase
         .from("time_entries")
         .select("id, stunden, taetigkeit, start_time, end_time, project_id, projects(name)")
@@ -806,10 +817,10 @@ async function executeTool(
         return `ERROR: Keine Buchung am ${datum} gefunden.`;
       }
       let target: any = null;
-      if (args.position && entries[args.position - 1]) {
-        target = entries[args.position - 1];
-      } else if (args.project_match) {
-        const needle = String(args.project_match).toLowerCase();
+      if (input.position && entries[input.position - 1]) {
+        target = entries[input.position - 1];
+      } else if (input.project_match) {
+        const needle = String(input.project_match).toLowerCase();
         target = entries.find((e: any) => (e.projects?.name || "").toLowerCase().includes(needle));
       } else if (entries.length === 1) {
         target = entries[0];
@@ -820,16 +831,16 @@ async function executeTool(
       }
       // Neues Projekt auflösen (falls gegeben)
       const update: any = {};
-      if (args.stunden != null) update.stunden = args.stunden;
-      if (args.taetigkeit) update.taetigkeit = args.taetigkeit;
-      if (args.start_time) update.start_time = args.start_time;
-      if (args.end_time) update.end_time = args.end_time;
-      if (args.neues_projekt_name) {
+      if (input.stunden != null) update.stunden = input.stunden;
+      if (input.taetigkeit) update.taetigkeit = input.taetigkeit;
+      if (input.start_time) update.start_time = input.start_time;
+      if (input.end_time) update.end_time = input.end_time;
+      if (input.neues_projekt_name) {
         const { data: projs } = await supabase
           .from("projects").select("id, name").not("status", "eq", "Abgeschlossen");
-        const needle = String(args.neues_projekt_name).toLowerCase();
+        const needle = String(input.neues_projekt_name).toLowerCase();
         const match = (projs || []).find((p: any) => p.name.toLowerCase().includes(needle));
-        if (!match) return `ERROR: Projekt "${args.neues_projekt_name}" nicht gefunden.`;
+        if (!match) return `ERROR: Projekt "${input.neues_projekt_name}" nicht gefunden.`;
         update.project_id = match.id;
       }
       if (Object.keys(update).length === 0) return "ERROR: Keine Änderungen angegeben.";
@@ -841,11 +852,11 @@ async function executeTool(
 
     case "einteilung_anzeigen": {
       const todayStr = new Date().toISOString().slice(0, 10);
-      let fromDate = args.datum || todayStr;
-      let toDate = args.datum || todayStr;
-      if (args.woche === "diese_woche" || args.woche === "naechste_woche") {
+      let fromDate = input.datum || todayStr;
+      let toDate = input.datum || todayStr;
+      if (input.woche === "diese_woche" || input.woche === "naechste_woche") {
         const ref = new Date();
-        if (args.woche === "naechste_woche") ref.setDate(ref.getDate() + 7);
+        if (input.woche === "naechste_woche") ref.setDate(ref.getDate() + 7);
         const dow = (ref.getDay() + 6) % 7; // Montag = 0
         const monday = new Date(ref); monday.setDate(ref.getDate() - dow);
         const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
@@ -860,7 +871,7 @@ async function executeTool(
         .gte("end_date", fromDate)
         .order("start_date");
       if (!einsaetze || einsaetze.length === 0) {
-        return args.datum ? `INFO: Keine Einteilung am ${fromDate}.` : "INFO: Keine Einteilung im angefragten Zeitraum.";
+        return input.datum ? `INFO: Keine Einteilung am ${fromDate}.` : "INFO: Keine Einteilung im angefragten Zeitraum.";
       }
       const lines = einsaetze.map((e: any) => {
         const projektName = e.projects?.name || e.name || "(ohne Projekt)";
@@ -1219,9 +1230,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
       }
 
-      // Kompletten Verarbeitungs-Block pro Message in try-catch: der Bot
-      // soll IMMER antworten. Crasht ein Teil (DB, OpenAI, WAPI), kommt
-      // wenigstens eine Fallback-Nachricht zurück.
+      // SOFORT protokollieren — damit wir im Audit-Log sehen dass die
+      // Message angekommen ist, unabhängig davon was danach crasht.
+      try {
+        const earlyBody = msg.body || msg.caption || `[${msg.type || "unknown"}]`;
+        await supabase.from("whatsapp_messages").insert({
+          phone, direction: "incoming",
+          message_body: earlyBody,
+          message_type: msg.type === "image" ? "image_in" : "text_in",
+          processed: false,
+          wapi_message_id: msg.messageId || null,
+        });
+      } catch (e: any) {
+        console.error("Early audit save failed:", e?.message);
+      }
+
       try {
 
       const emp = await findEmployeeByPhone(phone);
@@ -1316,7 +1339,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         } else {
           // Keine Caption → merken für Batch-Antwort am Ende des Webhook-Calls.
           // Keine sofortige Reply pro Foto mehr → das war das Multi-Spam-Problem.
-          await saveMsg(phone, "incoming", "[Foto empfangen]", emp.id, userId, msg.messageId);
+          // (incoming ist bereits früh als Audit gespeichert)
           batchPhotoCount.set(phone, (batchPhotoCount.get(phone) || 0) + 1);
           batchEmp.set(phone, { emp, userId });
           continue;
@@ -1341,7 +1364,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .gte("created_at", expiryIso);
       const pendingCount = (pendingPhotos || []).length;
 
-      await saveMsg(phone, "incoming", userMessage, emp.id, userId, msg.messageId);
+      // incoming ist bereits früh als Audit gespeichert — hier nur processed=true setzen
+      if (msg.messageId) {
+        await supabase.from("whatsapp_messages")
+          .update({ employee_id: emp.id, user_id: userId, processed: true })
+          .eq("wapi_message_id", msg.messageId);
+      }
 
       const [ctxData, history] = await Promise.all([
         gatherContext(userId),
@@ -1371,16 +1399,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       await saveMsg(phone, "outgoing", reply, emp.id, userId);
       await sendWhatsApp(phone, reply);
       } catch (iterErr: any) {
-        // Irgendwas in der Message-Verarbeitung ist schiefgelaufen — Fallback-Reply,
-        // damit der Mitarbeiter NIE ohne Antwort dasteht. Volles Error-Log für Debug.
-        console.error("Message processing failed:", iterErr?.stack || iterErr);
+        console.error("Msg processing failed:", iterErr?.stack || iterErr);
         try {
-          const fallbackMsg = "Entschuldigung, da ist gerade was schiefgelaufen. Bitte probier's in einem Moment nochmal — wenn's bleibt, kurz dem Admin Bescheid sagen.";
-          await sendWhatsApp(phone, fallbackMsg);
-          await saveMsg(phone, "outgoing", `[FEHLER] ${fallbackMsg}`, undefined, undefined);
-        } catch (fallbackErr) {
-          console.error("Even fallback failed:", fallbackErr);
-        }
+          const fb = "Entschuldigung, da ist gerade was schiefgelaufen. Bitte probier's in einem Moment nochmal.";
+          await sendWhatsApp(phone, fb);
+          await saveMsg(phone, "outgoing", `[FEHLER] ${fb}`);
+        } catch (fe) { console.error("Fallback also failed:", fe); }
       }
     }
 
