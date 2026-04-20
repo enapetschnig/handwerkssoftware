@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { Clock, Package, FolderOpen } from "lucide-react";
@@ -22,26 +23,44 @@ interface ImportFromProjectDialogProps {
   open: boolean;
   onClose: () => void;
   projectId?: string | null;
+  customerId?: string | null;
+  mode?: "zeit" | "material" | "alle";
   onImport: (items: { beschreibung: string; menge: number; einheit: string; einzelpreis: number }[]) => void;
 }
 
-export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: ImportFromProjectDialogProps) {
+export function ImportFromProjectDialog({
+  open, onClose, projectId, customerId, mode = "alle", onImport,
+}: ImportFromProjectDialogProps) {
   const [items, setItems] = useState<ImportItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState("zeit");
+  const [tab, setTab] = useState<"zeit" | "material">(mode === "material" ? "material" : "zeit");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [localProjectId, setLocalProjectId] = useState<string | null>(projectId ?? null);
+
+  // Wenn von außen kein Projekt gesetzt ist, laden wir die Liste für Auswahl
+  useEffect(() => {
+    if (!open) return;
+    setLocalProjectId(projectId ?? null);
+    if (!projectId) {
+      let q = supabase.from("projects").select("id, name")
+        .not("status", "eq", "Abgeschlossen").order("name");
+      if (customerId) q = q.eq("customer_id", customerId) as any;
+      q.then(({ data }) => setProjects((data as any) || []));
+    }
+  }, [open, projectId, customerId]);
 
   useEffect(() => {
-    if (open && projectId) fetchAll();
+    if (open && localProjectId) fetchAll();
     else if (open) setItems([]);
-  }, [open, projectId]);
+  }, [open, localProjectId]);
 
   const fetchAll = async () => {
-    if (!projectId) return;
+    if (!localProjectId) return;
     setLoading(true);
 
     const [timeItems, materialItems] = await Promise.all([
-      fetchTimeEntries(projectId),
-      fetchMaterialEntries(projectId),
+      mode === "material" ? Promise.resolve([]) : fetchTimeEntries(localProjectId),
+      mode === "zeit" ? Promise.resolve([]) : fetchMaterialEntries(localProjectId),
     ]);
 
     setItems([...timeItems, ...materialItems]);
@@ -242,21 +261,55 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
     </div>
   );
 
+  const title = mode === "zeit"
+    ? "Arbeitszeiten aus Projekt importieren"
+    : mode === "material"
+      ? "Material aus Projekt importieren"
+      : "Aus Projekt importieren";
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="w-5 h-5" />
-            Aus Projekt importieren
+            {title}
           </DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2">
-          Materialien importieren aus Verbrauch laut Materiallieferscheine. Mengen aus Lieferscheinen ersetzen die Angebotspositionen, Preise werden aus dem Angebot übernommen.
-        </p>
+        {/* Projekt-Auswahl — nur wenn von außen keins vorgegeben */}
+        {!projectId && (
+          <div className="space-y-1.5">
+            <Label>Projekt</Label>
+            <Select
+              value={localProjectId || ""}
+              onValueChange={(v) => setLocalProjectId(v)}
+            >
+              <SelectTrigger><SelectValue placeholder="Projekt auswählen…" /></SelectTrigger>
+              <SelectContent>
+                {projects.length === 0 && (
+                  <SelectItem value="_none" disabled>Keine aktiven Projekte</SelectItem>
+                )}
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
-        {!projectId ? (
+        {mode !== "zeit" && (
+          <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2">
+            Materialien aus dem Verbrauch (Lieferscheine) — Mengen aus Lieferscheinen ersetzen die Angebotspositionen, Preise werden aus dem Angebot übernommen.
+          </p>
+        )}
+        {mode === "zeit" && (
+          <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded-md p-2">
+            Arbeitszeiten aus den Zeitbuchungen dieses Projekts. Pro Mitarbeiter aggregiert. Beschreibung und Preis kannst du anpassen bevor du importierst.
+          </p>
+        )}
+
+        {!localProjectId ? (
           <p className="text-center py-8 text-muted-foreground">
             Bitte zuerst ein Projekt auswählen.
           </p>
@@ -264,44 +317,57 @@ export function ImportFromProjectDialog({ open, onClose, projectId, onImport }: 
           <p className="text-center py-8 text-muted-foreground">Lädt Projektdaten...</p>
         ) : items.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">
-            Keine Arbeitszeiten oder Lieferscheine für dieses Projekt gefunden.
+            {mode === "zeit"
+              ? "Keine Arbeitszeiten auf diesem Projekt gebucht."
+              : mode === "material"
+                ? "Keine Lieferscheine für dieses Projekt gefunden."
+                : "Keine Arbeitszeiten oder Lieferscheine für dieses Projekt gefunden."}
           </p>
         ) : (
           <>
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="zeit" className="gap-2">
-                  <Clock className="w-4 h-4" />
-                  Arbeitszeit ({zeitItems.length})
-                </TabsTrigger>
-                <TabsTrigger value="material" className="gap-2">
-                  <Package className="w-4 h-4" />
-                  Material ({matItems.length})
-                </TabsTrigger>
-              </TabsList>
+            {mode === "alle" ? (
+              <Tabs value={tab} onValueChange={(v) => setTab(v as "zeit" | "material")}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="zeit" className="gap-2">
+                    <Clock className="w-4 h-4" />
+                    Arbeitszeit ({zeitItems.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="material" className="gap-2">
+                    <Package className="w-4 h-4" />
+                    Material ({matItems.length})
+                  </TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="zeit" className="space-y-2 mt-3">
-                {zeitItems.length === 0 ? (
-                  <p className="text-center py-6 text-muted-foreground text-sm">Keine Arbeitszeiten gebucht</p>
-                ) : (
-                  zeitItems.map((item) => {
-                    const globalIdx = items.indexOf(item);
-                    return renderItem(item, globalIdx);
-                  })
-                )}
-              </TabsContent>
+                <TabsContent value="zeit" className="space-y-2 mt-3">
+                  {zeitItems.length === 0 ? (
+                    <p className="text-center py-6 text-muted-foreground text-sm">Keine Arbeitszeiten gebucht</p>
+                  ) : (
+                    zeitItems.map((item) => {
+                      const globalIdx = items.indexOf(item);
+                      return renderItem(item, globalIdx);
+                    })
+                  )}
+                </TabsContent>
 
-              <TabsContent value="material" className="space-y-2 mt-3">
-                {matItems.length === 0 ? (
-                  <p className="text-center py-6 text-muted-foreground text-sm">Keine Lieferscheine gefunden</p>
-                ) : (
-                  matItems.map((item) => {
-                    const globalIdx = items.indexOf(item);
-                    return renderItem(item, globalIdx);
-                  })
-                )}
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="material" className="space-y-2 mt-3">
+                  {matItems.length === 0 ? (
+                    <p className="text-center py-6 text-muted-foreground text-sm">Keine Lieferscheine gefunden</p>
+                  ) : (
+                    matItems.map((item) => {
+                      const globalIdx = items.indexOf(item);
+                      return renderItem(item, globalIdx);
+                    })
+                  )}
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <div className="space-y-2 mt-1">
+                {(mode === "zeit" ? zeitItems : matItems).map((item) => {
+                  const globalIdx = items.indexOf(item);
+                  return renderItem(item, globalIdx);
+                })}
+              </div>
+            )}
 
             {/* Summary */}
             <div className="flex items-center justify-between pt-3 border-t text-sm">

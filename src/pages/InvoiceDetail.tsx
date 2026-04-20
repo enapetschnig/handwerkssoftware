@@ -13,6 +13,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
+import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
 import { ImportFromOfferDialog } from "@/components/ImportFromOfferDialog";
 import { ImportTimeDialog } from "@/components/ImportTimeDialog";
@@ -174,6 +175,7 @@ export default function InvoiceDetail() {
   const [customerEditOpen, setCustomerEditOpen] = useState(false);
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
+  const [importTimeOpen, setImportTimeOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [stornoDialogOpen, setStornoDialogOpen] = useState(false);
@@ -2015,6 +2017,10 @@ export default function InvoiceDetail() {
                       </Button>
                     </>
                   )}
+                  <Button onClick={() => setImportTimeOpen(true)} variant="outline" size="sm" className="gap-1">
+                    <FileText className="w-4 h-4" />
+                    Arbeitszeiten
+                  </Button>
                   <Button onClick={() => setTemplateDialogOpen(true)} variant="outline" size="sm" className="gap-1">
                     <Package className="w-4 h-4" />
                     Materialien
@@ -2694,6 +2700,31 @@ export default function InvoiceDetail() {
             }
             setImportOfferOpen(false);
             toast({ title: "Aus Angebot importiert", description: `${newItems.length} Positionen hinzugefügt` });
+          }}
+        />
+
+        {/* Import Arbeitszeiten aus Projekt */}
+        <ImportFromProjectDialog
+          open={importTimeOpen}
+          onClose={() => setImportTimeOpen(false)}
+          projectId={form.project_id || null}
+          customerId={form.customer_id || null}
+          mode="zeit"
+          onImport={(importedItems) => {
+            const newItems = importedItems.map((item, idx) => ({
+              position: items.length + idx + 1,
+              beschreibung: item.beschreibung,
+              menge: item.menge,
+              einheit: item.einheit,
+              einzelpreis: item.einzelpreis,
+              gesamtpreis: item.menge * item.einzelpreis,
+            }));
+            setItems(prev => mergeItems(prev, newItems));
+            setImportTimeOpen(false);
+            toast({
+              title: "Arbeitszeiten importiert",
+              description: `${newItems.length} Position${newItems.length === 1 ? "" : "en"} hinzugefügt`,
+            });
           }}
         />
 
