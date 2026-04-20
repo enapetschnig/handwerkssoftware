@@ -334,14 +334,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const today = vienna.date;
 
-    // Nur an aktive Mitarbeiter mit freigeschaltetem WhatsApp senden
-    const { data: employees } = await supabase
-      .from("employees")
-      .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
+    // Nur an aktive Mitarbeiter mit freigeschaltetem WhatsApp UND aktivem Profil senden
+    // (entspricht exakt der Liste in den WhatsApp-Admin-Einstellungen)
+    const { data: employees } = await (supabase.from("employees" as never) as any)
+      .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date, profiles:user_id!inner(is_active)")
       .eq("whatsapp_aktiv", true)
       .eq("aktiv", true)
-      .not("telefon", "is", null)
-      .not("user_id", "is", null);
+      .eq("profiles.is_active", true)
+      .not("telefon", "is", null);
 
     if (!employees?.length) {
       return new Response(

@@ -155,14 +155,21 @@ async function findEmployeeByPhone(phone: string) {
     .replace(/^0+/, "");
   const last8 = cleaned.slice(-8);
 
-  const { data } = await supabase
-    .from("employees")
-    .select("id, vorname, nachname, user_id, telefon, whatsapp_aktiv")
-    .or(`telefon.ilike.%${last8}%`)
-    .limit(1)
-    .maybeSingle();
+  // Nur Einträge mit aktivem und verknüpftem Profil — das gleiche Kriterium,
+  // das auch die WhatsApp-Admin-Liste verwendet. So werden Karteileichen
+  // (employees-Zeilen mit user_id auf nicht mehr existierende Profile, oder
+  // ganz ohne user_id) zuverlässig ignoriert.
+  const { data: candidates } = await (supabase.from("employees" as never) as any)
+    .select("id, vorname, nachname, user_id, telefon, whatsapp_aktiv, aktiv, profiles:user_id!inner(is_active)")
+    .eq("aktiv", true)
+    .eq("whatsapp_aktiv", true)
+    .eq("profiles.is_active", true)
+    .ilike("telefon", `%${last8}%`);
 
-  return data;
+  if (!candidates?.length) return null;
+  // Bei mehreren Treffern: exaktes Telefon-Match bevorzugen
+  const cleanedMatch = `+${cleaned}`;
+  return candidates.find((c: any) => c.telefon === cleanedMatch) || candidates[0];
 }
 
 // ─── Conversation persistence ────────────────────────────
