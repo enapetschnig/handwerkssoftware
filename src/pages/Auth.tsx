@@ -6,14 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -64,45 +62,6 @@ export default function Auth() {
     navigate("/");
     setLoading(false);
   };
-
-  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const vorname = formData.get("vorname") as string;
-    const nachname = formData.get("nachname") as string;
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { vorname, nachname },
-      },
-    });
-
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Fehler bei der Registrierung",
-        description: error.message,
-      });
-      setLoading(false);
-      return;
-    }
-
-    toast({
-      title: "Registrierung erfolgreich!",
-      description: "Ein Administrator wird Ihr Konto freischalten.",
-    });
-    
-    navigate("/");
-    setLoading(false);
-  };
-
 
   const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -177,81 +136,46 @@ export default function Auth() {
               </form>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Login/Registrieren Auswahl */}
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={isLogin ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setIsLogin(true)}
-                >
-                  Anmelden
-                </Button>
-                <Button
-                  type="button"
-                  variant={!isLogin ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setIsLogin(false)}
-                >
-                  Registrieren
-                </Button>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Benutzername oder E-Mail</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="benutzername oder email@..."
+                  required
+                />
               </div>
 
-              {/* Formular */}
-              <form onSubmit={isLogin ? handleLogin : handleSignup} className="space-y-4">
-                {!isLogin && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="vorname">Vorname</Label>
-                      <Input id="vorname" name="vorname" type="text" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="nachname">Nachname</Label>
-                      <Input id="nachname" name="nachname" type="text" required />
-                    </div>
-                  </div>
-                )}
+              <div className="space-y-2">
+                <Label htmlFor="password">Passwort</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                />
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">{isLogin ? "Benutzername oder E-Mail" : "E-Mail"}</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type={isLogin ? "text" : "email"}
-                    autoComplete={isLogin ? "username" : "email"}
-                    placeholder={isLogin ? "benutzername oder email@..." : "ihre@email.at"}
-                    required
-                  />
-                </div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordReset(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                Passwort vergessen?
+              </button>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password">Passwort</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    minLength={6}
-                  />
-                </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Lädt..." : "Anmelden"}
+              </Button>
 
-                {isLogin && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordReset(true)}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Passwort vergessen?
-                  </button>
-                )}
-
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Lädt..." : (isLogin ? "Anmelden" : "Registrieren")}
-                </Button>
-              </form>
-
-            </div>
+              <p className="text-xs text-muted-foreground text-center pt-2">
+                Zugangsdaten erhältst du von deinem Administrator.
+              </p>
+            </form>
           )}
         </CardContent>
       </Card>
