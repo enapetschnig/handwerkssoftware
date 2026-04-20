@@ -10,6 +10,8 @@ import { MessageCircle, Send, RefreshCw, Settings, Clock, Calendar, Save, Users,
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const DAY_OPTIONS = [
@@ -58,7 +60,13 @@ export function WhatsAppAdminSettings() {
     whatsapp_morning_enabled: "true",
     whatsapp_morning_time: "07:00",
     whatsapp_bot_name: "BKS Assistent",
+    whatsapp_morning_template: "",
+    whatsapp_evening_template: "",
+    whatsapp_evening_done_template: "",
   });
+  const [previewOpen, setPreviewOpen] = useState<null | "morning" | "evening">(null);
+  const [previewMsg, setPreviewMsg] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -231,6 +239,34 @@ export function WhatsAppAdminSettings() {
   const isDayActive = (day: string) =>
     settings.whatsapp_reminder_days.split(",").includes(day);
 
+  const handlePreview = async (type: "morning" | "evening") => {
+    setPreviewLoading(true);
+    setPreviewOpen(type);
+    setPreviewMsg("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("whatsapp-daily-reminder", {
+        body: { type, preview: true, user_id: session?.user?.id },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      setPreviewMsg((data as any)?.message || "");
+    } catch (err: any) {
+      let detail = err.message;
+      try {
+        const ctx: any = (err as any).context;
+        if (ctx?.clone) {
+          const body = await ctx.clone().text();
+          try { detail = JSON.parse(body)?.error || body || detail; } catch { detail = body || detail; }
+        }
+      } catch { /* ignore */ }
+      toast({ variant: "destructive", title: "Vorschau fehlgeschlagen", description: detail });
+      setPreviewOpen(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleTriggerReminder = async (type: "morning" | "evening") => {
     setSendingReminder(type);
     try {
@@ -240,7 +276,17 @@ export function WhatsAppAdminSettings() {
         body: { type, mode: "force" },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
-      if (error) throw error;
+      if (error) {
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx?.clone) {
+            const body = await ctx.clone().text();
+            try { detail = JSON.parse(body)?.error || body || detail; } catch { detail = body || detail; }
+          }
+        } catch { /* ignore */ }
+        throw new Error(detail);
+      }
       toast({
         title: type === "morning" ? "Morgennachrichten gesendet" : "Abenderinnerungen gesendet",
         description: `${(data as any)?.sentCount || 0} Mitarbeiter benachrichtigt`,
@@ -452,16 +498,55 @@ export function WhatsAppAdminSettings() {
               ))}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => handleTriggerReminder("evening")}
-            disabled={sendingReminder === "evening"}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${sendingReminder === "evening" ? "animate-spin" : ""}`} />
-            {sendingReminder === "evening" ? "Sende..." : "Jetzt Abend-Erinnerung senden"}
-          </Button>
+          <div className="space-y-1.5">
+            <Label className="flex items-center justify-between">
+              <span>Nachrichten-Vorlage (offen)</span>
+              <span className="text-[10px] text-muted-foreground font-normal">
+                leer = Standard
+              </span>
+            </Label>
+            <Textarea
+              rows={6}
+              value={settings.whatsapp_evening_template}
+              onChange={(e) => updateSetting("whatsapp_evening_template", e.target.value)}
+              placeholder={"Hey {name}! Du hast noch {rest}h offen ...\n\nPlatzhalter: {name} {tagessoll} {stunden_heute} {rest} {projekte} {wochentag}"}
+              className="font-mono text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Wenn das Tagessoll schon erreicht ist, wird eine kürzere Nachricht
+              verwendet (siehe separates Feld weiter unten).
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePreview("evening")}
+              disabled={previewLoading && previewOpen === "evening"}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Vorschau
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleTriggerReminder("evening")}
+              disabled={sendingReminder === "evening"}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${sendingReminder === "evening" ? "animate-spin" : ""}`} />
+              {sendingReminder === "evening" ? "Sende..." : "Jetzt senden"}
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nachrichten-Vorlage (Tag erledigt)</Label>
+            <Textarea
+              rows={3}
+              value={settings.whatsapp_evening_done_template}
+              onChange={(e) => updateSetting("whatsapp_evening_done_template", e.target.value)}
+              placeholder={"Hey {name}! Deine Stunden für heute sind komplett ({stunden_heute}h) ✓"}
+              className="font-mono text-xs"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -492,16 +577,41 @@ export function WhatsAppAdminSettings() {
               onChange={(e) => updateSetting("whatsapp_morning_time", e.target.value)}
             />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => handleTriggerReminder("morning")}
-            disabled={sendingReminder === "morning"}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${sendingReminder === "morning" ? "animate-spin" : ""}`} />
-            {sendingReminder === "morning" ? "Sende..." : "Jetzt Morgen-Nachricht senden"}
-          </Button>
+          <div className="space-y-1.5">
+            <Label className="flex items-center justify-between">
+              <span>Nachrichten-Vorlage</span>
+              <span className="text-[10px] text-muted-foreground font-normal">
+                leer = Standard
+              </span>
+            </Label>
+            <Textarea
+              rows={8}
+              value={settings.whatsapp_morning_template}
+              onChange={(e) => updateSetting("whatsapp_morning_template", e.target.value)}
+              placeholder={"Guten Morgen {name}! ☀️\n\n{einteilung_block}Tagessoll: {tagessoll}h ({wochentag})\n\n*Projekte:*\n{projekte}\n\nPlatzhalter: {name} {tagessoll} {wochentag} {einteilung} {einteilung_block} {projekte} {stunden_heute} {rest}"}
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePreview("morning")}
+              disabled={previewLoading && previewOpen === "morning"}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Vorschau
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleTriggerReminder("morning")}
+              disabled={sendingReminder === "morning"}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${sendingReminder === "morning" ? "animate-spin" : ""}`} />
+              {sendingReminder === "morning" ? "Sende..." : "Jetzt senden"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -545,6 +655,29 @@ export function WhatsAppAdminSettings() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={previewOpen !== null} onOpenChange={(o) => !o && setPreviewOpen(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Vorschau — {previewOpen === "morning" ? "Morgen-Nachricht" : "Abend-Erinnerung"}
+            </DialogTitle>
+          </DialogHeader>
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Lädt…
+            </div>
+          ) : (
+            <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm font-mono">
+              {previewMsg || "(leer)"}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Basierend auf deinem aktuellen Account und den heutigen Daten.
+            So würde der Mitarbeiter die Nachricht erhalten.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

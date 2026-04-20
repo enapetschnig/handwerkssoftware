@@ -83,6 +83,34 @@ function formatProjectList(
   return out.trimEnd();
 }
 
+const DEFAULT_MORNING_TEMPLATE = `Guten Morgen {name}! ☀️
+
+{einteilung_block}Tagessoll: *{tagessoll}h* ({wochentag})
+
+*Projekte:*
+{projekte}
+
+Stunden schreiben = Nummer + Stunden, z.B. _"1 8h Montage"_`;
+
+const DEFAULT_EVENING_OPEN_TEMPLATE = `Hey {name}! 👋
+
+Du hast heute noch *{rest}h* offen ({stunden_heute}/{tagessoll}h gebucht).
+
+*Auf welches Projekt?*
+{projekte}
+
+Antwort z.B.: _"1 {rest}h Kabel verlegt"_`;
+
+const DEFAULT_EVENING_DONE_TEMPLATE = `Hey {name}! Deine Stunden für heute sind komplett ({stunden_heute}h) ✓ Schönen Feierabend! 🍺`;
+
+function renderTemplate(tpl: string, vars: Record<string, string | number>): string {
+  let out = tpl;
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));
+  }
+  return out;
+}
+
 async function generateReminderMessage(
   name: string,
   scheduleInfo: string,
@@ -99,31 +127,32 @@ async function generateReminderMessage(
   ];
   const dayName = dayNames[new Date().getDay()];
 
-  if (isEvening && remaining > 0) {
-    // Evening reminder: direct, with project list ready to go
-    let msg = `Hey ${name}! 👋\n\n`;
-    msg += `Du hast heute noch *${remaining}h* offen (${todayHours > 0 ? `${todayHours}/${dailyTarget}h gebucht` : `${dailyTarget}h Tagessoll`}).\n\n`;
-    msg += `*Auf welches Projekt?*\n${projectList}\n\n`;
-    msg += `Antwort z.B.: _"1 ${remaining}h Kabel verlegt"_`;
-    return msg;
+  const einteilungBlock = scheduleInfo
+    ? `📋 *Deine Einteilung heute:*\n${scheduleInfo}\n\n`
+    : `Heute keine Einteilung in der Plantafel.\n\n`;
+
+  const vars = {
+    name,
+    wochentag: dayName,
+    tagessoll: dailyTarget,
+    stunden_heute: todayHours,
+    rest: remaining,
+    einteilung: scheduleInfo || "Heute keine Einteilung in der Plantafel.",
+    einteilung_block: einteilungBlock,
+    projekte: projectList,
+  };
+
+  if (isEvening) {
+    if (remaining > 0) {
+      const tpl = (await getSetting("whatsapp_evening_template", "")) || DEFAULT_EVENING_OPEN_TEMPLATE;
+      return renderTemplate(tpl, vars);
+    }
+    const tpl = (await getSetting("whatsapp_evening_done_template", "")) || DEFAULT_EVENING_DONE_TEMPLATE;
+    return renderTemplate(tpl, vars);
   }
 
-  if (isEvening && remaining <= 0) {
-    // Already done for the day
-    return `Hey ${name}! Deine Stunden für heute sind komplett (${todayHours}h) ✓ Schönen Feierabend! 🍺`;
-  }
-
-  // Morning message
-  let msg = `Guten Morgen ${name}! ☀️\n\n`;
-  if (scheduleInfo) {
-    msg += `📋 *Deine Einteilung heute:*\n${scheduleInfo}\n\n`;
-  } else {
-    msg += `Heute keine Einteilung in der Plantafel.\n\n`;
-  }
-  msg += `Tagessoll: *${dailyTarget}h* (${dayName})\n\n`;
-  msg += `*Projekte:*\n${projectList}\n\n`;
-  msg += `Stunden schreiben = Nummer + Stunden, z.B. _"1 8h Montage"_`;
-  return msg;
+  const tpl = (await getSetting("whatsapp_morning_template", "")) || DEFAULT_MORNING_TEMPLATE;
+  return renderTemplate(tpl, vars);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -137,16 +166,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth: Service-Role-Key, CRON_SECRET (env) oder cron_webhook_secret (app_settings)
+  // Auth: Service-Role-Key, Cron-Secrets ODER Admin-JWT (für den "Jetzt senden"-Button)
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const cronSecret = Deno.env.get("CRON_SECRET");
   const dbCronSecret = await getSetting("cron_webhook_secret", "");
-  const isAuthorized =
+
+  let isAuthorized =
     (serviceKey && token === serviceKey) ||
     (cronSecret && token === cronSecret) ||
     (dbCronSecret && token === dbCronSecret);
+
+  if (!isAuthorized && token) {
+    // Admin-JWT-Pfad: User-Token validieren, Admin-Rolle prüfen
+    const { data: { user: caller } } = await supabase.auth.getUser(token);
+    if (caller) {
+      const { data: roleRow } = await supabase
+        .from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
+      if (roleRow?.role === "administrator") isAuthorized = true;
+    }
+  }
+
   if (!isAuthorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -156,11 +197,58 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     let reminderType = "auto";
     let mode: "auto" | "force" = "auto";
+    let preview = false;
+    let previewUserId: string | null = null;
     try {
       const body = await req.json();
       reminderType = body?.type || "auto";
       if (body?.mode === "force") mode = "force";
+      if (body?.preview === true) preview = true;
+      if (body?.user_id) previewUserId = String(body.user_id);
     } catch { /* no body */ }
+
+    // Vorschau-Modus: generiert die Nachricht ohne zu senden
+    if (preview) {
+      const isEvening = reminderType === "evening";
+      const today = new Date().toISOString().split("T")[0];
+      // Beispiel-Mitarbeiter: übergebener user_id oder Platzhalter
+      let name = "Max";
+      let scheduleInfo = "";
+      let todayHours = 0;
+      const allProjects = await getAllActiveProjects();
+      const todayProjectIds = new Set<string>();
+      if (previewUserId) {
+        const { data: emp } = await supabase
+          .from("employees")
+          .select("vorname, user_id")
+          .eq("user_id", previewUserId)
+          .maybeSingle();
+        if (emp?.vorname) name = emp.vorname;
+        const { data: einsaetze } = await supabase
+          .from("einsaetze")
+          .select("name, adresse, start_time, end_time, ganztaegig, beschreibung, project_id, projects(id, name)")
+          .eq("user_id", previewUserId)
+          .lte("start_date", today)
+          .gte("end_date", today);
+        if (einsaetze?.length) {
+          scheduleInfo = einsaetze.map((e: any) => {
+            if (e.projects?.id) todayProjectIds.add(e.projects.id);
+            const n = e.projects?.name || e.name || "(ohne Projekt)";
+            const z = e.ganztaegig ? "ganztags" : (e.start_time && e.end_time ? `${e.start_time.slice(0,5)}–${e.end_time.slice(0,5)}` : "");
+            return `• ${n}${z ? ` (${z})` : ""}${e.adresse ? `\n  📍 ${e.adresse}` : ""}`;
+          }).join("\n");
+        }
+        const { data: entries } = await supabase.from("time_entries")
+          .select("stunden").eq("user_id", previewUserId).eq("datum", today);
+        todayHours = (entries || []).reduce((s: number, e: any) => s + (e.stunden || 0), 0);
+      }
+      const projectList = formatProjectList(allProjects, todayProjectIds);
+      const message = await generateReminderMessage(name, scheduleInfo, todayHours, isEvening, projectList);
+      return new Response(
+        JSON.stringify({ preview: true, type: isEvening ? "evening" : "morning", message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Europe/Vienna Zeit berechnen (pg_cron läuft in UTC)
     const viennaFmt = new Intl.DateTimeFormat("de-AT", {
