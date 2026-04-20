@@ -1219,6 +1219,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
       }
 
+      // Kompletten Verarbeitungs-Block pro Message in try-catch: der Bot
+      // soll IMMER antworten. Crasht ein Teil (DB, OpenAI, WAPI), kommt
+      // wenigstens eine Fallback-Nachricht zurück.
+      try {
+
       const emp = await findEmployeeByPhone(phone);
 
       if (!emp || !emp.user_id) {
@@ -1365,6 +1370,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       await saveMsg(phone, "outgoing", reply, emp.id, userId);
       await sendWhatsApp(phone, reply);
+      } catch (iterErr: any) {
+        // Irgendwas in der Message-Verarbeitung ist schiefgelaufen — Fallback-Reply,
+        // damit der Mitarbeiter NIE ohne Antwort dasteht. Volles Error-Log für Debug.
+        console.error("Message processing failed:", iterErr?.stack || iterErr);
+        try {
+          const fallbackMsg = "Entschuldigung, da ist gerade was schiefgelaufen. Bitte probier's in einem Moment nochmal — wenn's bleibt, kurz dem Admin Bescheid sagen.";
+          await sendWhatsApp(phone, fallbackMsg);
+          await saveMsg(phone, "outgoing", `[FEHLER] ${fallbackMsg}`, undefined, undefined);
+        } catch (fallbackErr) {
+          console.error("Even fallback failed:", fallbackErr);
+        }
+      }
     }
 
     // ── Batch-Antwort für caption-lose Fotos ──
