@@ -18,7 +18,12 @@ async function sendWhatsApp(to: string, message: string) {
     },
     body: JSON.stringify({ to: recipient, body: message }),
   });
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body?.sent === false || body?.error) {
+    const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(`WAPI: ${msg}`);
+  }
+  return body;
 }
 
 function formatPhone(phone: string): string {
@@ -45,15 +50,37 @@ function getDailyTarget(): number {
   return 0;
 }
 
-async function getProjectList(): Promise<string> {
-  const { data: projects } = await supabase
+async function getAllActiveProjects(): Promise<{ id: string; name: string }[]> {
+  const { data } = await supabase
     .from("projects")
-    .select("name")
-    .eq("status", "In Arbeit")
+    .select("id, name")
+    .not("status", "eq", "Abgeschlossen")
     .order("name");
+  return (data as any[]) || [];
+}
 
-  if (!projects?.length) return "";
-  return projects.map((p: any, i: number) => `${i + 1}. ${p.name}`).join("\n");
+function formatProjectList(
+  projects: { id: string; name: string }[],
+  todayIds: Set<string>
+): string {
+  if (!projects.length) return "_Aktuell keine Projekte angelegt._";
+  const todays = projects.filter((p) => todayIds.has(p.id));
+  const others = projects.filter((p) => !todayIds.has(p.id));
+
+  let out = "";
+  if (todays.length) {
+    out += "*Heute eingeteilt:*\n";
+    todays.forEach((p, i) => { out += `${i + 1}. ${p.name}\n`; });
+    if (others.length) {
+      out += "\n*Andere aktive Projekte:*\n";
+      others.slice(0, 10).forEach((p, i) => {
+        out += `${todays.length + i + 1}. ${p.name}\n`;
+      });
+    }
+  } else {
+    projects.slice(0, 10).forEach((p, i) => { out += `${i + 1}. ${p.name}\n`; });
+  }
+  return out.trimEnd();
 }
 
 async function generateReminderMessage(
@@ -219,11 +246,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const today = vienna.date;
 
-    // Only send to admin-verified WhatsApp numbers
+    // Nur an aktive Mitarbeiter mit freigeschaltetem WhatsApp senden
     const { data: employees } = await supabase
       .from("employees")
       .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
       .eq("whatsapp_aktiv", true)
+      .eq("aktiv", true)
       .not("telefon", "is", null)
       .not("user_id", "is", null);
 
@@ -252,8 +280,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Load project list once for all employees
-    const projectList = await getProjectList();
+    // Alle aktiven Projekte einmal laden — pro Mitarbeiter wird die Liste
+    // mit den heute eingeteilten Projekten oben sortiert.
+    const allProjects = await getAllActiveProjects();
 
     let sentCount = 0;
     const results: any[] = [];
@@ -288,10 +317,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
 
         let scheduleInfo = "";
+        const todayProjectIds = new Set<string>();
         // Einsätze aus der Plantafel (einsaetze-Tabelle) für heute holen
         const { data: einsaetze } = await supabase
           .from("einsaetze")
-          .select("name, adresse, start_time, end_time, ganztaegig, beschreibung, projects(name)")
+          .select("name, adresse, start_time, end_time, ganztaegig, beschreibung, project_id, projects(id, name)")
           .eq("user_id", emp.user_id)
           .lte("start_date", today)
           .gte("end_date", today)
@@ -301,6 +331,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
           scheduleInfo = einsaetze
             .map((e: any) => {
               const projektName = e.projects?.name || e.name || "(ohne Projekt)";
+              if (e.projects?.id) todayProjectIds.add(e.projects.id);
+              else if (e.project_id) todayProjectIds.add(e.project_id);
               const zeit = e.ganztaegig
                 ? "ganztags"
                 : (e.start_time && e.end_time)
@@ -314,6 +346,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             })
             .join("\n");
         }
+
+        const projectList = formatProjectList(allProjects, todayProjectIds);
 
         const message = await generateReminderMessage(
           emp.vorname,

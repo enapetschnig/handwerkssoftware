@@ -233,9 +233,13 @@ async function gatherContext(userId: string) {
         .select("id, stunden, taetigkeit, project_id, projects(name), created_at")
         .eq("user_id", userId).eq("datum", today)
         .order("created_at", { ascending: false }),
-      supabase.from("worker_assignments")
-        .select("project_id, projects(name), start_time, end_time, notizen")
-        .eq("user_id", userId).eq("datum", today),
+      // Plantafel-Einteilung heute aus einsaetze (nicht mehr worker_assignments)
+      supabase.from("einsaetze")
+        .select("project_id, projects(name), start_time, end_time, ganztaegig, adresse, beschreibung")
+        .eq("user_id", userId)
+        .lte("start_date", today)
+        .gte("end_date", today)
+        .order("start_time"),
       // Entire week for the weekly brain
       supabase.from("time_entries")
         .select("datum, stunden, taetigkeit, projects(name)")
@@ -302,9 +306,14 @@ async function gatherContext(userId: string) {
   if (assignments.length > 0) {
     ctx += `\nPLANTAFEL-EINTEILUNG HEUTE:\n`;
     assignments.forEach((a: any) => {
-      const timeStr = a.start_time && a.end_time ? ` (${a.start_time}–${a.end_time})` : "";
-      const noteStr = a.notizen ? ` – ${a.notizen}` : "";
-      ctx += `  • ${a.projects?.name || "?"}${timeStr}${noteStr}\n`;
+      const timeStr = a.ganztaegig
+        ? " (ganztags)"
+        : a.start_time && a.end_time
+          ? ` (${(a.start_time || "").slice(0, 5)}–${(a.end_time || "").slice(0, 5)})`
+          : "";
+      const addrStr = a.adresse ? ` – 📍 ${a.adresse}` : "";
+      const noteStr = a.beschreibung ? ` – ${a.beschreibung}` : "";
+      ctx += `  • ${a.projects?.name || "?"}${timeStr}${addrStr}${noteStr}\n`;
     });
   }
 
