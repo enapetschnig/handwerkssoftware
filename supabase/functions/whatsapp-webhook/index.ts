@@ -1476,6 +1476,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         continue;
       }
 
+      // Kurze Pause, damit parallel laufende Webhook-Instanzen ihre
+      // pending_photo-Inserts noch abschließen können, bevor wir zählen.
+      // Ohne diese Pause zählen wir evtl. nur 2 von 4 Fotos.
+      await new Promise((r) => setTimeout(r, 1500));
+
       // Zusätzlicher Safety-Net-Spam-Schutz: letzte outgoing-Nachricht <60s?
       const sixtySecAgo = new Date(Date.now() - 60 * 1000).toISOString();
       const { data: recent } = await supabase
