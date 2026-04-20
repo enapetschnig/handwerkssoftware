@@ -1430,15 +1430,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ── Batch-Antwort für caption-lose Fotos ──
-    // Egal ob 1 oder 10 Fotos in diesem Webhook-Call: genau EINE smarte
-    // Nachricht mit Projekt-Vorschlägen. Wenn aber in den letzten 60s schon
-    // eine Projekt-Liste geschickt wurde (Spam-Schutz), keine erneute.
+    // Egal ob 1 oder 10 Fotos — genau EINE smarte Nachricht mit Projekt-
+    // Vorschlägen. Atomarer DB-Lock (try_claim_photo_prompt) verhindert,
+    // dass bei parallel eintreffenden Webhook-Calls alle gleichzeitig einen
+    // Prompt senden (Race-Condition-Fix).
     for (const [phone, count] of batchPhotoCount.entries()) {
       const ctx = batchEmp.get(phone);
       if (!ctx) continue;
       const { emp, userId } = ctx;
 
-      // Spam-Schutz: letzte outgoing-Nachricht <60s? → nicht erneut
+      // ATOMIC CLAIM: nur die erste parallele Instanz kriegt true zurück,
+      // alle anderen false. TTL 120s — danach darf wieder geprompted werden.
+      const { data: claimed } = await (supabase.rpc as any)(
+        "try_claim_photo_prompt",
+        { p_user_id: userId, p_ttl_seconds: 120 }
+      );
+      if (!claimed) {
+        console.log(`Prompt claim denied (another instance already sent it) for user ${userId}`);
+        continue;
+      }
+
+      // Zusätzlicher Safety-Net-Spam-Schutz: letzte outgoing-Nachricht <60s?
       const sixtySecAgo = new Date(Date.now() - 60 * 1000).toISOString();
       const { data: recent } = await supabase
         .from("whatsapp_messages")
