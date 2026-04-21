@@ -146,11 +146,11 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
     setFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Kamera-Fotos sind oft 5-12 MB. Die OpenAI-Vision-API hat ein
-  // effektives Limit von ~20 MB Payload, aber die Supabase-Edge-Function
-  // soll nicht umsonst die Vollauflösung durch OCR jagen. Wir
-  // verkleinern auf max. 2000 px Langseite und 85% JPEG-Qualität.
-  const compressImage = async (file: File, maxDim = 2000, quality = 0.85): Promise<string> => {
+  // Kamera-Fotos sind oft 5-12 MB. Supabase-Edge-Function hat 6 MB
+  // Body-Limit. Wir skalieren nur wenig und nutzen hohe JPEG-Qualität,
+  // damit die OCR-Zahlen gut lesbar bleiben — 2400px/92% ist ein
+  // guter Kompromiss und bleibt unter 2 MB.
+  const compressImage = async (file: File, maxDim = 2400, quality = 0.92): Promise<string> => {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const image = new Image();
