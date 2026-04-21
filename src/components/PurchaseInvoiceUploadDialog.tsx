@@ -14,6 +14,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onUploaded: () => void;
   prefillProjectId?: string | null;
+  initialFile?: File | null;
 }
 
 const KATEGORIEN = [
@@ -26,7 +27,7 @@ const KATEGORIEN = [
   { value: "sonstiges", label: "Sonstiges" },
 ];
 
-export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, prefillProjectId }: Props) {
+export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, prefillProjectId, initialFile }: Props) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -82,8 +83,14 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
       supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name").then(({ data }) => {
         if (data) setProjects(data);
       });
+      // Wenn per Kamera-Button geöffnet → Datei direkt übernehmen + scannen
+      if (initialFile) {
+        setFiles([initialFile]);
+        void scanFileWithAi(initialFile);
+      }
     }
-  }, [open, prefillProjectId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillProjectId, initialFile]);
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 

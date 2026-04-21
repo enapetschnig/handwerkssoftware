@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,8 @@ export default function PurchaseInvoices() {
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [cameraFile, setCameraFile] = useState<File | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -161,10 +163,35 @@ export default function PurchaseInvoices() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-bold flex-1">Eingangsrechnungen & Belege</h1>
-          <Button onClick={() => setUploadOpen(true)} className="gap-2">
-            <Upload className="h-4 w-4" />
-            Hochladen
+          <Button
+            variant="outline"
+            onClick={() => cameraInputRef.current?.click()}
+            className="gap-2"
+            title="Rechnung fotografieren"
+          >
+            <Camera className="h-4 w-4" />
+            <span className="hidden sm:inline">Foto</span>
           </Button>
+          <Button onClick={() => { setCameraFile(null); setUploadOpen(true); }} className="gap-2">
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Hochladen</span>
+          </Button>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                setCameraFile(f);
+                setUploadOpen(true);
+              }
+              // reset so same file can be selected again
+              if (cameraInputRef.current) cameraInputRef.current.value = "";
+            }}
+          />
         </div>
       </header>
 
@@ -349,9 +376,10 @@ export default function PurchaseInvoices() {
       {/* Upload */}
       <PurchaseInvoiceUploadDialog
         open={uploadOpen}
-        onOpenChange={setUploadOpen}
+        onOpenChange={(o) => { setUploadOpen(o); if (!o) setCameraFile(null); }}
         onUploaded={loadData}
         prefillProjectId={projectFilter}
+        initialFile={cameraFile}
       />
 
       {/* Edit detail */}
