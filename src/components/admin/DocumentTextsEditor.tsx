@@ -15,7 +15,6 @@ const DOC_TYPES: { key: string; label: string }[] = [
   { key: "auftragsbestaetigung", label: "Auftragsbestätigung" },
   { key: "rechnung",             label: "Rechnung" },
   { key: "anzahlungsrechnung",   label: "Anzahlungsrechnung" },
-  { key: "teilrechnung",         label: "Teilrechnung" },
   { key: "schlussrechnung",      label: "Schlussrechnung" },
   { key: "lieferschein",         label: "Lieferschein" },
   { key: "gutschrift",           label: "Gutschrift" },

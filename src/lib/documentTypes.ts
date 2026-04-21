@@ -6,7 +6,6 @@ export type DocumentTyp =
   | "auftragsbestaetigung"
   | "rechnung"
   | "anzahlungsrechnung"
-  | "teilrechnung"
   | "schlussrechnung"
   | "lieferschein"
   | "gutschrift";
@@ -69,16 +68,6 @@ const ALL_CONFIGS: Record<DocumentTyp, DocConfig> = {
     hidePrices: false,
     showPaymentSection: true,
     showLeistungsdatum: false,
-  },
-  teilrechnung: {
-    typ: "teilrechnung",
-    label: "Teilrechnung",
-    shortLabel: "TR",
-    isInvoiceLike: true,
-    isAngebotLike: false,
-    hidePrices: false,
-    showPaymentSection: true,
-    showLeistungsdatum: true,
   },
   schlussrechnung: {
     typ: "schlussrechnung",

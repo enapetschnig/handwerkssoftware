@@ -475,7 +475,7 @@ export default function Invoices() {
     }
     if (i.status === "storniert") return false;
     // "rechnung"-Tab sammelt alle Rechnungs-artigen Dokumente
-    const invoiceLike = new Set(["rechnung", "anzahlungsrechnung", "teilrechnung", "schlussrechnung", "gutschrift"]);
+    const invoiceLike = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
     const angebotLike = new Set(["angebot", "auftragsbestaetigung"]);
     let matchTyp: boolean;
     if (filterTyp === "rechnung") {
@@ -493,7 +493,7 @@ export default function Invoices() {
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
 
-  const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "teilrechnung", "schlussrechnung", "gutschrift"]);
+  const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
   const _angebotLikeTypes = new Set(["angebot", "auftragsbestaetigung"]);
   const totalRechnungen = invoices.filter(i => _invoiceLikeTypes.has(i.typ) && i.status !== "storniert").length;
   const totalAngebote = invoices.filter(i => _angebotLikeTypes.has(i.typ) && i.status !== "storniert").length;
@@ -767,7 +767,11 @@ export default function Invoices() {
                       const brutto = Number(inv.brutto_summe);
                       const bezahlt = inv.bezahlt_betrag;
                       const offen = brutto - bezahlt;
-                      const availableStatuses = inv.typ === "rechnung" ? rechnungStatuses : angebotStatuses;
+                      // Rechnung-artige Dokumente (inkl. Anzahlungs-/Schlussrechnung, Gutschrift)
+                      // bekommen Zahlstatus; Angebot & Auftragsbestätigung bekommen angebot-Status
+                      // inkl. "verrechnet" (markiert den Auftrag als abgerechnet).
+                      const _invoiceLikeForStatus = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
+                      const availableStatuses = _invoiceLikeForStatus.has(inv.typ) ? rechnungStatuses : angebotStatuses;
                       return (
                         <TableRow
                           key={inv.id}
@@ -781,7 +785,6 @@ export default function Invoices() {
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                   {inv.typ === "auftragsbestaetigung" ? "AB"
                                     : inv.typ === "anzahlungsrechnung" ? "AR"
-                                    : inv.typ === "teilrechnung" ? "TR"
                                     : inv.typ === "schlussrechnung" ? "SR"
                                     : inv.typ === "lieferschein" ? "LS"
                                     : inv.typ === "gutschrift" ? "GS"

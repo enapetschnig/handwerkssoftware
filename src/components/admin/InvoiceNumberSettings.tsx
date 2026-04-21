@@ -21,7 +21,6 @@ const TYPES: { key: string; label: string; defaults: NumberConfig; example: stri
   { key: "auftragsbestaetigung", label: "Auftragsbestätigungen", defaults: { prefix: "AB", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "AB26001" },
   { key: "rechnung",             label: "Rechnungen",            defaults: { prefix: "",   format: "{YY}{NNN}",         start_nummer: "1", stellen: "3" }, example: "26001" },
   { key: "anzahlungsrechnung",   label: "Anzahlungsrechnungen",  defaults: { prefix: "AR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "AR26001" },
-  { key: "teilrechnung",         label: "Teilrechnungen",        defaults: { prefix: "TR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "TR26001" },
   { key: "schlussrechnung",      label: "Schlussrechnungen",     defaults: { prefix: "SR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "SR26001" },
   { key: "lieferschein",         label: "Lieferscheine",         defaults: { prefix: "LS", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "LS26001" },
   { key: "gutschrift",           label: "Gutschriften",          defaults: { prefix: "GS", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "GS26001" },

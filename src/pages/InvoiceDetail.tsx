@@ -199,9 +199,6 @@ export default function InvoiceDetail() {
   // Umwandlungs-Dialoge
   const [anzahlungDialogOpen, setAnzahlungDialogOpen] = useState(false);
   const [anzahlungProzentInput, setAnzahlungProzentInput] = useState<string>("30");
-  const [schlussrechnungDialogOpen, setSchlussrechnungDialogOpen] = useState(false);
-  const [verfuegbareAnzahlungen, setVerfuegbareAnzahlungen] = useState<{ id: string; nummer: string | null; datum: string | null; netto_summe: number; brutto_summe: number }[]>([]);
-  const [selectedAbzuege, setSelectedAbzuege] = useState<string[]>([]);
   const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -1352,7 +1349,10 @@ export default function InvoiceDetail() {
 
   if (loading) return <div className="text-center py-8">Lädt...</div>;
 
-  const typLabel = form.typ === "rechnung" ? "Rechnung" : "Angebot";
+  const typLabel = getDocConfig(form.typ).label;
+  // Grammatik-Artikel für "Neue/Neuer/Neues X erstellen":
+  //   Neues Angebot | Neuer Lieferschein | sonst: Neue <typ>
+  const typArticle = form.typ === "angebot" ? "Neues" : form.typ === "lieferschein" ? "Neuer" : "Neue";
 
   const groupedTemplates = templates.reduce<Record<string, TemplateItem[]>>((acc, t) => {
     (acc[t.kategorie] = acc[t.kategorie] || []).push(t);
@@ -1427,7 +1427,7 @@ export default function InvoiceDetail() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-[1600px]">
         <PageHeader
-          title={isNew ? `${form.typ === "angebot" ? "Neues" : "Neue"} ${typLabel} erstellen` : `${typLabel} ${form.nummer}`}
+          title={isNew ? `${typArticle} ${typLabel} erstellen` : `${typLabel} ${form.nummer}`}
           backPath="/invoices"
         />
 
@@ -1509,12 +1509,13 @@ export default function InvoiceDetail() {
                     {/* Umwandeln-Menü: zeigt basierend auf aktuellem typ die erlaubten Ziele */}
                     {!isNew && form.status !== "verrechnet" && form.status !== "abgelehnt" && form.status !== "storniert" && (() => {
                       const t = form.typ;
+                      // Vom Angebot aus darf man direkt in jeden Rechnungstyp
+                      // umwandeln — der Umweg über AB ist optional, nicht Pflicht.
                       const allow = {
                         auftragsbestaetigung: t === "angebot",
                         rechnung: t === "angebot" || t === "auftragsbestaetigung",
-                        anzahlungsrechnung: t === "auftragsbestaetigung",
-                        teilrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung",
-                        schlussrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung" || t === "teilrechnung",
+                        anzahlungsrechnung: t === "angebot" || t === "auftragsbestaetigung",
+                        schlussrechnung: t === "angebot" || t === "auftragsbestaetigung" || t === "anzahlungsrechnung",
                       };
                       if (!Object.values(allow).some(Boolean)) return null;
                       return (
@@ -1541,29 +1542,21 @@ export default function InvoiceDetail() {
                                 Anzahlungsrechnung…
                               </DropdownMenuItem>
                             )}
-                            {allow.teilrechnung && (
-                              <DropdownMenuItem onClick={() => handleConvertTo("teilrechnung")}>
-                                Teilrechnung
-                              </DropdownMenuItem>
-                            )}
                             {allow.schlussrechnung && (
                               <DropdownMenuItem onClick={async () => {
-                                // Verfügbare Anzahlungen zum selben Quelldokument laden
+                                // Automatischer Abzug aller Anzahlungsrechnungen zum selben Auftrag.
+                                // Kein Auswahl-Dialog mehr — alle verfügbaren Anzahlungen werden abgezogen.
                                 if (!invoiceId) return;
                                 const rootId = (form as any).parent_invoice_id || invoiceId;
                                 const { data } = await supabase
                                   .from("invoices")
-                                  .select("id, nummer, datum, netto_summe, brutto_summe")
+                                  .select("id")
                                   .eq("parent_invoice_id", rootId)
-                                  .in("typ", ["anzahlungsrechnung", "teilrechnung"]);
-                                setVerfuegbareAnzahlungen(((data as any[]) || []).map(r => ({
-                                  id: r.id, nummer: r.nummer, datum: r.datum,
-                                  netto_summe: Number(r.netto_summe) || 0, brutto_summe: Number(r.brutto_summe) || 0,
-                                })));
-                                setSelectedAbzuege([]);
-                                setSchlussrechnungDialogOpen(true);
+                                  .eq("typ", "anzahlungsrechnung");
+                                const ids = ((data as any[]) || []).map(r => r.id);
+                                handleConvertTo("schlussrechnung", { abzug_ids: ids });
                               }}>
-                                Schlussrechnung…
+                                Schlussrechnung
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -3002,59 +2995,6 @@ export default function InvoiceDetail() {
                 }}
               >
                 Anzahlungsrechnung erstellen
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Schlussrechnungs-Dialog: Liste der verfügbaren Anzahlungen zum Abzug */}
-        <Dialog open={schlussrechnungDialogOpen} onOpenChange={setSchlussrechnungDialogOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Schlussrechnung erstellen</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              {verfuegbareAnzahlungen.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Keine Anzahlungs- oder Teilrechnungen zu diesem Auftrag gefunden. Die Schlussrechnung wird ohne Abzüge erstellt.
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Wähle die Anzahlungen/Teilrechnungen aus, die von der Schlussrechnung abgezogen werden sollen. Sie erscheinen als negative Positionen.
-                  </p>
-                  <div className="space-y-2 max-h-[260px] overflow-y-auto">
-                    {verfuegbareAnzahlungen.map((anz) => (
-                      <label key={anz.id} className="flex items-center justify-between gap-3 rounded border p-2 cursor-pointer hover:bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedAbzuege.includes(anz.id)}
-                            onChange={(e) => {
-                              setSelectedAbzuege((prev) => e.target.checked ? [...prev, anz.id] : prev.filter(x => x !== anz.id));
-                            }}
-                          />
-                          <div>
-                            <div className="text-sm font-medium">{anz.nummer || "—"}</div>
-                            <div className="text-xs text-muted-foreground">{anz.datum || "—"}</div>
-                          </div>
-                        </div>
-                        <div className="text-sm font-mono">€ {(anz.netto_summe || 0).toFixed(2)}</div>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setSchlussrechnungDialogOpen(false)}>Abbrechen</Button>
-              <Button
-                onClick={() => {
-                  setSchlussrechnungDialogOpen(false);
-                  handleConvertTo("schlussrechnung", { abzug_ids: selectedAbzuege });
-                }}
-              >
-                Schlussrechnung erstellen
               </Button>
             </DialogFooter>
           </DialogContent>
