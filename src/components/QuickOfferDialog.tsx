@@ -139,7 +139,7 @@ export function QuickOfferDialog({ open, onOpenChange }: QuickOfferDialogProps) 
       if (numError) throw numError;
 
       const nummer = numData as string;
-      const laufnummer = parseInt(nummer.replace(/^AN/, '').slice(2)) || 1;
+      const laufnummer = parseInt((nummer.match(/(\d+)$/) || ["", "1"])[1]) || 1;
       const activeItems = quickItems.filter(i => i.menge > 0);
       const netto = activeItems.reduce((s, i) => s + i.menge * i.einzelpreis, 0);
       const mwst = netto * (mwstSatz / 100);

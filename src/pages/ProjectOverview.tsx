@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown, UserPlus } from "lucide-react";
+import { getDocConfig } from "@/lib/documentTypes";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
@@ -933,25 +934,32 @@ const ProjectOverview = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-1">
-                {projectInvoices.map(inv => (
-                  <button
-                    key={inv.id}
-                    className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
-                    onClick={() => navigate(`/invoices/${inv.id}`)}
-                  >
-                    <FileText className={`h-4 w-4 shrink-0 ${inv.typ === "angebot" ? "text-blue-500" : "text-green-600"}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{inv.nummer}</span>
-                        <span className="text-xs text-muted-foreground">{inv.typ === "angebot" ? "Angebot" : "Rechnung"}</span>
+                {projectInvoices.map(inv => {
+                  const cfg = getDocConfig(inv.typ);
+                  const iconColor = cfg.isAngebotLike ? "text-blue-500"
+                    : cfg.typ === "lieferschein" ? "text-orange-500"
+                    : cfg.typ === "gutschrift" ? "text-purple-500"
+                    : "text-green-600";
+                  return (
+                    <button
+                      key={inv.id}
+                      className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
+                      onClick={() => navigate(`/invoices/${inv.id}`)}
+                    >
+                      <FileText className={`h-4 w-4 shrink-0 ${iconColor}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{inv.nummer}</span>
+                          <span className="text-xs text-muted-foreground">{cfg.label}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {inv.kunde_name} · {new Date(inv.datum).toLocaleDateString("de-AT")}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {inv.kunde_name} · {new Date(inv.datum).toLocaleDateString("de-AT")}
-                      </div>
-                    </div>
-                    <span className="text-sm font-medium whitespace-nowrap">€ {Number(inv.brutto_summe).toFixed(2)}</span>
-                  </button>
-                ))}
+                      <span className="text-sm font-medium whitespace-nowrap">€ {Number(inv.brutto_summe).toFixed(2)}</span>
+                    </button>
+                  );
+                })}
               </CardContent>
             </Card>
           )}

@@ -310,6 +310,10 @@ export default function InvoiceDetail() {
     const anzahlungProzentParam = searchParams.get("anzahlung_prozent");
     const anzahlungBetragParam = searchParams.get("anzahlung_betrag");
     const abzugIdsParam = searchParams.get("abzug_ids");
+    // cancelled-Flag: wenn der Effect während eines async-Loads teardown wird
+    // (z.B. Navigation / id-Wechsel), überschreiben wir nicht mehr den Form-State
+    // und risikieren damit keinen User-Input wegzubügeln.
+    let cancelled = false;
     if (isNew && fromDocId && fromDocId !== "true") {
       (async () => {
         try {
@@ -317,6 +321,7 @@ export default function InvoiceDetail() {
             supabase.from("invoices").select("*").eq("id", fromDocId).maybeSingle(),
             supabase.from("invoice_items").select("*").eq("invoice_id", fromDocId).order("position"),
           ]);
+          if (cancelled) return;
           const data: any = invRes.data;
           if (!data) return;
           setForm(prev => ({
@@ -424,9 +429,11 @@ export default function InvoiceDetail() {
             }
           }
 
+          if (cancelled) return;
           if (nextItems.length > 0) setItems(nextItems);
           setFromAngebotId(fromDocId);
         } catch (err) {
+          if (cancelled) return;
           console.error("Konversion fehlgeschlagen:", err);
           toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Quelldokument konnte nicht geladen werden" });
         }
@@ -440,6 +447,7 @@ export default function InvoiceDetail() {
             .select("customer_id")
             .eq("id", defaultProjectId)
             .maybeSingle();
+          if (cancelled) return;
           if (!projFull?.customer_id) return;
           // Kundendaten laden
           const { data: cust } = await supabase
@@ -447,7 +455,7 @@ export default function InvoiceDetail() {
             .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, ansprechpartner, skonto_prozent, skonto_tage, nettofrist")
             .eq("id", projFull.customer_id)
             .maybeSingle();
-          if (!cust) return;
+          if (cancelled || !cust) return;
           setForm(prev => ({
             ...prev,
             customer_id: cust.id,
@@ -478,6 +486,7 @@ export default function InvoiceDetail() {
         }
       })();
     }
+    return () => { cancelled = true; };
   }, [id]);
 
 
@@ -1223,7 +1232,9 @@ export default function InvoiceDetail() {
       if (numError) throw numError;
 
       const nummer = numData as string;
-      const laufnummer = parseInt(nummer.replace(/^AN/, '').slice(2)) || 1;
+      // Laufnummer aus den TRAILING Digits extrahieren — funktioniert für alle
+      // Typ-Präfixe (AN, AB, AR, SR, LS, GS, TR, …) und Formate.
+      const laufnummer = parseInt((nummer.match(/(\d+)$/) || ["", "1"])[1]) || 1;
 
       const { data: newInvoice, error: insertError } = await supabase
         .from("invoices")
@@ -1321,6 +1332,24 @@ export default function InvoiceDetail() {
   const handleDelete = async () => {
     if (!invoiceId) return;
     try {
+      // Vorab prüfen, ob Folgedokumente (AB/AR/SR) auf dieses Dokument verweisen
+      // — dann ist die Löschung durch FK RESTRICT eh blockiert, und wir können
+      // einen aussagekräftigen Fehler statt generischer DB-Meldung zeigen.
+      const { data: children, count } = await supabase
+        .from("invoices")
+        .select("nummer, typ", { count: "exact", head: false })
+        .eq("parent_invoice_id", invoiceId)
+        .limit(3);
+      if ((count ?? 0) > 0) {
+        const beispiele = (children as any[] || []).map(c => c.nummer).filter(Boolean).join(", ");
+        toast({
+          variant: "destructive",
+          title: "Löschen nicht möglich",
+          description: `Zu diesem Dokument existieren bereits Folgedokumente (${beispiele}${(count ?? 0) > 3 ? ", …" : ""}). Lösche oder storniere diese zuerst.`,
+          duration: 9000,
+        });
+        return;
+      }
       await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
       const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
       if (error) throw error;
@@ -2197,7 +2226,7 @@ export default function InvoiceDetail() {
                   <Label>Datum</Label>
                   <Input type="date" value={form.datum} onChange={(e) => updateField("datum", e.target.value)} />
                 </div>
-                {form.typ === "rechnung" && (
+                {getDocConfig(form.typ).showLeistungsdatum && (
                   <div>
                     <Label>Leistungsdatum</Label>
                     <Input type="date" value={form.leistungsdatum} onChange={(e) => updateField("leistungsdatum", e.target.value)} />

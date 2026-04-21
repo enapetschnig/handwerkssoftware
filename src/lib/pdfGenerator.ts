@@ -565,6 +565,21 @@ export async function generateInvoicePdf(
     // Lieferschein
     y += 8;
   }
+
+  // ======= ANZAHLUNGS-HINWEIS (nur Anzahlungsrechnung) =======
+  // Editierbarer Textbaustein aus document_texts.anzahlung_hinweis mit
+  // bereits interpolierten Platzhaltern.
+  const anzahlungHinweis = (invoice as any).custom_anzahlung_hinweis as string | undefined;
+  if (anzahlungHinweis && docCfg.typ === "anzahlungsrechnung") {
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(anzahlungHinweis, ml, y, { maxWidth: contentWidth });
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
+    y += 6;
+  }
+
   // ======= SKONTO INFO (only for Rechnung with Skonto) =======
   if (showFaelligAm && skontoProzent > 0 && skontoTage > 0) {
     const brutto = Number(invoice.brutto_summe);

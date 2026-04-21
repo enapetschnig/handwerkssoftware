@@ -113,6 +113,9 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
 
       const { generateInvoicePdf } = await import("@/lib/pdfGenerator");
       const { generateEpcQrCode } = await import("@/lib/invoiceHtml");
+      const { loadDocumentTexts, applyDocumentTextsToInvoice } = await import("@/lib/documentTextsLoader");
+      // Textbausteine pro Typ vorladen (Cache), damit nicht jede Rechnung neu lädt
+      const docTextsByTyp: Record<string, any> = {};
 
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
@@ -129,8 +132,10 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
             .eq("invoice_id", inv.id)
             .order("position");
 
+          // QR-Code nur für zahlbare Rechnungstypen (nicht Gutschrift).
+          const _payableQR = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
           let qrUri: string | undefined;
-          if (Number(inv.brutto_summe) > 0) {
+          if (_payableQR.has(inv.typ) && Number(inv.brutto_summe) > 0) {
             try {
               qrUri = await generateEpcQrCode(Number(inv.brutto_summe), inv.nummer || "", bankData);
             } catch {}
@@ -149,29 +154,34 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
             );
             fileName = `Storno_${inv.storno_nummer}.pdf`;
           } else {
+            if (!docTextsByTyp[inv.typ]) docTextsByTyp[inv.typ] = await loadDocumentTexts(inv.typ);
+            const tageMatchExp = (inv.zahlungsbedingungen || "").match(/\d+/);
+            const invoiceWithTexts = applyDocumentTextsToInvoice({
+              typ: inv.typ, nummer: inv.nummer, status: inv.status,
+              kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
+              kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
+              kunde_land: inv.kunde_land, kunde_email: inv.kunde_email,
+              kunde_telefon: inv.kunde_telefon, kunde_uid: inv.kunde_uid,
+              datum: inv.datum, faellig_am: inv.faellig_am,
+              leistungsdatum: inv.leistungsdatum, gueltig_bis: inv.gueltig_bis,
+              zahlungsbedingungen: inv.zahlungsbedingungen, notizen: inv.notizen,
+              netto_summe: Number(inv.netto_summe), mwst_satz: Number(inv.mwst_satz),
+              mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
+              bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
+              rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
+              skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
+              kunde_anrede: (inv as any).kunde_anrede || "", kunde_titel: (inv as any).kunde_titel || "",
+              reverse_charge: (inv as any).reverse_charge || false,
+              anzahlung_prozent: Number((inv as any).anzahlung_prozent || 0) || undefined,
+            }, docTextsByTyp[inv.typ], { tage: tageMatchExp ? Number(tageMatchExp[0]) : 14 });
             pdfBlob = await generateInvoicePdf(
-              {
-                typ: inv.typ, nummer: inv.nummer, status: inv.status,
-                kunde_name: inv.kunde_name, kunde_adresse: inv.kunde_adresse,
-                kunde_plz: inv.kunde_plz, kunde_ort: inv.kunde_ort,
-                kunde_land: inv.kunde_land, kunde_email: inv.kunde_email,
-                kunde_telefon: inv.kunde_telefon, kunde_uid: inv.kunde_uid,
-                datum: inv.datum, faellig_am: inv.faellig_am,
-                leistungsdatum: inv.leistungsdatum, gueltig_bis: inv.gueltig_bis,
-                zahlungsbedingungen: inv.zahlungsbedingungen, notizen: inv.notizen,
-                netto_summe: Number(inv.netto_summe), mwst_satz: Number(inv.mwst_satz),
-                mwst_betrag: Number(inv.mwst_betrag), brutto_summe: Number(inv.brutto_summe),
-                bezahlt_betrag: Number(inv.bezahlt_betrag), rabatt_prozent: Number(inv.rabatt_prozent),
-                rabatt_betrag: Number(inv.rabatt_betrag), mahnstufe: Number(inv.mahnstufe),
-                skonto_prozent: Number(inv.skonto_prozent || 0), skonto_tage: Number(inv.skonto_tage || 0),
-                kunde_anrede: (inv as any).kunde_anrede || "", kunde_titel: (inv as any).kunde_titel || "",
-                reverse_charge: (inv as any).reverse_charge || false,
-              },
+              invoiceWithTexts,
               (items || []).map((it: any) => ({
                 position: it.position, beschreibung: it.beschreibung,
                 kurztext: it.kurztext || it.beschreibung, langtext: it.langtext || "",
                 menge: Number(it.menge), einheit: it.einheit || "Stk.",
                 einzelpreis: Number(it.einzelpreis), gesamtpreis: Number(it.gesamtpreis),
+                mwst_exempt: !!(it as any).mwst_exempt,
               })),
               bankData, logoUri, qrUri, firmenUid, layout
             );

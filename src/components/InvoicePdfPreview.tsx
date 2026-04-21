@@ -12,6 +12,7 @@ import {
   type BankData,
 } from "@/lib/invoiceHtml";
 import { generateInvoicePdf } from "@/lib/pdfGenerator";
+import { loadDocumentTexts, applyDocumentTextsToInvoice } from "@/lib/documentTextsLoader";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, parseLayoutSettings } from "@/lib/invoiceLayoutTypes";
 
 import { loadInvoiceLogo } from "@/lib/logoLoader";
@@ -101,9 +102,11 @@ export function InvoicePdfPreview({
 
       const logoUri = await getLogoDataUri();
 
-      // QR code for invoices
+      // QR code für alle zahlbaren Rechnungstypen (Rechnung, Anzahlungs-,
+      // Schlussrechnung). Gutschrift bewusst ausgeklammert (Auszahlung).
+      const _payableQR = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
       let qrDataUri: string | undefined;
-      if (formDataRef.current.typ === "rechnung" && formDataRef.current.brutto_summe > 0) {
+      if (_payableQR.has(formDataRef.current.typ) && formDataRef.current.brutto_summe > 0) {
         try {
           qrDataUri = await generateEpcQrCode(
             formDataRef.current.brutto_summe,
@@ -113,8 +116,17 @@ export function InvoicePdfPreview({
         } catch {}
       }
 
+      // Editierbare Textbausteine für den Typ laden und am Invoice-Objekt
+      // als custom_*_text anhängen (pdfGenerator/invoiceHtml verwenden diese
+      // Overrides vor den hardcodierten Defaults).
+      const docTexts = await loadDocumentTexts(formDataRef.current.typ);
+      const tageMatch = (formDataRef.current.zahlungsbedingungen || "").match(/\d+/);
+      const invoiceWithTexts = applyDocumentTextsToInvoice(formDataRef.current, docTexts, {
+        tage: tageMatch ? Number(tageMatch[0]) : 14,
+      });
+
       const blob = await generateInvoicePdf(
-        formDataRef.current,
+        invoiceWithTexts,
         itemsRef.current,
         bankData,
         logoUri,

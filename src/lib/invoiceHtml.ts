@@ -87,6 +87,17 @@ export interface InvoiceHtmlItem {
   gesamtpreis: number;
 }
 
+// Minimal HTML-Escape für freien Text aus document_texts (verhindert XSS
+// + kaputtes Markup, falls User Sonderzeichen wie < > & in Textbausteinen hat).
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function fmt(val: number): string {
   return val.toFixed(2).replace(".", ",");
 }
@@ -235,9 +246,20 @@ export function buildInvoiceHtml(
     ? invoice.zahlungsbedingungen.match(/(\d+)/)?.[1] || "14"
     : "14";
 
-  const closingText = isAngebot
-    ? `<div class="closing-text">Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.</div>`
-    : `<div class="closing-text">Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.</div>`;
+  // Editierbarer Closing-Text aus document_texts hat Vorrang.
+  const customClosing = (invoice as any).custom_closing_text as string | undefined;
+  const closingText = customClosing
+    ? `<div class="closing-text">${escapeHtml(customClosing)}</div>`
+    : isAngebot
+      ? `<div class="closing-text">Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.</div>`
+      : `<div class="closing-text">Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.</div>`;
+
+  // Anzahlungs-Hinweis aus document_texts — nur bei Anzahlungsrechnung gerendert.
+  const anzahlungHinweis = (invoice as any).custom_anzahlung_hinweis as string | undefined;
+  const anzahlungHinweisBlock =
+    anzahlungHinweis && invoice.typ === "anzahlungsrechnung"
+      ? `<div style="margin-top:8px;font-style:italic;font-size:9pt;color:#555;">${escapeHtml(anzahlungHinweis)}</div>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="de"><head><meta charset="utf-8"><title>${typLabel} ${invoice.nummer || "Vorschau"}</title>
@@ -396,6 +418,7 @@ ${hidePrices ? "" : `<div class="totals-section">
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ""}
 
 ${closingText}
+${anzahlungHinweisBlock}
 
 ${
   showBank
