@@ -17,6 +17,7 @@ import type {
   Project,
   LeaveRequest,
   CompanyHoliday,
+  EmployeeColor,
 } from "./scheduleTypes";
 
 const WEEKEND_BG = "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)";
@@ -29,6 +30,7 @@ interface Props {
   days: Date[];
   leaveRequests: LeaveRequest[];
   holidays: CompanyHoliday[];
+  employeeColors?: Record<string, EmployeeColor>;
   onManageClick: () => void;
   onCellClick?: (userId: string, startDate: string, endDate: string) => void;
   onEinsatzClick: (einsatz: Einsatz) => void;
@@ -42,6 +44,7 @@ export function MitarbeiterSection({
   days,
   leaveRequests,
   holidays,
+  employeeColors,
   onManageClick,
   onCellClick,
   onEinsatzClick,
@@ -82,11 +85,19 @@ export function MitarbeiterSection({
   function renderMemberRow(profile: Profile) {
     const userEinsaetze = getEinsaetzeForUser(einsaetze, profile.id);
 
+    // Individuelle Farbe aus Admin-Einstellung (falls vorhanden).
+    const empColor = employeeColors?.[profile.id];
+    const sidebarStyle: React.CSSProperties = empColor
+      ? { width: 280, backgroundColor: empColor.bg_color, color: empColor.text_color }
+      : { width: 280 };
     return (
       <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
         {/* Sidebar */}
-        <div className="flex items-center px-3 py-1 border-r bg-white shrink-0" style={{ width: 280 }}>
-          <span className="text-sm truncate">{profile.vorname} {profile.nachname}</span>
+        <div
+          className={`flex items-center px-3 py-1 border-r shrink-0 ${empColor ? "" : "bg-white"}`}
+          style={sidebarStyle}
+        >
+          <span className="text-sm truncate font-medium">{profile.vorname} {profile.nachname}</span>
         </div>
 
         {/* Timeline */}

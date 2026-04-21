@@ -49,6 +49,7 @@ export default function ScheduleBoard() {
     setBoardProjects,
     leaveRequests,
     companyHolidays,
+    employeeColors,
     loading,
     fetchData,
   } = useScheduleData();
@@ -356,6 +357,7 @@ export default function ScheduleBoard() {
               days={weekDays}
               leaveRequests={leaveRequests}
               holidays={companyHolidays}
+              employeeColors={employeeColors}
               onAddTeam={canEdit ? () => { setEditingTeam(null); setCreateTeamOpen(true); } : undefined}
               onEditTeam={canEdit ? handleEditTeam : (() => {})}
               onCellClick={canEdit ? handleCellClick : undefined}
@@ -372,6 +374,7 @@ export default function ScheduleBoard() {
               days={weekDays}
               leaveRequests={leaveRequests}
               holidays={companyHolidays}
+              employeeColors={employeeColors}
               onManageClick={() => {}}
               onCellClick={canEdit ? handleCellClick : undefined}
               onEinsatzClick={handleEinsatzClick}

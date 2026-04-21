@@ -20,6 +20,7 @@ import type {
   Project,
   LeaveRequest,
   CompanyHoliday,
+  EmployeeColor,
 } from "./scheduleTypes";
 
 const WEEKEND_BG = "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)";
@@ -34,6 +35,7 @@ interface Props {
   days: Date[];
   leaveRequests: LeaveRequest[];
   holidays: CompanyHoliday[];
+  employeeColors?: Record<string, EmployeeColor>;
   onAddTeam?: () => void;
   onEditTeam: (team: Team) => void;
   onCellClick?: (userId: string, startDate: string, endDate: string) => void;
@@ -43,7 +45,7 @@ interface Props {
 
 export function TeamSection({
   teams, teamMembers, profiles, einsaetze, boardProjects, projects, days,
-  leaveRequests, holidays, onAddTeam, onEditTeam, onCellClick, onMultiUserCellClick, onEinsatzClick,
+  leaveRequests, holidays, employeeColors, onAddTeam, onEditTeam, onCellClick, onMultiUserCellClick, onEinsatzClick,
 }: Props) {
   const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
@@ -116,10 +118,17 @@ export function TeamSection({
       rowIdx >= Math.min(dragStartRowIdx, dragEndRowIdx) &&
       rowIdx <= Math.max(dragStartRowIdx, dragEndRowIdx);
 
+    const empColor = employeeColors?.[profile.id];
+    const sidebarStyle: React.CSSProperties = empColor
+      ? { width: 280, backgroundColor: empColor.bg_color, color: empColor.text_color }
+      : { width: 280 };
     return (
       <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
-        <div className="flex items-center px-3 py-1 border-r bg-white shrink-0" style={{ width: 280 }}>
-          <span className="text-sm truncate pl-4">{profile.vorname} {profile.nachname}</span>
+        <div
+          className={`flex items-center px-3 py-1 border-r shrink-0 ${empColor ? "" : "bg-white"}`}
+          style={sidebarStyle}
+        >
+          <span className="text-sm truncate pl-4 font-medium">{profile.vorname} {profile.nachname}</span>
         </div>
 
         <div className="flex-1 relative min-h-[36px]">
