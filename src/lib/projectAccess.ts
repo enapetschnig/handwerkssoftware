@@ -29,6 +29,36 @@ export async function getEmployeeAccessibleProjectIds(employeeId: string): Promi
   return ((data as any[]) || []).map(p => p.id);
 }
 
+export type ProjectAccessSource = "assigned" | "bauleiter" | "verantwortlicher";
+
+export interface EmployeeProjectRelation {
+  projectId: string;
+  name: string;
+  sources: ProjectAccessSource[]; // Mehrfachzuordnung möglich
+}
+
+/** Lädt alle aktiven Projekte und markiert für den gegebenen Mitarbeiter,
+ *  aus welcher Quelle er Zugang hat (als Bauleiter, Verantwortlicher
+ *  und/oder via zugewiesene_mitarbeiter). Projekte ohne Zugang haben
+ *  sources = [] und können in der UI weiterhin angehakt werden. */
+export async function loadEmployeeProjectRelations(
+  employeeId: string,
+): Promise<EmployeeProjectRelation[]> {
+  const { data } = await (supabase.from("projects" as never) as any)
+    .select("id, name, status, verantwortlicher_id, bauleiter_id, zugewiesene_mitarbeiter")
+    .not("status", "eq", "Abgeschlossen")
+    .order("name");
+  return ((data as any[]) || []).map((p: any) => {
+    const sources: ProjectAccessSource[] = [];
+    if (p.verantwortlicher_id === employeeId) sources.push("verantwortlicher");
+    if (p.bauleiter_id === employeeId) sources.push("bauleiter");
+    if (Array.isArray(p.zugewiesene_mitarbeiter) && p.zugewiesene_mitarbeiter.includes(employeeId)) {
+      sources.push("assigned");
+    }
+    return { projectId: p.id, name: p.name, sources };
+  });
+}
+
 /** Synchronisiert die Projekt-Zugänge eines Mitarbeiters:
  *  - fügt employeeId zu allen Projekten in nextIds hinzu, sofern noch nicht drin
  *  - entfernt employeeId aus allen aktuellen Zuordnungen, die nicht in nextIds sind.
