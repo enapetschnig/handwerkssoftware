@@ -128,7 +128,13 @@ export function buildInvoiceHtml(
   const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
   const rabattProzent = Number(invoice.rabatt_prozent) || 0;
   const rabattBetrag = Number(invoice.rabatt_betrag) || 0;
-  const positionenNetto = (items || []).reduce(
+  // mwst_exempt-Zeilen sind Brutto-Abzüge (Anzahlungen) und gehen NICHT
+  // in die Netto-Summe für die MwSt-Berechnung ein.
+  const exemptBrutto = (items || []).filter(it => (it as any).mwst_exempt).reduce(
+    (sum, it) => sum + Number(it.gesamtpreis),
+    0
+  );
+  const positionenNetto = (items || []).filter(it => !(it as any).mwst_exempt).reduce(
     (sum, it) => sum + Number(it.gesamtpreis),
     0
   );
@@ -137,6 +143,7 @@ export function buildInvoiceHtml(
       ? positionenNetto * (rabattProzent / 100)
       : rabattBetrag;
   const hasRabatt = rabattWert > 0;
+  const hasExempt = exemptBrutto !== 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
   const showPaymentInfo = showFaelligAm && bezahltBetrag > 0;
   const mahnstufe = Number(invoice.mahnstufe) || 0;
@@ -170,8 +177,13 @@ export function buildInvoiceHtml(
   }
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Nettobetrag</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.netto_summe))}</td></tr>`;
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">USt. ${Number(invoice.mwst_satz).toFixed(0)}%</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.mwst_betrag))}</td></tr>`;
+  if (hasExempt) {
+    const bruttoVorAbzug = Number(invoice.netto_summe) + Number(invoice.mwst_betrag || 0);
+    totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Zwischensumme brutto</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(bruttoVorAbzug)}</td></tr>`;
+    totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">Anzahlungs-Abzug (brutto)</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">${fmtCurrency(exemptBrutto)}</td></tr>`;
+  }
   totalsHtml += `<tr><td colspan="2" style="padding:0;"><div style="border-top:2px solid ${accent};margin:6px 0;"></div></td></tr>`;
-  totalsHtml += `<tr><td style="padding:6px 0;font-size:14pt;font-weight:800;color:#1a1a1a;">Gesamtbetrag</td><td style="padding:6px 0;text-align:right;font-size:14pt;font-weight:800;color:#1a1a1a;">${fmtCurrency(Number(invoice.brutto_summe))}</td></tr>`;
+  totalsHtml += `<tr><td style="padding:6px 0;font-size:14pt;font-weight:800;color:#1a1a1a;">${hasExempt ? "Zu zahlen" : "Gesamtbetrag"}</td><td style="padding:6px 0;text-align:right;font-size:14pt;font-weight:800;color:#1a1a1a;">${fmtCurrency(Number(invoice.brutto_summe))}</td></tr>`;
   if (showPaymentInfo) {
     totalsHtml += `<tr><td style="padding:4px 0;color:#16a34a;font-size:9pt;">Bereits bezahlt</td><td style="padding:4px 0;text-align:right;color:#16a34a;font-size:9pt;">${fmtCurrency(bezahltBetrag)}</td></tr>`;
     totalsHtml += `<tr><td style="padding:4px 0;font-weight:700;color:${accent};font-size:10pt;">Offener Betrag</td><td style="padding:4px 0;text-align:right;font-weight:700;color:${accent};font-size:10pt;">${fmtCurrency(restBetrag)}</td></tr>`;

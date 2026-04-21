@@ -304,10 +304,14 @@ export async function generateInvoicePdf(
     tableBody.push(row);
   });
 
-  // Build totals rows for the table footer
+  // Build totals rows for the table footer.
+  // mwst_exempt-Zeilen sind bereits Brutto-Abzüge (z.B. Anzahlungen) und
+  // gehen NICHT in die Netto-Summe ein; sie werden als eigener Block nach
+  // dem Bruttobetrag ausgewiesen.
   const rabattProzent = Number(invoice.rabatt_prozent) || 0;
   const rabattBetrag = Number(invoice.rabatt_betrag) || 0;
-  const positionenNetto = items.reduce((s, it) => s + Number(it.gesamtpreis), 0);
+  const exemptBrutto = items.filter(it => (it as any).mwst_exempt).reduce((s, it) => s + Number(it.gesamtpreis), 0);
+  const positionenNetto = items.filter(it => !(it as any).mwst_exempt).reduce((s, it) => s + Number(it.gesamtpreis), 0);
   const rabattWert = rabattProzent > 0 ? positionenNetto * (rabattProzent / 100) : rabattBetrag;
   const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
@@ -321,6 +325,15 @@ export async function generateInvoicePdf(
     }
     if (isReverseCharge) {
       tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+    } else if (exemptBrutto !== 0) {
+      // Schlussrechnung mit Anzahlungs-Abzug: expliziter Block
+      // Netto → USt → Zwischensumme brutto → Abzug → Verbleibend
+      const bruttoVorAbzug = Number(invoice.netto_summe) + Number(invoice.mwst_betrag || 0);
+      tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+      tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
+      tableFoot.push(["", "", "", "Zwischensumme brutto", "", fmtCurrency(bruttoVorAbzug)]);
+      tableFoot.push(["", "", "", "Anzahlungs-Abzug (brutto)", "", fmtCurrency(exemptBrutto)]);
+      tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
     } else {
       tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
       tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
@@ -469,7 +482,7 @@ export async function generateInvoicePdf(
     const label = row[3];
     const value = row[5];
     const isBrutto = label === "Bruttobetrag";
-    const isRabatt = label.startsWith("Rabatt");
+    const isRabatt = label.startsWith("Rabatt") || label.startsWith("Anzahlungs-Abzug");
 
     if (isBrutto) {
       pdf.setDrawColor(0, 0, 0);

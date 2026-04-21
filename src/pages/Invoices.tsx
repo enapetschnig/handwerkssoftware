@@ -70,6 +70,16 @@ const statusLabels: Record<string, string> = {
 // Rechnung: Kein Entwurf zurück, kein Storniert von außen (nur in Detail-Ansicht)
 const rechnungStatuses = ["offen", "teilbezahlt", "bezahlt"];
 const angebotStatuses = ["offen", "angenommen", "abgelehnt", "verrechnet"];
+// Auftragsbestätigung IST das angenommene Angebot → angenommen/abgelehnt sind redundant.
+const abStatuses = ["offen", "verrechnet"];
+// Gutschrift = Auszahlung an Kunden. "teilbezahlt/bezahlt" passt nicht;
+// "verrechnet" markiert, dass die Gutschrift mit einer Rechnung verrechnet wurde.
+const gutschriftStatuses = ["offen", "verrechnet"];
+// Zahlbare Rechnungstypen (Kunde → wir). Gutschrift bewusst ausgeschlossen.
+const PAYABLE_INVOICE_TYPES = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
+// Alle rechnungs-artigen Typen (inkl. Gutschrift) für Umsatz-/Liste-Filter.
+const INVOICE_LIKE_TYPES = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
+const ANGEBOT_LIKE_TYPES = new Set(["angebot", "auftragsbestaetigung"]);
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -152,14 +162,16 @@ export default function Invoices() {
       toast({ variant: "destructive", title: "Status kann nicht geändert werden", description: `Status "${statusLabels[inv.status]}" ist endgültig` });
       return;
     }
-    // Prevent backward transitions from teilbezahlt
-    if (inv.status === "teilbezahlt" && (newStatus === "offen" || newStatus === "entwurf")) {
+    // Prevent backward transitions from jeglichen Zahlungs-Status
+    if ((inv.status === "teilbezahlt" || inv.status === "bezahlt") &&
+        (newStatus === "offen" || newStatus === "entwurf")) {
       toast({ variant: "destructive", title: "Nicht möglich", description: `Status kann nicht von "${statusLabels[inv.status]}" auf "${statusLabels[newStatus]}" zurückgesetzt werden` });
       return;
     }
 
-    // For teilbezahlt/bezahlt: open payment dialog first
-    if (newStatus === "teilbezahlt" || newStatus === "bezahlt") {
+    // For teilbezahlt/bezahlt: open payment dialog first — NUR für echte
+    // zahlbare Rechnungen (nicht Gutschrift, nicht Angebot/AB).
+    if ((newStatus === "teilbezahlt" || newStatus === "bezahlt") && PAYABLE_INVOICE_TYPES.has(inv.typ)) {
       setPaymentInvoiceId(invoiceId);
       setPaymentStatus(newStatus);
       setPaymentBetrag(newStatus === "bezahlt" && inv ? String((inv.brutto_summe - (inv.bezahlt_betrag || 0)).toFixed(2)) : "");
@@ -448,12 +460,8 @@ export default function Invoices() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Zahlbare Rechnungstypen: alle Rechnungen vom Kunden an uns.
-  // Gutschrift bewusst ausgeschlossen (geht in die andere Richtung).
-  const _payableInvoiceTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
-
   const isOverdue = (inv: Invoice) =>
-    _payableInvoiceTypes.has(inv.typ) &&
+    PAYABLE_INVOICE_TYPES.has(inv.typ) &&
     inv.faellig_am &&
     (inv.status === "offen" || inv.status === "teilbezahlt") &&
     isBefore(parseISO(inv.faellig_am), today);
@@ -479,13 +487,11 @@ export default function Invoices() {
     }
     if (i.status === "storniert") return false;
     // "rechnung"-Tab sammelt alle Rechnungs-artigen Dokumente
-    const invoiceLike = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
-    const angebotLike = new Set(["angebot", "auftragsbestaetigung"]);
     let matchTyp: boolean;
     if (filterTyp === "rechnung") {
-      matchTyp = invoiceLike.has(i.typ);
+      matchTyp = INVOICE_LIKE_TYPES.has(i.typ);
     } else if (filterTyp === "angebot") {
-      matchTyp = angebotLike.has(i.typ);
+      matchTyp = ANGEBOT_LIKE_TYPES.has(i.typ);
     } else if (filterTyp === "lieferschein") {
       matchTyp = i.typ === "lieferschein";
     } else {
@@ -497,15 +503,13 @@ export default function Invoices() {
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
 
-  const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
-  const _angebotLikeTypes = new Set(["angebot", "auftragsbestaetigung"]);
-  const totalRechnungen = invoices.filter(i => _invoiceLikeTypes.has(i.typ) && i.status !== "storniert").length;
-  const totalAngebote = invoices.filter(i => _angebotLikeTypes.has(i.typ) && i.status !== "storniert").length;
+  const totalRechnungen = invoices.filter(i => INVOICE_LIKE_TYPES.has(i.typ) && i.status !== "storniert").length;
+  const totalAngebote = invoices.filter(i => ANGEBOT_LIKE_TYPES.has(i.typ) && i.status !== "storniert").length;
   const offeneSumme = invoices
-    .filter(i => _invoiceLikeTypes.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt"))
+    .filter(i => INVOICE_LIKE_TYPES.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + Number(i.brutto_summe) - i.bezahlt_betrag, 0);
   const bezahlteSumme = invoices
-    .filter(i => _invoiceLikeTypes.has(i.typ) && (i.status === "bezahlt" || i.status === "teilbezahlt"))
+    .filter(i => INVOICE_LIKE_TYPES.has(i.typ) && (i.status === "bezahlt" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + i.bezahlt_betrag, 0);
 
   // Status options for the filter depend on selected typ
@@ -544,7 +548,7 @@ export default function Invoices() {
           }
           const visibleInvoices = invoices.filter(i => i.typ === filterTyp && i.status !== "storniert");
           const count = visibleInvoices.length;
-          const openBrutto = visibleInvoices.filter(i => _payableInvoiceTypes.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
+          const openBrutto = visibleInvoices.filter(i => PAYABLE_INVOICE_TYPES.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
           const overdue = visibleInvoices.filter(i => isOverdue(i)).length;
           return (
             <div className="grid grid-cols-3 gap-3 mb-4">
@@ -771,11 +775,16 @@ export default function Invoices() {
                       const brutto = Number(inv.brutto_summe);
                       const bezahlt = inv.bezahlt_betrag;
                       const offen = brutto - bezahlt;
-                      // Rechnung-artige Dokumente (inkl. Anzahlungs-/Schlussrechnung, Gutschrift)
-                      // bekommen Zahlstatus; Angebot & Auftragsbestätigung bekommen angebot-Status
-                      // inkl. "verrechnet" (markiert den Auftrag als abgerechnet).
-                      const _invoiceLikeForStatus = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
-                      const availableStatuses = _invoiceLikeForStatus.has(inv.typ) ? rechnungStatuses : angebotStatuses;
+                      // Status-Set pro Typ:
+                      //   - echte zahlbare Rechnungen (RE/AR/SR) → offen/teilbezahlt/bezahlt
+                      //   - Gutschrift → offen/verrechnet (Auszahlung, kein Bezahlstatus)
+                      //   - Angebot → offen/angenommen/abgelehnt/verrechnet
+                      //   - Auftragsbestätigung → offen/verrechnet (AB IST das angenommene Angebot)
+                      const availableStatuses =
+                        inv.typ === "gutschrift" ? gutschriftStatuses :
+                        inv.typ === "auftragsbestaetigung" ? abStatuses :
+                        PAYABLE_INVOICE_TYPES.has(inv.typ) ? rechnungStatuses :
+                        angebotStatuses;
                       return (
                         <TableRow
                           key={inv.id}
@@ -802,7 +811,7 @@ export default function Invoices() {
                           <TableCell className="text-right font-medium">€ {brutto.toFixed(2)}</TableCell>
                           {filterTyp !== "angebot" && (
                             <TableCell className="text-right">
-                              {_payableInvoiceTypes.has(inv.typ) ? (
+                              {PAYABLE_INVOICE_TYPES.has(inv.typ) ? (
                                 <div>
                                   {inv.status === "bezahlt" ? (
                                     <span className="text-green-600 font-medium">€ {brutto.toFixed(2)}</span>
@@ -879,7 +888,7 @@ export default function Invoices() {
                                 <DropdownMenuItem onClick={(e) => handlePrintPdf(inv.id, e as any)}>
                                   <Printer className="h-4 w-4 mr-2" /> Drucken
                                 </DropdownMenuItem>
-                                {inv.typ === "rechnung" && isOverdue(inv) && (
+                                {PAYABLE_INVOICE_TYPES.has(inv.typ) && isOverdue(inv) && (
                                   <DropdownMenuItem
                                     className="text-red-600 focus:text-red-700"
                                     onClick={async (e) => {

@@ -65,6 +65,9 @@ interface InvoiceItem {
   rabatt_prozent?: number;
   produktnummer?: string;
   gesamtpreis: number;
+  // Wenn true, ist gesamtpreis bereits BRUTTO und wird aus der MwSt-
+  // Berechnung ausgenommen (Anzahlungs-Abzüge in Schlussrechnungen).
+  mwst_exempt?: boolean;
 }
 
 interface InvoiceData {
@@ -203,6 +206,8 @@ export default function InvoiceDetail() {
   // Welches Feld hat der User zuletzt angefasst? Bestimmt, ob wir mit
   // Prozent oder Fix-Betrag in die URL/Ladelogik gehen.
   const [anzahlungMode, setAnzahlungMode] = useState<"prozent" | "betrag">("prozent");
+  // Summe bereits ausgestellter Anzahlungen zum gleichen Auftrag (für Kumulations-Check)
+  const [bestehendeAnzahlungenNetto, setBestehendeAnzahlungenNetto] = useState<number>(0);
   const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -389,7 +394,11 @@ export default function InvoiceDetail() {
             }];
           }
 
-          // Schlussrechnung: Anzahlungen als negative Zeilen anhängen
+          // Schlussrechnung: Anzahlungen als negative BRUTTO-Zeilen anhängen.
+          // Brutto (nicht netto!), weil die MwSt der Anzahlung bereits ausgewiesen
+          // wurde und nicht nochmal mit dem aktuellen MwSt-Satz verrechnet werden
+          // darf (AT-Rechnungsrecht). mwst_exempt=true sorgt dafür, dass die
+          // Kalkulation diese Zeilen aus der MwSt-Berechnung ausnimmt.
           if (targetTyp === "schlussrechnung" && abzugIdsParam) {
             const ids = abzugIdsParam.split(",").filter(Boolean);
             if (ids.length > 0) {
@@ -398,17 +407,18 @@ export default function InvoiceDetail() {
                 .select("id, nummer, netto_summe, brutto_summe, datum")
                 .in("id", ids);
               ((abzugInvs as any[]) || []).forEach((abz) => {
-                const betrag = Number(abz.netto_summe) || 0;
+                const brutto = Number(abz.brutto_summe) || 0;
                 nextItems.push({
                   position: nextItems.length + 1,
-                  beschreibung: `Abzug Anzahlung ${abz.nummer} vom ${abz.datum}`,
+                  beschreibung: `Abzug Anzahlung ${abz.nummer} vom ${abz.datum} (brutto, MwSt-frei)`,
                   kurztext: `Abzug ${abz.nummer}`,
                   langtext: "",
                   menge: 1,
                   einheit: "pausch.",
-                  einzelpreis: -betrag,
+                  einzelpreis: -brutto,
                   rabatt_prozent: 0,
-                  gesamtpreis: -betrag,
+                  gesamtpreis: -brutto,
+                  mwst_exempt: true,
                 });
               });
             }
@@ -562,6 +572,7 @@ export default function InvoiceDetail() {
         rabatt_prozent: Number((it as any).rabatt_prozent) || 0,
         produktnummer: (it as any).produktnummer || "",
         gesamtpreis: Number(it.gesamtpreis),
+        mwst_exempt: !!(it as any).mwst_exempt,
       })));
     }
 
@@ -652,15 +663,19 @@ export default function InvoiceDetail() {
     });
   };
 
-  // Calculations with discount — round to 2 decimal places to avoid floating-point issues
+  // Calculations with discount — round to 2 decimal places to avoid floating-point issues.
+  // mwst_exempt-Zeilen enthalten bereits Brutto (z.B. Anzahlungs-Abzüge)
+  // und werden separat verrechnet, damit die MwSt der Anzahlung nicht mit
+  // dem aktuellen Satz neu berechnet wird.
   const r2 = (v: number) => Math.round(v * 100) / 100;
-  const positionenNetto = r2(items.reduce((sum, item) => sum + item.gesamtpreis, 0));
+  const exemptBrutto = r2(items.filter(it => it.mwst_exempt).reduce((sum, it) => sum + Number(it.gesamtpreis || 0), 0));
+  const positionenNetto = r2(items.filter(it => !it.mwst_exempt).reduce((sum, it) => sum + Number(it.gesamtpreis || 0), 0));
   const rabattWert = r2(form.rabatt_prozent > 0
     ? positionenNetto * (form.rabatt_prozent / 100)
     : form.rabatt_betrag);
   const nettoSumme = r2(positionenNetto - rabattWert);
   const mwstBetrag = r2(nettoSumme * (form.mwst_satz / 100));
-  const bruttoSumme = r2(nettoSumme + mwstBetrag);
+  const bruttoSumme = r2(nettoSumme + mwstBetrag + exemptBrutto);
   const restBetrag = r2(bruttoSumme - form.bezahlt_betrag);
 
   const canDelete = form.typ === "angebot";
@@ -893,6 +908,7 @@ export default function InvoiceDetail() {
         gesamtpreis: item.gesamtpreis,
         produktnummer: item.produktnummer || null,
         rabatt_prozent: item.rabatt_prozent || 0,
+        mwst_exempt: item.mwst_exempt || false,
       }));
 
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert);
@@ -1245,6 +1261,12 @@ export default function InvoiceDetail() {
           skonto_tage: form.skonto_tage || 0,
           gueltig_bis: form.gueltig_bis || null,
           customer_id: form.customer_id || null,
+          // Duplikate sind bewusst unabhängig — kein parent_invoice_id und
+          // keine Anzahlungs-Felder, damit das Duplikat nicht versehentlich
+          // in einer Schlussrechnung als Abzug auftaucht.
+          parent_invoice_id: null,
+          anzahlung_prozent: null,
+          anzahlung_betrag: null,
         })
         .select("id")
         .single();
@@ -1263,6 +1285,7 @@ export default function InvoiceDetail() {
         gesamtpreis: item.gesamtpreis,
         produktnummer: (item as any).produktnummer || null,
         rabatt_prozent: (item as any).rabatt_prozent || 0,
+        mwst_exempt: (item as any).mwst_exempt || false,
       }));
 
       await supabase.from("invoice_items").insert(itemsToInsert);
@@ -1563,7 +1586,22 @@ export default function InvoiceDetail() {
                               </DropdownMenuItem>
                             )}
                             {allow.anzahlungsrechnung && (
-                              <DropdownMenuItem onClick={() => {
+                              <DropdownMenuItem onClick={async () => {
+                                // Bereits bestehende nicht-stornierte Anzahlungen zum selben Auftrag
+                                // laden, damit der Dialog die Rest-Basis kennt (Kumulations-Check).
+                                if (invoiceId) {
+                                  const { data: existingAnz } = await supabase
+                                    .from("invoices")
+                                    .select("netto_summe")
+                                    .eq("parent_invoice_id", invoiceId)
+                                    .eq("typ", "anzahlungsrechnung")
+                                    .neq("status", "storniert");
+                                  const sum = ((existingAnz as any[]) || []).reduce(
+                                    (s, r) => s + (Number(r.netto_summe) || 0), 0);
+                                  setBestehendeAnzahlungenNetto(sum);
+                                } else {
+                                  setBestehendeAnzahlungenNetto(0);
+                                }
                                 setAnzahlungProzentInput("30");
                                 setAnzahlungBetragInput((nettoSumme * 0.3).toFixed(2));
                                 setAnzahlungMode("prozent");
@@ -2560,8 +2598,21 @@ export default function InvoiceDetail() {
                       <TableCell className="text-right">€ {mwstBetrag.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>
+                    {exemptBrutto !== 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-right text-red-600">
+                          Anzahlungs-Abzug (brutto, MwSt-frei)
+                        </TableCell>
+                        <TableCell className="text-right text-red-600 font-medium">
+                          € {exemptBrutto.toFixed(2)}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    )}
                     <TableRow>
-                      <TableCell colSpan={6} className="text-right font-bold text-lg">Brutto</TableCell>
+                      <TableCell colSpan={6} className="text-right font-bold text-lg">
+                        {exemptBrutto < 0 ? "Zu zahlen" : "Brutto"}
+                      </TableCell>
                       <TableCell className="text-right font-bold text-lg">€ {bruttoSumme.toFixed(2)}</TableCell>
                       <TableCell />
                     </TableRow>
@@ -3029,13 +3080,16 @@ export default function InvoiceDetail() {
             {(() => {
               const basisNetto = nettoSumme;
               const basisBrutto = bruttoSumme;
+              const restNetto = Math.max(0, basisNetto - bestehendeAnzahlungenNetto);
               const prozentNum = Number(anzahlungProzentInput);
               const betragNum = Number(anzahlungBetragInput);
               const anzNetto = anzahlungMode === "prozent"
                 ? (isNaN(prozentNum) ? 0 : basisNetto * prozentNum / 100)
                 : (isNaN(betragNum) ? 0 : betragNum);
               const anzBrutto = anzNetto * (1 + (form.mwst_satz / 100));
-              const valid = anzNetto > 0 && anzNetto <= basisNetto + 0.01;
+              // Neue Anzahlung darf den noch offenen Rest (basisNetto abzüglich
+              // bereits ausgestellter Anzahlungen) nicht überschreiten.
+              const valid = anzNetto > 0 && anzNetto <= restNetto + 0.01;
               return (
                 <>
                   <div className="space-y-4 py-2">
@@ -3048,6 +3102,18 @@ export default function InvoiceDetail() {
                         <span>inkl. {form.mwst_satz}% MwSt.:</span>
                         <span className="font-mono">€ {basisBrutto.toFixed(2)} brutto</span>
                       </div>
+                      {bestehendeAnzahlungenNetto > 0 && (
+                        <>
+                          <div className="flex justify-between text-xs text-orange-600 mt-1 pt-1 border-t">
+                            <span>bereits angezahlt (netto):</span>
+                            <span className="font-mono">- € {bestehendeAnzahlungenNetto.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs font-medium mt-0.5">
+                            <span>Rest verfügbar (netto):</span>
+                            <span className="font-mono">€ {restNetto.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -3117,7 +3183,7 @@ export default function InvoiceDetail() {
                       disabled={!valid}
                       onClick={() => {
                         if (!valid) {
-                          toast({ variant: "destructive", title: "Ungültiger Anzahlungsbetrag", description: "Der Betrag muss > 0 und ≤ Gesamtsumme sein." });
+                          toast({ variant: "destructive", title: "Ungültiger Anzahlungsbetrag", description: `Der Betrag muss > 0 und ≤ dem noch offenen Rest (€ ${restNetto.toFixed(2)}) sein.` });
                           return;
                         }
                         setAnzahlungDialogOpen(false);
