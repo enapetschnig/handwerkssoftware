@@ -25,6 +25,13 @@ export interface InvoiceLayoutFooter {
   show_page_numbers: boolean;
 }
 
+export interface InvoiceLayoutContact {
+  /** Name des Ansprechpartners, der auf dem Dokument genannt wird. */
+  name: string;
+  phone: string;
+  email: string;
+}
+
 export interface InvoiceLayoutSettings {
   company: InvoiceLayoutCompany;
   logo: InvoiceLayoutLogo;
@@ -34,6 +41,7 @@ export interface InvoiceLayoutSettings {
   closing_text_angebot: string;
   danke_text: string;
   accent_color: string;
+  contact: InvoiceLayoutContact;
 }
 
 export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
@@ -64,6 +72,7 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   closing_text_angebot: "Dieses Angebot ist 30 Tage gültig. Wir freuen uns auf Ihren Auftrag!",
   danke_text: "Vielen Dank für Ihren Auftrag!",
   accent_color: "#0077CC", /* BKS Blau */
+  contact: { name: "", phone: "", email: "" },
 };
 
 /** Known legacy accent colors that should auto-migrate to BKS Blau */
@@ -98,6 +107,7 @@ export function parseLayoutSettings(value: string | null | undefined): InvoiceLa
       closing_text_angebot: parsed.closing_text_angebot ?? DEFAULT_LAYOUT.closing_text_angebot,
       danke_text: parsed.danke_text ?? DEFAULT_LAYOUT.danke_text,
       accent_color: accent,
+      contact: { ...DEFAULT_LAYOUT.contact, ...(parsed.contact || {}) },
     };
   } catch {
     return { ...DEFAULT_LAYOUT };

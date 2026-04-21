@@ -326,6 +326,42 @@ export function InvoiceLayoutEditor() {
               </Button>
             </div>
           </div>
+
+          {/* Ansprechpartner – erscheint rechts oben unter "Gültig bis" */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t">
+            <div className="space-y-2 md:col-span-3">
+              <Label className="text-sm font-medium">Ansprechpartner für Dokumente</Label>
+              <p className="text-xs text-muted-foreground">Wird auf Angeboten/Rechnungen unter der Meta-Box (rechts oben) angezeigt.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact_name" className="text-xs">Name</Label>
+              <Input
+                id="contact_name"
+                value={form.contact?.name || ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), name: e.target.value } }))}
+                placeholder="z.B. Max Mustermann"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact_phone" className="text-xs">Telefon</Label>
+              <Input
+                id="contact_phone"
+                value={form.contact?.phone || ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), phone: e.target.value } }))}
+                placeholder="+43 ..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact_email" className="text-xs">E-Mail</Label>
+              <Input
+                id="contact_email"
+                type="email"
+                value={form.contact?.email || ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), email: e.target.value } }))}
+                placeholder="name@firma.at"
+              />
+            </div>
+          </div>
         </div>
 
         <Separator />

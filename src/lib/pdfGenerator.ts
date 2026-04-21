@@ -65,9 +65,12 @@ export async function generateInvoicePdf(
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const ml = 15; // margin left
+  const ml = 25; // margin left – DIN 676: Fensterkuvert linker Rand
   const mr = 15; // margin right
   const contentWidth = pageWidth - ml - mr;
+  // Briefkopf-Bereich (Logo + Firmeninfo) endet frühestens bei 45mm,
+  // damit die Empfängeradresse sauber im Fensterkuvert erscheint.
+  const LETTERHEAD_MIN_BOTTOM = 45;
 
   // ======= HEADER (only first page) =======
   let y = 15;
@@ -116,19 +119,20 @@ export async function generateInvoicePdf(
     }
   }
 
-  y = Math.max(logoBottomY + 4, y + 20);
-  // Separator
-  pdf.setDrawColor(200, 200, 200);
-  pdf.setLineWidth(0.3);
-  pdf.line(ml, y, pageWidth - mr, y);
-  y += 4;
+  // Briefkopf muss mindestens bis LETTERHEAD_MIN_BOTTOM reichen,
+  // damit der Empfängerblock im Fensterkuvert sichtbar ist.
+  y = Math.max(logoBottomY + 4, LETTERHEAD_MIN_BOTTOM);
 
-  // Sender line
+  // Sender line (Absenderzeile über dem Empfänger, klein + unterstrichen)
   pdf.setFontSize(7);
   pdf.setTextColor(0, 0, 0);
-  pdf.text(L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 "), ml, y);
+  const senderText = L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" \u00B7 ");
+  pdf.text(senderText, ml, y);
+  // Unterstreichende Linie exakt so lang wie die Absenderzeile
+  const senderWidth = pdf.getTextWidth(senderText);
   pdf.setDrawColor(180, 180, 180);
-  pdf.line(ml, y + 1.5, ml + 72, y + 1.5);
+  pdf.setLineWidth(0.2);
+  pdf.line(ml, y + 1.5, ml + senderWidth, y + 1.5);
   y += 6;
 
   // Recipient
@@ -188,35 +192,42 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
+  // Ansprechpartner unter der Meta-Box (Name + Telefon + E-Mail)
+  const contact = L.contact || { name: "", phone: "", email: "" };
+  if (contact.name || contact.phone || contact.email) {
+    metaY += 2;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text("Ihr Ansprechpartner:", metaX, metaY);
+    metaY += 4;
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(9);
+    if (contact.name) { pdf.text(contact.name, metaX, metaY); metaY += 4; }
+    if (contact.phone) { pdf.text(contact.phone, metaX, metaY); metaY += 4; }
+    if (contact.email) { pdf.text(contact.email, metaX, metaY); metaY += 4; }
+  }
+
   y = Math.max(y, metaY) + 4;
 
-  // Document title
+  // Document title: "Angebot - <betreff>" (ohne Nummer; die steht rechts oben)
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);
   pdf.setTextColor(0, 0, 0);
-  pdf.text(`${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}`, ml, y);
-  y += 4;
+  const titleText = invoice.betreff
+    ? `${typLabel} – ${invoice.betreff}`
+    : typLabel;
+  // mehrzeilig möglich
+  const titleLines = pdf.splitTextToSize(titleText, contentWidth);
+  titleLines.forEach((line: string, i: number) => {
+    pdf.text(line, ml, y + i * 5.5);
+  });
+  y += titleLines.length * 5.5;
+  y += 1;
   pdf.setDrawColor(acR, acG, acB);
   pdf.setLineWidth(0.8);
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
-
-  // Betreff (subject line) — mehrzeilig möglich
-  if (invoice.betreff) {
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    const maxWidth = pageWidth - ml - mr;
-    const lines = pdf.splitTextToSize(invoice.betreff, maxWidth);
-    const betreffHeight = lines.length * 4.5 + 4;
-    // Falls Betreff nicht mehr auf die Seite passt, neue Seite
-    if (y + betreffHeight > pageHeight - 30) {
-      pdf.addPage();
-      y = 20;
-    }
-    pdf.text(lines, ml, y);
-    y += betreffHeight;
-  }
 
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
@@ -284,9 +295,9 @@ export async function generateInvoicePdf(
   if (showBank) closingH += 40;
   if (!showFaelligAm && !showBank) closingH += 8;
 
-  // Dynamic footer height
+  // Dynamic footer height: base + jede Textzeile + ggf. Seitennummer-Zeile
   const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
-  const footerH = 8 + footerLines.length * 4;
+  const footerH = 8 + footerLines.length * 4 + (L.footer.show_page_numbers ? 4 : 0);
 
   // autoTable: body rows ONLY (no footer/totals). Small margin → pages fill up fully.
   // Totals + closing drawn manually after, with page break if needed.
@@ -465,7 +476,8 @@ export async function generateInvoicePdf(
     y += 4;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    pdf.text("Gemäß § 19 Abs. 1 UStG geht die Steuerschuld auf den Leistungsempfänger über.", ml, y);
+    // §19 Abs. 1a UStG: Bauleistungen (häufigster Fall bei BKS).
+    pdf.text("Es wird darauf hingewiesen, dass die Steuerschuld gem. § 19 Abs. 1a UStG auf den Leistungsempfänger übergeht.", ml, y, { maxWidth: contentWidth });
     y += 6;
   }
 
@@ -474,7 +486,10 @@ export async function generateInvoicePdf(
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  const zahlungsTage = invoice.zahlungsbedingungen?.match(/(\d+)/)?.[1] || "14";
+  const zahlungsbedingungen = (invoice.zahlungsbedingungen || "").trim();
+  const zahlungsTageMatch = zahlungsbedingungen.match(/(\d+)/);
+  // "sofort" / "prompt" / sonstige Texte ohne Zahl → direkt den Text nehmen.
+  const isZahlungSofort = /sofort|umgehend|prompt/i.test(zahlungsbedingungen);
   const customClosing = (invoice as any).custom_closing_text as string | undefined;
   if (customClosing) {
     pdf.text(customClosing, ml, y, { maxWidth: contentWidth });
@@ -483,7 +498,18 @@ export async function generateInvoicePdf(
     pdf.text(L.closing_text_angebot, ml, y, { maxWidth: contentWidth });
     y += 8;
   } else if (docCfg.isInvoiceLike) {
-    pdf.text(L.closing_text_invoice.replace("{{tage}}", zahlungsTage), ml, y, { maxWidth: contentWidth });
+    let closingText: string;
+    if (isZahlungSofort) {
+      closingText = "Zahlbar sofort ohne Abzug.";
+    } else if (zahlungsTageMatch) {
+      closingText = L.closing_text_invoice.replace("{{tage}}", zahlungsTageMatch[1]);
+    } else if (zahlungsbedingungen) {
+      // freier Text (z.B. "bei Lieferung bar") → direkt übernehmen
+      closingText = zahlungsbedingungen;
+    } else {
+      closingText = L.closing_text_invoice.replace("{{tage}}", "14");
+    }
+    pdf.text(closingText, ml, y, { maxWidth: contentWidth });
     y += 5;
     pdf.setFontSize(7.5);
     pdf.setTextColor(0, 0, 0);
@@ -541,7 +567,10 @@ export async function generateInvoicePdf(
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Bankverbindung: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, ml, y);
+    const bankLine = bank.kontoinhaber
+      ? `Kontoinhaber: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`
+      : `IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`;
+    pdf.text(bankLine, ml, y);
     y += 5;
 
     // QR Code
@@ -582,7 +611,10 @@ export async function generateInvoicePdf(
     pdf.text(footerLine1, pageWidth / 2, footerY, { align: "center" });
     footerY += 4;
     if (L.footer.show_bank_in_footer) {
-      pdf.text(`IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`, pageWidth / 2, footerY, { align: "center" });
+      const ibanLine = bank.kontoinhaber
+        ? `Kontoinhaber: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`
+        : `IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`;
+      pdf.text(ibanLine, pageWidth / 2, footerY, { align: "center" });
       footerY += 4;
     }
     if (L.footer.line2) {
@@ -593,8 +625,10 @@ export async function generateInvoicePdf(
       pdf.text(L.footer.line3, pageWidth / 2, footerY, { align: "center" });
       footerY += 4;
     }
+    // Seitennummer in eigener letzter Zeile (rechts), damit sie den
+    // zentrierten Text nicht überschreibt.
     if (L.footer.show_page_numbers) {
-      pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, fy + 4, { align: "right" });
+      pdf.text(`Seite ${i} von ${totalPages}`, pageWidth - mr, footerY, { align: "right" });
     }
   }
 

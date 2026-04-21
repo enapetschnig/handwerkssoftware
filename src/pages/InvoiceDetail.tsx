@@ -1013,40 +1013,70 @@ export default function InvoiceDetail() {
     toast({ title: "Zahlung gelöscht" });
   };
 
+  /** Erzeugt das Rechnungs-PDF client-side (jsPDF). Lädt Bank+UID+Logo+Layout
+   *  aus den Einstellungen. Liefert einen Blob zurück. */
+  const buildInvoicePdfBlob = async (): Promise<Blob> => {
+    const [{ generateInvoicePdf }, { loadInvoiceLogo }] = await Promise.all([
+      import("@/lib/pdfGenerator"),
+      import("@/lib/logoLoader"),
+    ]);
+
+    const { data: bankSettings } = await supabase
+      .from("app_settings")
+      .select("key, value")
+      .in("key", ["bank_kontoinhaber", "bank_iban", "bank_bic", "firmen_uid"]);
+    const bank = { kontoinhaber: "", iban: "", bic: "" };
+    let firmenUid = "";
+    bankSettings?.forEach((s: any) => {
+      if (s.key === "bank_kontoinhaber") bank.kontoinhaber = s.value;
+      if (s.key === "bank_iban") bank.iban = s.value;
+      if (s.key === "bank_bic") bank.bic = s.value;
+      if (s.key === "firmen_uid") firmenUid = s.value || "";
+    });
+
+    const logoUri = await loadInvoiceLogo();
+    return generateInvoicePdf(
+      form as any,
+      items as any,
+      bank,
+      logoUri,
+      undefined,
+      firmenUid,
+      invoiceLayout,
+    );
+  };
+
   const handleDownloadPdf = async () => {
     if (!invoiceId) {
       toast({ variant: "destructive", title: "Fehler", description: "Bitte zuerst speichern" });
       return;
     }
-
     try {
-      const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
-        body: { invoiceId },
-      });
+      const pdfBlob = await buildInvoicePdfBlob();
 
-      if (error) throw error;
+      // Datei direkt herunterladen
+      const fileName = `${form.nummer || "Dokument"}_${format(new Date(), "yyyy-MM-dd")}.pdf`;
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      const html = decodeURIComponent(escape(atob(data.pdf)));
+      // Zusätzlich ins Archiv hochladen (best effort, blockiert den Download nicht)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.storage
+            .from("invoice-pdfs")
+            .upload(`${user.id}/${invoiceId}/${fileName}`, pdfBlob, { upsert: true, contentType: "application/pdf" });
+          loadStoredPdfs(invoiceId);
+        }
+      } catch { /* ignore archive errors */ }
 
-      // Archive the HTML
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const fileName = `${form.nummer}_${format(new Date(), "yyyy-MM-dd_HH-mm")}.html`;
-        const blob = new Blob([html], { type: "text/html" });
-        await supabase.storage
-          .from("invoice-pdfs")
-          .upload(`${user.id}/${invoiceId}/${fileName}`, blob, { upsert: false });
-        loadStoredPdfs(invoiceId);
-      }
-
-      // Open in new tab for PDF download via print dialog
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(html);
-        printWindow.document.close();
-      }
-
-      toast({ title: "PDF geöffnet", description: "Nutze 'Als PDF speichern' im Druckdialog" });
+      toast({ title: "PDF erzeugt", description: fileName });
     } catch (err: any) {
       console.error("PDF-Fehler:", err);
       toast({ variant: "destructive", title: "PDF-Fehler", description: err.message || "PDF konnte nicht erstellt werden" });
@@ -1056,16 +1086,14 @@ export default function InvoiceDetail() {
   const handlePrintPdf = async () => {
     if (!invoiceId) return;
     try {
-      const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
-        body: { invoiceId },
-      });
-      if (error) throw error;
-      const html = decodeURIComponent(escape(atob(data.pdf)));
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(html);
-        printWindow.document.close();
-        setTimeout(() => printWindow.print(), 500);
+      const pdfBlob = await buildInvoicePdfBlob();
+      const url = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(url, "_blank");
+      // Browser öffnet das PDF direkt mit eingebautem Viewer → Druck via Ctrl/Cmd+P
+      // URL erst nach 60s freigeben, damit der Tab Zeit zum Laden hat.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (!printWindow) {
+        toast({ variant: "destructive", title: "Popup blockiert", description: "Bitte Popups für diese Seite erlauben." });
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Drucken fehlgeschlagen", description: err.message });
@@ -2057,8 +2085,8 @@ export default function InvoiceDetail() {
                     className="rounded"
                   />
                   <div>
-                    <Label htmlFor="reverse_charge" className="cursor-pointer font-medium">Reverse Charge (Leistung in EU-Ausland)</Label>
-                    <p className="text-xs text-muted-foreground">Steuerschuldnerschaft geht auf den Leistungsempfänger über — keine USt auf der Rechnung</p>
+                    <Label htmlFor="reverse_charge" className="cursor-pointer font-medium">Reverse Charge – Bauleistungen (§ 19 Abs. 1a UStG)</Label>
+                    <p className="text-xs text-muted-foreground">Steuerschuld geht auf den Leistungsempfänger über – MwSt auf der Rechnung entfällt. UID des Kunden ist Pflicht.</p>
                   </div>
                 </div>
               )}
