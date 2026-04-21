@@ -676,7 +676,6 @@ export default function Invoices() {
                     { val: "rechnung",            label: "Rechnung",           cls: "bg-green-100 text-green-800 border-green-300" },
                     { val: "anzahlungsrechnung",  label: "Anzahlungsrechnung", cls: "bg-orange-100 text-orange-800 border-orange-300" },
                     { val: "schlussrechnung",    label: "Schlussrechnung",    cls: "bg-emerald-100 text-emerald-900 border-emerald-400" },
-                    { val: "gutschrift",         label: "Gutschrift",         cls: "bg-purple-100 text-purple-800 border-purple-300" },
                   ]
                 : [
                     { val: "alle",                label: "Alle",               cls: "bg-muted text-foreground" },
