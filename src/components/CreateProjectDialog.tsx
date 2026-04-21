@@ -78,6 +78,7 @@ export function CreateProjectDialog({
   const { options: prioritaetOptions } = useConfigOptions("prioritaet");
   const { options: projektTypOptions } = useConfigOptions("projekt_typ");
   const { options: leistungsartOptions } = useConfigOptions("leistungsart");
+  const { options: bereichOptions } = useConfigOptions("projekt_bereich");
 
   // Employees & statuses
   const [employees, setEmployees] = useState<{ id: string; vorname: string; nachname: string }[]>([]);
@@ -107,8 +108,13 @@ export function CreateProjectDialog({
   const [projektPlz, setProjektPlz] = useState("");
   const [projektOrt, setProjektOrt] = useState("");
   const [projektLand, setProjektLand] = useState("Österreich");
+  const [projektKontaktName, setProjektKontaktName] = useState("");
+  const [projektKontaktTelefon, setProjektKontaktTelefon] = useState("");
   const [zusatzinfos, setZusatzinfos] = useState("");
   const [wegbeschreibung, setWegbeschreibung] = useState("");
+
+  // --- Section 1b: Bereich/Mandant ---
+  const [bereich, setBereich] = useState("");
 
   // --- Section 4: Projektinhalt ---
   const [projektTyp, setProjektTyp] = useState("");
@@ -158,8 +164,11 @@ export function CreateProjectDialog({
       setProjektPlz("");
       setProjektOrt("");
       setProjektLand("Österreich");
+      setProjektKontaktName("");
+      setProjektKontaktTelefon("");
       setZusatzinfos("");
       setWegbeschreibung("");
+      setBereich("");
       setProjektTyp("");
       setProjektart("");
       setPrioritaet("normal");
@@ -372,6 +381,9 @@ export function CreateProjectDialog({
           plz: projektPlz.trim() || null,
           ort: projektOrt.trim() || null,
           land: projektLand.trim() || null,
+          projekt_kontakt_name: projektKontaktName.trim() || null,
+          projekt_kontakt_telefon: projektKontaktTelefon.trim() || null,
+          bereich: bereich || null,
           zusatzinfos: zusatzinfos.trim() || null,
           wegbeschreibung: wegbeschreibung.trim() || null,
           // Projektinhalt
@@ -723,6 +735,19 @@ export function CreateProjectDialog({
                 />
               </div>
               <div>
+                <Label>Bereich / Firma</Label>
+                <Select value={bereich || "none"} onValueChange={(v) => setBereich(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">--</SelectItem>
+                    {bereichOptions.map((o) => (
+                      <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Mandant für Kalender-Zuordnung (Monti.pro, Gartenmacher, …).</p>
+              </div>
+              <div>
                 <Label>Beschreibung / Kurzbeschreibung</Label>
                 <Textarea
                   value={beschreibung}
@@ -890,9 +915,27 @@ export function CreateProjectDialog({
 
             {/* ======== Section 3: Projektadresse / Leistungsort ======== */}
             <div className="space-y-3">
-              <Label className="text-base font-semibold border-b pb-1 block">
-                Projektadresse / Leistungsort
-              </Label>
+              <div className="flex items-center justify-between border-b pb-1">
+                <Label className="text-base font-semibold block">
+                  Projektadresse / Leistungsort
+                </Label>
+                {(adresse || plz || ort) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setProjektAdresse(adresse);
+                      setProjektPlz(plz);
+                      setProjektOrt(ort);
+                      if (!projektKontaktName) setProjektKontaktName(customerName);
+                      if (!projektKontaktTelefon) setProjektKontaktTelefon(telefon);
+                    }}
+                  >
+                    Kundenadresse übernehmen
+                  </Button>
+                )}
+              </div>
               <AddressAutocomplete
                 label="Adresse"
                 value={projektAdresse}
@@ -908,6 +951,16 @@ export function CreateProjectDialog({
                 <div className="col-span-2">
                   <Label>Ort</Label>
                   <Input value={projektOrt} onChange={(e) => setProjektOrt(e.target.value)} placeholder="z.B. Wien, Graz..." />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Kontakt vor Ort</Label>
+                  <Input value={projektKontaktName} onChange={(e) => setProjektKontaktName(e.target.value)} placeholder="z.B. Frau Müller" />
+                </div>
+                <div>
+                  <Label>Telefon</Label>
+                  <Input type="tel" value={projektKontaktTelefon} onChange={(e) => setProjektKontaktTelefon(e.target.value)} placeholder="+43 664 ..." />
                 </div>
               </div>
               <div>

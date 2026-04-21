@@ -39,6 +39,7 @@ const ProjectOverview = () => {
   const [editSaving, setEditSaving] = useState(false);
   const { options: projektartOptions } = useConfigOptions("projektart");
   const { options: prioritaetOptions } = useConfigOptions("prioritaet");
+  const { options: bereichOptions } = useConfigOptions("projekt_bereich");
   const { statuses: projectStatuses, findByName: findStatusByName } = useProjectStatuses();
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [employees, setEmployees] = useState<{id: string, vorname: string, nachname: string}[]>([]);
@@ -49,7 +50,9 @@ const ProjectOverview = () => {
     kunde_adresse: "", kunde_plz: "", kunde_ort: "", kunde_email: "", kunde_telefon: "", kunde_uid: "",
     // Projekt-/Leistungsort (gespeichert in projects)
     projekt_adresse: "", projekt_plz: "", projekt_ort: "",
+    projekt_kontakt_name: "", projekt_kontakt_telefon: "",
     // Sonstiges Projekt
+    bereich: "",
     projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
     budget: "", auftragsvolumen: "", bauleiter_id: "",
   });
@@ -61,7 +64,7 @@ const ProjectOverview = () => {
   const [btbCount, setBtbCount] = useState(0);
   const [regieCount, setRegieCount] = useState(0);
   const [protokollCount, setProtokollCount] = useState(0);
-  const [projectProtokolle, setProjectProtokolle] = useState<{ id: string; nummer: string | null; datum: string; typ: string | null; ort: string | null; kind: "protokoll" | "ersttermin" }[]>([]);
+  const [projectProtokolle, setProjectProtokolle] = useState<{ id: string; nummer: string | null; datum: string; typ: string | null; ort: string | null; kind: "protokoll" | "ersttermin"; linked?: boolean }[]>([]);
   const [regiePdfs, setRegiePdfs] = useState<{id: string; datum: string; kunde_name: string; pdf_path: string}[]>([]);
   const [purchaseInvoices, setPurchaseInvoices] = useState<{id: string; lieferant: string; rechnungsdatum: string | null; betrag_brutto: number; status: string; kategorie: string | null}[]>([]);
   const [projectData, setProjectData] = useState<any>(null);
@@ -209,7 +212,10 @@ const ProjectOverview = () => {
       projekt_adresse: proj.adresse || parts[0] || "",
       projekt_plz: proj.plz || parts[1] || "",
       projekt_ort: (proj as any).ort || parts[2] || "",
+      projekt_kontakt_name: (proj as any).projekt_kontakt_name || "",
+      projekt_kontakt_telefon: (proj as any).projekt_kontakt_telefon || "",
       // Sonstiges
+      bereich: (proj as any).bereich || "",
       projektart: (proj as any).projektart || "",
       prioritaet: (proj as any).prioritaet || "normal",
       geplanter_start: (proj as any).geplanter_start || "",
@@ -252,6 +258,9 @@ const ProjectOverview = () => {
       adresse: editForm.projekt_adresse.trim() || null,
       plz: editForm.projekt_plz.trim() || null,
       ort: editForm.projekt_ort.trim() || null,
+      projekt_kontakt_name: editForm.projekt_kontakt_name.trim() || null,
+      projekt_kontakt_telefon: editForm.projekt_kontakt_telefon.trim() || null,
+      bereich: editForm.bereich || null,
       customer_id: editForm.customer_id,
       projektart: editForm.projektart || null,
       prioritaet: editForm.prioritaet || "normal",
@@ -392,21 +401,28 @@ const ProjectOverview = () => {
       .then(({ data }) => setPurchaseInvoices(data || []));
 
     // Fetch Protokoll count + Liste (Besprechungsprotokolle + Ersttermine)
+    // Ersttermine: direkt verknüpfte (project_id=X) + noch unverknüpfte
+    // Ersttermine desselben Kunden (damit sie manuell zugeordnet werden können).
+    const custIdForProto = (data as any)?.customer_id || null;
+    const erstterminFilter = custIdForProto
+      ? `project_id.eq.${projectId},and(project_id.is.null,customer_id.eq.${custIdForProto})`
+      : `project_id.eq.${projectId}`;
     Promise.all([
       (supabase.from("besprechungsprotokolle" as never) as any)
         .select("id, nummer, datum, typ, ort")
         .eq("project_id", projectId)
         .order("datum", { ascending: false }),
       (supabase.from("ersttermin_interessent" as never) as any)
-        .select("id, nummer, datum, projektname, standort")
-        .eq("project_id", projectId)
+        .select("id, nummer, datum, projektname, standort, project_id")
+        .or(erstterminFilter)
         .order("datum", { ascending: false }),
     ]).then(([protoRes, erstterminRes]) => {
       const protos = ((protoRes as any).data || []).map((p: any) => ({
-        id: p.id, nummer: p.nummer, datum: p.datum, typ: p.typ, ort: p.ort, kind: "protokoll" as const,
+        id: p.id, nummer: p.nummer, datum: p.datum, typ: p.typ, ort: p.ort, kind: "protokoll" as const, linked: true,
       }));
       const ersts = ((erstterminRes as any).data || []).map((e: any) => ({
         id: e.id, nummer: e.nummer, datum: e.datum, typ: "Ersttermin", ort: e.standort || e.projektname, kind: "ersttermin" as const,
+        linked: e.project_id === projectId,
       }));
       const all = [...protos, ...ersts].sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
       setProjectProtokolle(all);
@@ -589,6 +605,23 @@ const ProjectOverview = () => {
                   <span className="text-muted-foreground">Leistungsort:</span>{" "}
                   {[projectData.adresse, [projectData.plz, (projectData as any).ort].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
                 </div>
+              )}
+              {((projectData as any).projekt_kontakt_name || (projectData as any).projekt_kontakt_telefon) && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Kontakt vor Ort:</span>{" "}
+                  {(projectData as any).projekt_kontakt_name || ""}
+                  {(projectData as any).projekt_kontakt_telefon && (
+                    <>
+                      {" "}
+                      <a className="text-primary underline" href={`tel:${(projectData as any).projekt_kontakt_telefon}`}>
+                        {(projectData as any).projekt_kontakt_telefon}
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
+              {(projectData as any).bereich && (
+                <div className="text-sm"><span className="text-muted-foreground">Bereich:</span> {bereichOptions.find(o => o.wert === (projectData as any).bereich)?.label || (projectData as any).bereich}</div>
               )}
               {/* Rechnungsadresse (Kunde) */}
               {customerData && (customerData.adresse || customerData.plz || customerData.ort) && (
@@ -808,25 +841,52 @@ const ProjectOverview = () => {
               </CardHeader>
               <CardContent className="space-y-1">
                 {projectProtokolle.map((p) => (
-                  <button
+                  <div
                     key={`${p.kind}-${p.id}`}
-                    className="flex items-center gap-3 text-sm w-full text-left hover:bg-muted rounded px-2 py-2 transition-colors"
-                    onClick={() => navigate(p.kind === "ersttermin" ? `/ersttermine/${p.id}` : `/besprechungsprotokolle/${p.id}`)}
+                    className="flex items-center gap-3 text-sm w-full hover:bg-muted rounded px-2 py-2 transition-colors"
                   >
-                    <MessageSquare className={`h-4 w-4 shrink-0 ${p.kind === "ersttermin" ? "text-orange-500" : "text-cyan-600"}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{p.nummer || "—"}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {p.kind === "ersttermin" ? "Erstaufnahme" : (p.typ ? p.typ.charAt(0).toUpperCase() + p.typ.slice(1) : "Protokoll")}
-                        </span>
+                    <button
+                      className="flex items-center gap-3 text-left flex-1 min-w-0"
+                      onClick={() => navigate(p.kind === "ersttermin" ? `/ersttermine/${p.id}` : `/besprechungsprotokolle/${p.id}`)}
+                    >
+                      <MessageSquare className={`h-4 w-4 shrink-0 ${p.kind === "ersttermin" ? "text-orange-500" : "text-cyan-600"}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{p.nummer || "—"}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {p.kind === "ersttermin" ? "Erstaufnahme" : (p.typ ? p.typ.charAt(0).toUpperCase() + p.typ.slice(1) : "Protokoll")}
+                          </span>
+                          {p.kind === "ersttermin" && p.linked === false && (
+                            <span className="text-[10px] uppercase tracking-wide text-orange-600 border border-orange-300 rounded px-1 py-0.5">nicht verknüpft</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {p.datum ? new Date(p.datum).toLocaleDateString("de-AT") : "—"}
+                          {p.ort ? ` · ${p.ort}` : ""}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {p.datum ? new Date(p.datum).toLocaleDateString("de-AT") : "—"}
-                        {p.ort ? ` · ${p.ort}` : ""}
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    {p.kind === "ersttermin" && p.linked === false && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const { error } = await (supabase.from("ersttermin_interessent" as never) as any)
+                            .update({ project_id: projectId })
+                            .eq("id", p.id);
+                          if (error) {
+                            toast({ variant: "destructive", title: "Fehler", description: error.message });
+                          } else {
+                            toast({ title: "Ersttermin verknüpft", description: "Dem Projekt zugeordnet." });
+                            fetchProjectName();
+                          }
+                        }}
+                      >
+                        Verknüpfen
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </CardContent>
             </Card>
@@ -928,6 +988,19 @@ const ProjectOverview = () => {
             {/* Erweiterte Projektfelder */}
             <div className="border-t pt-4 space-y-3">
               <Label className="text-base font-semibold">Projektdetails</Label>
+              <div>
+                <Label>Bereich / Firma</Label>
+                <Select value={editForm.bereich || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, bereich: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">--</SelectItem>
+                    {bereichOptions.map(o => (
+                      <SelectItem key={o.id} value={o.wert}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Mandant für Kalender-Zuordnung (Monti.pro, Gartenmacher, …).</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Projektart</Label>
@@ -996,7 +1069,26 @@ const ProjectOverview = () => {
 
             {/* Leistungsort / Durchführungsort */}
             <div className="border-t pt-4">
-              <Label className="text-base font-semibold mb-1 block">Leistungsort / Durchführungsort</Label>
+              <div className="flex items-start justify-between mb-1">
+                <Label className="text-base font-semibold block">Leistungsort / Durchführungsort</Label>
+                {editForm.customer_id && (editForm.kunde_adresse || editForm.kunde_plz || editForm.kunde_ort) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditForm(f => ({
+                      ...f,
+                      projekt_adresse: f.kunde_adresse,
+                      projekt_plz: f.kunde_plz,
+                      projekt_ort: f.kunde_ort,
+                      projekt_kontakt_name: f.projekt_kontakt_name || (f.kunde_name || ""),
+                      projekt_kontakt_telefon: f.projekt_kontakt_telefon || (f.kunde_telefon || ""),
+                    }))}
+                  >
+                    Kundenadresse übernehmen
+                  </Button>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground mb-3">
                 Adresse, wo die Arbeiten tatsächlich durchgeführt werden. Kann von der Kundenadresse abweichen.
               </p>
@@ -1024,6 +1116,25 @@ const ProjectOverview = () => {
                       value={editForm.projekt_ort}
                       onChange={(e) => setEditForm(f => ({ ...f, projekt_ort: e.target.value }))}
                       placeholder="z.B. Schrattenbach"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <Label className="text-xs">Kontakt vor Ort</Label>
+                    <Input
+                      value={editForm.projekt_kontakt_name}
+                      onChange={(e) => setEditForm(f => ({ ...f, projekt_kontakt_name: e.target.value }))}
+                      placeholder="z.B. Frau Müller"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Telefon</Label>
+                    <Input
+                      type="tel"
+                      value={editForm.projekt_kontakt_telefon}
+                      onChange={(e) => setEditForm(f => ({ ...f, projekt_kontakt_telefon: e.target.value }))}
+                      placeholder="+43 664 ..."
                     />
                   </div>
                 </div>

@@ -115,6 +115,8 @@ export default function ErstterminDetail() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [askProjectOpen, setAskProjectOpen] = useState(false);
   const [askProjectName, setAskProjectName] = useState("");
+  const [linkableProjects, setLinkableProjects] = useState<{ id: string; name: string; projektnummer: string | null }[]>([]);
+  const [selectedLinkProject, setSelectedLinkProject] = useState<string>("");
 
   // UI state
   const [loading, setLoading] = useState(!isNew);
@@ -202,6 +204,35 @@ export default function ErstterminDetail() {
     setLoading(false);
     // nach Initial-Load kurz warten, dann Dirty-Tracking aktivieren
     setTimeout(() => setHasUnsavedChanges(false), 300);
+  };
+
+  // Lade Projekte des aktuellen Kunden für die "Mit Projekt verknüpfen"-Auswahl.
+  useEffect(() => {
+    if (!customerId || projectId) {
+      setLinkableProjects([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("projects")
+        .select("id, name, projektnummer")
+        .eq("customer_id", customerId)
+        .order("name");
+      setLinkableProjects((data as any) || []);
+    })();
+  }, [customerId, projectId]);
+
+  const handleLinkToExistingProject = async () => {
+    if (!savedId || !selectedLinkProject) return;
+    const { error } = await (supabase.from("ersttermin_interessent" as never) as any)
+      .update({ project_id: selectedLinkProject })
+      .eq("id", savedId);
+    if (error) {
+      toast({ variant: "destructive", title: "Fehler", description: error.message });
+      return;
+    }
+    setProjectId(selectedLinkProject);
+    toast({ title: "Ersttermin verknüpft", description: "Mit dem gewählten Projekt verbunden." });
   };
 
   // Photos
@@ -654,21 +685,48 @@ export default function ErstterminDetail() {
         {/* Projekt-Verknüpfung (wenn gespeichert und noch kein Projekt) */}
         {savedId && !projectId && customerId && (
           <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <FolderPlus className="h-5 w-5 text-primary mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Kein Projekt verknüpft</p>
-                  <p className="text-xs text-muted-foreground">Aus diesem Ersttermin kann jederzeit ein Projekt angelegt werden.</p>
+            <CardContent className="py-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <FolderPlus className="h-5 w-5 text-primary mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Kein Projekt verknüpft</p>
+                    <p className="text-xs text-muted-foreground">Mit bestehendem Projekt verbinden oder neu erstellen.</p>
+                  </div>
                 </div>
+                <Button size="sm" onClick={() => {
+                  const suggested = projektname.trim() || (selectedCustomerData?.name ? `Projekt ${selectedCustomerData.name}` : "");
+                  setAskProjectName(suggested);
+                  setAskProjectOpen(true);
+                }}>
+                  <FolderPlus className="h-4 w-4 mr-1" />Neues Projekt erstellen
+                </Button>
               </div>
-              <Button size="sm" onClick={() => {
-                const suggested = projektname.trim() || (selectedCustomerData?.name ? `Projekt ${selectedCustomerData.name}` : "");
-                setAskProjectName(suggested);
-                setAskProjectOpen(true);
-              }}>
-                <FolderPlus className="h-4 w-4 mr-1" />Projekt aus Ersttermin erstellen
-              </Button>
+              {linkableProjects.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                  <span className="text-xs text-muted-foreground">Mit bestehendem Projekt verknüpfen:</span>
+                  <Select value={selectedLinkProject} onValueChange={setSelectedLinkProject}>
+                    <SelectTrigger className="w-[260px] h-9">
+                      <SelectValue placeholder="Projekt wählen..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {linkableProjects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.projektnummer ? `${p.projektnummer} · ` : ""}{p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!selectedLinkProject}
+                    onClick={handleLinkToExistingProject}
+                  >
+                    Verknüpfen
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

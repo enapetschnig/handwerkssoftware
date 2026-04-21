@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { QuickUploadDialog } from "@/components/QuickUploadDialog";
 import { MobilePhotoCapture } from "@/components/MobilePhotoCapture";
 import { useProjectStatuses, type ProjectStatus } from "@/hooks/useProjectStatuses";
+import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { mergeDuplicateProjects } from "@/lib/mergeDuplicateProjects";
 
 type Project = {
@@ -63,7 +64,9 @@ const Projects = () => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [bereichFilter, setBereichFilter] = useState<string>("all");
   const { statuses: projectStatuses, findByName } = useProjectStatuses();
+  const { options: bereichOptions } = useConfigOptions("projekt_bereich");
 
   useEffect(() => {
     checkAdminStatus();
@@ -367,8 +370,8 @@ const Projects = () => {
           </p>
         </div>
 
-        {/* Status-Filter + Suche */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        {/* Status-Filter */}
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge
             variant={statusFilter === "all" ? "default" : "outline"}
             className="cursor-pointer select-none"
@@ -398,6 +401,34 @@ const Projects = () => {
             );
           })}
         </div>
+        {/* Bereich-Filter (nur anzeigen wenn Projekte mit bereich existieren) */}
+        {projects.some((p) => (p as any).bereich) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground mr-1">Bereich:</span>
+            <Badge
+              variant={bereichFilter === "all" ? "default" : "outline"}
+              className="cursor-pointer select-none"
+              onClick={() => setBereichFilter("all")}
+            >
+              Alle
+            </Badge>
+            {bereichOptions.map((o) => {
+              const count = projects.filter((p) => (p as any).bereich === o.wert).length;
+              if (count === 0 && bereichFilter !== o.wert) return null;
+              return (
+                <Badge
+                  key={o.id}
+                  variant={bereichFilter === o.wert ? "default" : "outline"}
+                  className="cursor-pointer select-none"
+                  onClick={() => setBereichFilter(o.wert)}
+                >
+                  {o.label}
+                  <span className="ml-1.5 opacity-70">({count})</span>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
 
         <div className="mb-4">
           <div className="relative">
@@ -422,7 +453,9 @@ const Projects = () => {
                 (project.beschreibung || "").toLowerCase().includes(q);
               const matchesStatus =
                 statusFilter === "all" || (project.status || "").toLowerCase() === statusFilter.toLowerCase();
-              return matchesSearch && matchesStatus;
+              const matchesBereich =
+                bereichFilter === "all" || (project as any).bereich === bereichFilter;
+              return matchesSearch && matchesStatus && matchesBereich;
             });
 
             if (filtered.length === 0) {
@@ -477,6 +510,11 @@ const Projects = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
+                        {(project as any).bereich && (
+                          <Badge variant="secondary" className="whitespace-nowrap text-xs">
+                            {bereichOptions.find((o) => o.wert === (project as any).bereich)?.label || (project as any).bereich}
+                          </Badge>
+                        )}
                         {(project as any).projektart && (
                           <Badge variant="outline" className="whitespace-nowrap text-xs">
                             {(project as any).projektart}

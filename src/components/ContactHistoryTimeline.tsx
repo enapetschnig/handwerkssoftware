@@ -24,7 +24,7 @@ interface ContactHistoryEntry {
   datum: string;
   dauer_minuten: number | null;
   kontaktperson: string | null;
-  user_id: string;
+  erstellt_von: string;
   created_at: string;
 }
 
@@ -134,7 +134,7 @@ export function ContactHistoryTimeline({ customerId, projectId }: Props) {
       kontaktperson: form.kontaktperson.trim() || null,
       customer_id: customerId ?? null,
       project_id: projectId ?? null,
-      user_id: user.id,
+      erstellt_von: user.id,
     };
 
     const { error } = await supabase
@@ -231,7 +231,7 @@ export function ContactHistoryTimeline({ customerId, projectId }: Props) {
                       </p>
                     )}
 
-                    {(isAdmin || entry.user_id === currentUserId) && (
+                    {(isAdmin || entry.erstellt_von === currentUserId) && (
                       <Button
                         variant="ghost"
                         size="sm"
