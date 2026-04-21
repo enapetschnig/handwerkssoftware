@@ -404,6 +404,55 @@ export default function InvoiceDetail() {
           toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Quelldokument konnte nicht geladen werden" });
         }
       })();
+    } else if (isNew && defaultProjectId) {
+      // Kein from_doc, aber ?project=... → Projekt + Kunden + Projekt-Kontakt
+      // automatisch ins Formular übernehmen (aus dem Projekt heraus gestartet).
+      (async () => {
+        try {
+          const { data: projFull } = await (supabase.from("projects" as never) as any)
+            .select("customer_id, projekt_kontakt_name, projekt_kontakt_telefon")
+            .eq("id", defaultProjectId)
+            .maybeSingle();
+          if (!projFull) return;
+          // Ansprechpartner aus Projekt
+          setForm(prev => ({
+            ...prev,
+            ansprechpartner_name: projFull.projekt_kontakt_name || "",
+            ansprechpartner_telefon: projFull.projekt_kontakt_telefon || "",
+          } as any));
+          if (!projFull.customer_id) return;
+          // Kundendaten laden
+          const { data: cust } = await supabase
+            .from("customers")
+            .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
+            .eq("id", projFull.customer_id)
+            .maybeSingle();
+          if (!cust) return;
+          setForm(prev => ({
+            ...prev,
+            customer_id: cust.id,
+            kunde_name: cust.name,
+            kunde_adresse: cust.adresse || "",
+            kunde_plz: cust.plz || "",
+            kunde_ort: cust.ort || "",
+            kunde_land: cust.land || "Österreich",
+            kunde_email: cust.email || "",
+            kunde_telefon: cust.telefon || "",
+            kunde_uid: cust.uid_nummer || "",
+            kunde_anrede: (cust as any).anrede || "",
+            kunde_titel: (cust as any).titel || "",
+            kundennummer: cust.kundennummer || "",
+            skonto_prozent: Number(cust.skonto_prozent) || 0,
+            skonto_tage: Number(cust.skonto_tage) || 0,
+          } as any));
+          const nettofrist = Number((cust as any).nettofrist) || 0;
+          if (nettofrist > 0 && defaultTyp === "rechnung") {
+            setForm(prev => ({ ...prev, zahlungsbedingungen: `${nettofrist} Tage` }));
+          }
+        } catch (err) {
+          console.error("Projekt-Prefill fehlgeschlagen:", err);
+        }
+      })();
     }
   }, [id]);
 

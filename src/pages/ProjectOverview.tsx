@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown, UserPlus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { ContactHistoryTimeline } from "@/components/ContactHistoryTimeline";
@@ -590,6 +590,9 @@ const ProjectOverview = () => {
           </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/besprechungsprotokolle/neu?project=${projectId}`)}>
             <MessageSquare className="h-3.5 w-3.5" />Neues Protokoll
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/ersttermine/neu?project=${projectId}`)}>
+            <UserPlus className="h-3.5 w-3.5" />Neue Erstaufnahme
           </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/invoices/new?typ=angebot&project=${projectId}`)}>
             <FileText className="h-3.5 w-3.5" />Neues Angebot

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Save, Trash2, CheckCircle, PenLine, FolderPlus, Camera, Upload, ZoomIn, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ interface ErstterminPhoto {
 
 export default function ErstterminDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const isNew = id === "neu";
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -222,6 +223,39 @@ export default function ErstterminDetail() {
         setProjectId(d.project_id || null);
       }
       fetchPhotos(id);
+    } else if (isNew) {
+      // Neu-Ersttermin aus Projekt heraus aufgerufen: ?project=<id>
+      // → project_id + Kunde + Projekt-Adresse vorausfüllen.
+      const preProjectId = searchParams.get("project");
+      if (preProjectId) {
+        setProjectId(preProjectId);
+        const { data: proj } = await (supabase.from("projects" as never) as any)
+          .select("id, name, customer_id, adresse, plz, ort, projekt_kontakt_name, projekt_kontakt_telefon")
+          .eq("id", preProjectId)
+          .maybeSingle();
+        if (proj) {
+          if (proj.name) setProjektname(proj.name);
+          if (proj.adresse) setStandort(proj.adresse);
+          if (proj.plz) setStandortPlz(proj.plz);
+          if (proj.ort) setStandortOrt(proj.ort);
+          if (proj.projekt_kontakt_name) setAnsprechpartner(proj.projekt_kontakt_name);
+          if (proj.projekt_kontakt_telefon) setTelefon(proj.projekt_kontakt_telefon);
+          if (proj.customer_id) {
+            setCustomerId(proj.customer_id);
+            // Kundendaten direkt laden, damit die Kundenbox sofort gefüllt ist.
+            const { data: cust } = await supabase
+              .from("customers")
+              .select("id, name, anrede, titel, adresse, plz, ort, email, telefon, uid_nummer")
+              .eq("id", proj.customer_id)
+              .maybeSingle();
+            if (cust) {
+              setSelectedCustomerData(cust as any);
+              if (cust.email) setEmail(cust.email);
+              if (!proj.projekt_kontakt_telefon && cust.telefon) setTelefon(cust.telefon);
+            }
+          }
+        }
+      }
     }
     setLoading(false);
     // nach Initial-Load kurz warten, dann Dirty-Tracking aktivieren

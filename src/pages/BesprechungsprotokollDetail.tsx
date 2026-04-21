@@ -66,7 +66,21 @@ const BesprechungsprotokollDetail = () => {
     const { data: projData } = await supabase.from("projects").select("id, name, customer_id").order("name");
     if (projData) setProjects(projData as Project[]);
 
-    if (!isNew && id) await fetchProtokoll(id);
+    if (!isNew && id) {
+      await fetchProtokoll(id);
+    } else if (isNew && projectId) {
+      // Neu-Protokoll aus Projekt: Kunde + Projekt-Adresse vorausfüllen
+      const proj = (projData as any[])?.find((p: any) => p.id === projectId);
+      if (proj?.customer_id) setCustomerId(proj.customer_id);
+      const { data: projFull } = await (supabase.from("projects" as never) as any)
+        .select("adresse, plz, ort")
+        .eq("id", projectId)
+        .maybeSingle();
+      if (projFull) {
+        const parts = [projFull.adresse, [projFull.plz, projFull.ort].filter(Boolean).join(" ")].filter(Boolean);
+        if (parts.length > 0) setOrt(parts.join(", "));
+      }
+    }
     setLoading(false);
   };
 
