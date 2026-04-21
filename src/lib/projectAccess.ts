@@ -103,55 +103,28 @@ export async function loadEmployeeProjectRelations(
   });
 }
 
-/** Synchronisiert die Projekt-Zugänge eines Mitarbeiters:
- *  - fügt employeeId zu allen Projekten in nextIds hinzu, sofern noch nicht drin
- *  - entfernt employeeId aus allen aktuellen Zuordnungen, die nicht in nextIds sind.
- *  Liefert { added, removed } zurück für Feedback. */
+/** Synchronisiert die Projekt-Zugänge eines Mitarbeiters via SECURITY-DEFINER-RPC
+ *  set_employee_project_access. Das RPC bekommt employee_id + Liste der
+ *  gewünschten project_ids und aktualisiert projects.zugewiesene_mitarbeiter
+ *  atomar + ohne RLS-Hürden. Der Caller muss Admin/Vorarbeiter sein
+ *  (wird in der Funktion geprüft).
+ *
+ *  Wirft bei Fehlern eine Exception mit Details.
+ */
 export async function syncEmployeeProjectAccess(
   employeeId: string,
   nextProjectIds: string[],
-): Promise<{ added: number; removed: number }> {
-  const nextSet = new Set(nextProjectIds);
-
-  // Aktuelle Projekt-Zuordnungen des Mitarbeiters holen
-  const { data: assigned } = await (supabase.from("projects" as never) as any)
-    .select("id, zugewiesene_mitarbeiter")
-    .contains("zugewiesene_mitarbeiter", [employeeId]);
-  const currentIds = new Set(((assigned as any[]) || []).map(p => p.id));
-
-  // Entfernen: aktuell zugeordnet, aber nicht mehr gewünscht
-  const toRemove = [...currentIds].filter(id => !nextSet.has(id));
-  // Hinzufügen: gewünscht, aber nicht aktuell zugeordnet
-  const toAdd = nextProjectIds.filter(id => !currentIds.has(id));
-
-  // Für Add-/Remove-Operationen müssen wir das JSONB-Array manuell aktualisieren
-  // (Supabase JS hat kein array-contains-modify out-of-box).
-  if (toRemove.length > 0) {
-    const { data: removeRows } = await (supabase.from("projects" as never) as any)
-      .select("id, zugewiesene_mitarbeiter")
-      .in("id", toRemove);
-    for (const row of (removeRows as any[]) || []) {
-      const current: string[] = Array.isArray(row.zugewiesene_mitarbeiter) ? row.zugewiesene_mitarbeiter : [];
-      const updated = current.filter((x: string) => x !== employeeId);
-      await (supabase.from("projects" as never) as any)
-        .update({ zugewiesene_mitarbeiter: updated })
-        .eq("id", row.id);
-    }
+): Promise<{ added: number; removed: number; failed: number }> {
+  const { data, error } = await (supabase.rpc as any)("set_employee_project_access", {
+    p_employee_id: employeeId,
+    p_project_ids: nextProjectIds,
+  });
+  if (error) {
+    throw new Error(`Projekt-Zuordnung fehlgeschlagen: ${error.message}`);
   }
-
-  if (toAdd.length > 0) {
-    const { data: addRows } = await (supabase.from("projects" as never) as any)
-      .select("id, zugewiesene_mitarbeiter")
-      .in("id", toAdd);
-    for (const row of (addRows as any[]) || []) {
-      const current: string[] = Array.isArray(row.zugewiesene_mitarbeiter) ? row.zugewiesene_mitarbeiter : [];
-      if (!current.includes(employeeId)) {
-        await (supabase.from("projects" as never) as any)
-          .update({ zugewiesene_mitarbeiter: [...current, employeeId] })
-          .eq("id", row.id);
-      }
-    }
-  }
-
-  return { added: toAdd.length, removed: toRemove.length };
+  return {
+    added: Number((data as any)?.added) || 0,
+    removed: Number((data as any)?.removed) || 0,
+    failed: 0,
+  };
 }

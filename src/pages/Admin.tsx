@@ -590,20 +590,26 @@ export default function Admin() {
 
       // Projekt-Zugänge synchronisieren (nur für Nicht-Admins;
       // Administratoren sehen per RLS immer alle Projekte).
-      let syncResult: { added: number; removed: number } | null = null;
+      let syncResult: { added: number; removed: number; failed: number } | null = null;
+      let syncError: string | null = null;
       if (selectedEmployee && employeeRole !== "administrator") {
         try {
           syncResult = await syncEmployeeProjectAccess(selectedEmployee.id, employeeProjectIds);
         } catch (err: any) {
           console.error("Projekt-Zuordnung fehlgeschlagen:", err);
-          toast({ variant: "destructive", title: "Hinweis", description: `Projekt-Zuordnung fehlgeschlagen: ${err.message}` });
+          syncError = err.message || String(err);
         }
       }
 
-      const syncMsg = syncResult && (syncResult.added > 0 || syncResult.removed > 0)
-        ? ` Projekt-Zugänge aktualisiert (${syncResult.added > 0 ? `+${syncResult.added}` : ""}${syncResult.added > 0 && syncResult.removed > 0 ? " / " : ""}${syncResult.removed > 0 ? `-${syncResult.removed}` : ""}) – sofort aktiv in Zeiterfassung + WhatsApp-Bot.`
-        : "";
-      toast({ title: "Gespeichert", description: `Änderungen übernommen.${syncMsg}` });
+      if (syncError) {
+        // Wenn die Sync fehlgeschlagen ist — nicht schließen, Admin muss Bescheid wissen
+        toast({ variant: "destructive", title: "Projekt-Zuordnung fehlgeschlagen", description: syncError });
+      } else {
+        const syncMsg = syncResult && (syncResult.added > 0 || syncResult.removed > 0)
+          ? ` Projekt-Zugänge aktualisiert (${syncResult.added > 0 ? `+${syncResult.added}` : ""}${syncResult.added > 0 && syncResult.removed > 0 ? " / " : ""}${syncResult.removed > 0 ? `-${syncResult.removed}` : ""}) – sofort aktiv in Zeiterfassung + WhatsApp-Bot.`
+          : "";
+        toast({ title: "Gespeichert", description: `Änderungen übernommen.${syncMsg}` });
+      }
       fetchEmployees();
       if (nameChanged) fetchUsers({ silent: true });
       setSelectedEmployee(null);
