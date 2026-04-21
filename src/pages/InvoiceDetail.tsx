@@ -199,6 +199,10 @@ export default function InvoiceDetail() {
   // Umwandlungs-Dialoge
   const [anzahlungDialogOpen, setAnzahlungDialogOpen] = useState(false);
   const [anzahlungProzentInput, setAnzahlungProzentInput] = useState<string>("30");
+  const [anzahlungBetragInput, setAnzahlungBetragInput] = useState<string>("");
+  // Welches Feld hat der User zuletzt angefasst? Bestimmt, ob wir mit
+  // Prozent oder Fix-Betrag in die URL/Ladelogik gehen.
+  const [anzahlungMode, setAnzahlungMode] = useState<"prozent" | "betrag">("prozent");
   const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -299,6 +303,7 @@ export default function InvoiceDetail() {
     const fromDocId = searchParams.get("from_doc") || searchParams.get("from_angebot");
     const targetTyp = searchParams.get("typ") || "rechnung";
     const anzahlungProzentParam = searchParams.get("anzahlung_prozent");
+    const anzahlungBetragParam = searchParams.get("anzahlung_betrag");
     const abzugIdsParam = searchParams.get("abzug_ids");
     if (isNew && fromDocId && fromDocId !== "true") {
       (async () => {
@@ -336,6 +341,7 @@ export default function InvoiceDetail() {
             reverse_charge: !!data.reverse_charge,
             kundennummer: data.kundennummer || "",
             anzahlung_prozent: anzahlungProzentParam ? Number(anzahlungProzentParam) : null,
+            anzahlung_betrag: anzahlungBetragParam ? Number(anzahlungBetragParam) : null,
             parent_invoice_id: fromDocId,
           } as any));
           const srcItems = (itemsRes.data || []) as any[];
@@ -351,21 +357,35 @@ export default function InvoiceDetail() {
             gesamtpreis: Number(it.gesamtpreis) || 0,
           }));
 
-          // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag
-          if (targetTyp === "anzahlungsrechnung" && anzahlungProzentParam) {
+          // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag.
+          // Betrag hat Vorrang vor Prozent, falls beide gesetzt sind.
+          if (targetTyp === "anzahlungsrechnung" && (anzahlungBetragParam || anzahlungProzentParam)) {
             const gesamtNetto = nextItems.reduce((s, it) => s + it.gesamtpreis, 0);
-            const prozent = Number(anzahlungProzentParam);
-            const anzBetrag = gesamtNetto * (prozent / 100);
+            const quellNummer = data.nummer || "Auftragsbestätigung";
+            let anzBetrag: number;
+            let labelKurz: string;
+            let labelLang: string;
+            if (anzahlungBetragParam) {
+              anzBetrag = Number(anzahlungBetragParam);
+              labelKurz = "Anzahlung";
+              labelLang = `Anzahlung gemäß ${quellNummer}`;
+            } else {
+              const prozent = Number(anzahlungProzentParam);
+              anzBetrag = gesamtNetto * (prozent / 100);
+              labelKurz = `Anzahlung ${prozent}%`;
+              labelLang = `Anzahlung ${prozent}% gemäß ${quellNummer}`;
+            }
+            anzBetrag = Math.round(anzBetrag * 100) / 100;
             nextItems = [{
               position: 1,
-              beschreibung: `Anzahlung ${prozent}% gemäß ${data.nummer || "Auftragsbestätigung"}`,
-              kurztext: `Anzahlung ${prozent}%`,
+              beschreibung: labelLang,
+              kurztext: labelKurz,
               langtext: "",
               menge: 1,
               einheit: "pausch.",
-              einzelpreis: Math.round(anzBetrag * 100) / 100,
+              einzelpreis: anzBetrag,
               rabatt_prozent: 0,
-              gesamtpreis: Math.round(anzBetrag * 100) / 100,
+              gesamtpreis: anzBetrag,
             }];
           }
 
@@ -1262,10 +1282,11 @@ export default function InvoiceDetail() {
 
   // Umwandlung zu beliebigem Ziel-Dokumenttyp. options steuern Extras
   // (Anzahlungs-Prozent, Abzüge von Anzahlungen).
-  const handleConvertTo = (targetTyp: string, options?: { anzahlung_prozent?: number; abzug_ids?: string[] }) => {
+  const handleConvertTo = (targetTyp: string, options?: { anzahlung_prozent?: number; anzahlung_betrag?: number; abzug_ids?: string[] }) => {
     if (!invoiceId) return;
     const params = new URLSearchParams({ typ: targetTyp, from_doc: invoiceId });
     if (options?.anzahlung_prozent != null) params.set("anzahlung_prozent", String(options.anzahlung_prozent));
+    if (options?.anzahlung_betrag != null) params.set("anzahlung_betrag", String(options.anzahlung_betrag));
     if (options?.abzug_ids?.length) params.set("abzug_ids", options.abzug_ids.join(","));
     navigate(`/invoices/new?${params.toString()}`);
   };
@@ -1538,7 +1559,12 @@ export default function InvoiceDetail() {
                               </DropdownMenuItem>
                             )}
                             {allow.anzahlungsrechnung && (
-                              <DropdownMenuItem onClick={() => { setAnzahlungProzentInput("30"); setAnzahlungDialogOpen(true); }}>
+                              <DropdownMenuItem onClick={() => {
+                                setAnzahlungProzentInput("30");
+                                setAnzahlungBetragInput((nettoSumme * 0.3).toFixed(2));
+                                setAnzahlungMode("prozent");
+                                setAnzahlungDialogOpen(true);
+                              }}>
                                 Anzahlungsrechnung…
                               </DropdownMenuItem>
                             )}
@@ -2953,50 +2979,120 @@ export default function InvoiceDetail() {
           }}
         />
 
-        {/* Anzahlungsrechnung-Dialog: nur Prozentsatz */}
+        {/* Anzahlungsrechnung-Dialog: Prozent ODER fester Betrag */}
         <Dialog open={anzahlungDialogOpen} onOpenChange={setAnzahlungDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Anzahlungsrechnung erstellen</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 py-2">
-              <p className="text-sm text-muted-foreground">
-                Anzahlungsbetrag als prozentualer Anteil vom Netto-Gesamtbetrag der Auftragsbestätigung.
-              </p>
-              <div>
-                <Label>Prozentsatz</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={anzahlungProzentInput}
-                    onChange={(e) => setAnzahlungProzentInput(e.target.value)}
-                    className="max-w-[120px]"
-                  />
-                  <span className="text-sm text-muted-foreground">% vom Netto</span>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Bei der Schlussrechnung wird diese Anzahlung dann als Abzug berücksichtigt.
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAnzahlungDialogOpen(false)}>Abbrechen</Button>
-              <Button
-                onClick={() => {
-                  const p = Number(anzahlungProzentInput);
-                  if (isNaN(p) || p <= 0 || p > 100) {
-                    toast({ variant: "destructive", title: "Ungültiger Prozentsatz" });
-                    return;
-                  }
-                  setAnzahlungDialogOpen(false);
-                  handleConvertTo("anzahlungsrechnung", { anzahlung_prozent: p });
-                }}
-              >
-                Anzahlungsrechnung erstellen
-              </Button>
-            </DialogFooter>
+            {(() => {
+              const basisNetto = nettoSumme;
+              const basisBrutto = bruttoSumme;
+              const prozentNum = Number(anzahlungProzentInput);
+              const betragNum = Number(anzahlungBetragInput);
+              const anzNetto = anzahlungMode === "prozent"
+                ? (isNaN(prozentNum) ? 0 : basisNetto * prozentNum / 100)
+                : (isNaN(betragNum) ? 0 : betragNum);
+              const anzBrutto = anzNetto * (1 + (form.mwst_satz / 100));
+              const valid = anzNetto > 0 && anzNetto <= basisNetto + 0.01;
+              return (
+                <>
+                  <div className="space-y-4 py-2">
+                    <div className="rounded border bg-muted/40 p-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Gesamtbetrag (Basis):</span>
+                        <span className="font-mono font-medium">€ {basisNetto.toFixed(2)} netto</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
+                        <span>inkl. {form.mwst_satz}% MwSt.:</span>
+                        <span className="font-mono">€ {basisBrutto.toFixed(2)} brutto</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Prozentsatz</Label>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step="0.1"
+                            value={anzahlungProzentInput}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setAnzahlungProzentInput(v);
+                              setAnzahlungMode("prozent");
+                              const p = Number(v);
+                              if (!isNaN(p) && basisNetto > 0) {
+                                setAnzahlungBetragInput((basisNetto * p / 100).toFixed(2));
+                              }
+                            }}
+                          />
+                          <span className="text-sm text-muted-foreground">%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Fester Betrag (netto)</Label>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-sm text-muted-foreground">€</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={anzahlungBetragInput}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setAnzahlungBetragInput(v);
+                              setAnzahlungMode("betrag");
+                              const b = Number(v);
+                              if (!isNaN(b) && basisNetto > 0) {
+                                setAnzahlungProzentInput(((b / basisNetto) * 100).toFixed(2));
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded border border-primary/30 bg-primary/5 p-3 text-sm">
+                      <div className="flex justify-between font-medium">
+                        <span>Anzahlung:</span>
+                        <span className="font-mono">€ {anzNetto.toFixed(2)} netto</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
+                        <span>inkl. {form.mwst_satz}% MwSt.:</span>
+                        <span className="font-mono">€ {anzBrutto.toFixed(2)} brutto</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Bei der Schlussrechnung wird diese Anzahlung automatisch als Abzug berücksichtigt.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setAnzahlungDialogOpen(false)}>Abbrechen</Button>
+                    <Button
+                      disabled={!valid}
+                      onClick={() => {
+                        if (!valid) {
+                          toast({ variant: "destructive", title: "Ungültiger Anzahlungsbetrag", description: "Der Betrag muss > 0 und ≤ Gesamtsumme sein." });
+                          return;
+                        }
+                        setAnzahlungDialogOpen(false);
+                        if (anzahlungMode === "betrag") {
+                          handleConvertTo("anzahlungsrechnung", { anzahlung_betrag: Math.round(anzNetto * 100) / 100 });
+                        } else {
+                          handleConvertTo("anzahlungsrechnung", { anzahlung_prozent: Number(anzahlungProzentInput) });
+                        }
+                      }}
+                    >
+                      Anzahlungsrechnung erstellen
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 
