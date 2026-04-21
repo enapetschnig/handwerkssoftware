@@ -86,6 +86,10 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [filterTyp, setFilterTyp] = useState<string>("rechnung");
   const [filterStatus, setFilterStatus] = useState<string>("alle");
+  // Sub-Typ-Filter innerhalb der Rechnungen- bzw. Angebote-Tabs.
+  //   "alle" = keine weitere Einschränkung
+  //   sonst = exakter invoices.typ-Wert
+  const [filterSubTyp, setFilterSubTyp] = useState<string>("alle");
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchive, setShowArchive] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -502,8 +506,12 @@ export default function Invoices() {
     let matchTyp: boolean;
     if (filterTyp === "rechnung") {
       matchTyp = INVOICE_LIKE_TYPES.has(i.typ);
+      // Sub-Filter innerhalb der Rechnungen (normale / AR / SR / GS)
+      if (matchTyp && filterSubTyp !== "alle") matchTyp = i.typ === filterSubTyp;
     } else if (filterTyp === "angebot") {
       matchTyp = ANGEBOT_LIKE_TYPES.has(i.typ);
+      // Sub-Filter innerhalb der Angebote (Angebot / AB)
+      if (matchTyp && filterSubTyp !== "alle") matchTyp = i.typ === filterSubTyp;
     } else if (filterTyp === "lieferschein") {
       matchTyp = i.typ === "lieferschein";
     } else {
@@ -601,20 +609,20 @@ export default function Invoices() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex rounded-md border overflow-hidden">
                 <button
-                  onClick={() => setFilterTyp("rechnung")}
+                  onClick={() => { setFilterTyp("rechnung"); setFilterSubTyp("alle"); }}
                   className={`px-4 py-2 text-sm font-medium transition-colors ${filterTyp === "rechnung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                 >
                   Rechnungen
                 </button>
                 <button
-                  onClick={() => setFilterTyp("angebot")}
+                  onClick={() => { setFilterTyp("angebot"); setFilterSubTyp("alle"); }}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "angebot" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                   title="Angebote + Auftragsbestätigungen"
                 >
                   Angebote
                 </button>
                 <button
-                  onClick={() => setFilterTyp("storno")}
+                  onClick={() => { setFilterTyp("storno"); setFilterSubTyp("alle"); }}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "storno" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                   title="Stornierte Rechnungen / Storno-Belege"
                 >
@@ -659,6 +667,43 @@ export default function Invoices() {
                 </DropdownMenu>
               </div>
             </div>
+
+            {/* Sub-Filter pro Typ — nur sichtbar bei Rechnungen + Angebote */}
+            {(filterTyp === "rechnung" || filterTyp === "angebot") && (() => {
+              const chips: { val: string; label: string; cls: string }[] = filterTyp === "rechnung"
+                ? [
+                    { val: "alle",                label: "Alle",               cls: "bg-muted text-foreground" },
+                    { val: "rechnung",            label: "Rechnung",           cls: "bg-green-100 text-green-800 border-green-300" },
+                    { val: "anzahlungsrechnung",  label: "Anzahlungsrechnung", cls: "bg-orange-100 text-orange-800 border-orange-300" },
+                    { val: "schlussrechnung",    label: "Schlussrechnung",    cls: "bg-emerald-100 text-emerald-900 border-emerald-400" },
+                    { val: "gutschrift",         label: "Gutschrift",         cls: "bg-purple-100 text-purple-800 border-purple-300" },
+                  ]
+                : [
+                    { val: "alle",                label: "Alle",               cls: "bg-muted text-foreground" },
+                    { val: "angebot",             label: "Angebot",            cls: "bg-blue-100 text-blue-800 border-blue-300" },
+                    { val: "auftragsbestaetigung", label: "Auftragsbestätigung", cls: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+                  ];
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {chips.map(chip => {
+                    const active = filterSubTyp === chip.val;
+                    return (
+                      <button
+                        key={chip.val}
+                        onClick={() => setFilterSubTyp(chip.val)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
+                          active
+                            ? `${chip.cls} ring-2 ring-offset-1 ring-primary/50`
+                            : `${chip.cls} opacity-60 hover:opacity-100`
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Schlanke Filter-Zeile */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -805,17 +850,43 @@ export default function Invoices() {
                         >
                           <TableCell className="font-mono font-medium">
                             <div className="flex items-center gap-2">
+                              {(() => {
+                                // Typ-Badge immer sichtbar (auch bei Rechnung + Angebot) und
+                                // farblich unterschieden — macht in der Liste sofort klar, ob
+                                // es eine normale Rechnung, Anzahlungs-, Schlussrechnung,
+                                // Gutschrift, Angebot, AB oder Lieferschein ist.
+                                const styles: Record<string, string> = {
+                                  angebot:              "bg-blue-100 text-blue-800 border-blue-300",
+                                  auftragsbestaetigung: "bg-indigo-100 text-indigo-800 border-indigo-300",
+                                  rechnung:             "bg-green-100 text-green-800 border-green-300",
+                                  anzahlungsrechnung:   "bg-orange-100 text-orange-800 border-orange-300",
+                                  schlussrechnung:      "bg-emerald-100 text-emerald-900 border-emerald-400",
+                                  lieferschein:         "bg-amber-100 text-amber-800 border-amber-300",
+                                  gutschrift:           "bg-purple-100 text-purple-800 border-purple-300",
+                                };
+                                const labels: Record<string, string> = {
+                                  angebot: "AN", auftragsbestaetigung: "AB", rechnung: "RE",
+                                  anzahlungsrechnung: "AR", schlussrechnung: "SR",
+                                  lieferschein: "LS", gutschrift: "GS",
+                                };
+                                return (
+                                  <span
+                                    className={`inline-flex items-center justify-center text-[10px] font-semibold tracking-wide px-1.5 py-0.5 rounded border min-w-[28px] ${styles[inv.typ] || "bg-muted text-foreground border-border"}`}
+                                    title={
+                                      inv.typ === "anzahlungsrechnung" ? "Anzahlungsrechnung"
+                                        : inv.typ === "schlussrechnung" ? "Schlussrechnung"
+                                        : inv.typ === "auftragsbestaetigung" ? "Auftragsbestätigung"
+                                        : inv.typ === "gutschrift" ? "Gutschrift"
+                                        : inv.typ === "lieferschein" ? "Lieferschein"
+                                        : inv.typ === "rechnung" ? "Rechnung"
+                                        : "Angebot"
+                                    }
+                                  >
+                                    {labels[inv.typ] || inv.typ.slice(0, 2).toUpperCase()}
+                                  </span>
+                                );
+                              })()}
                               <span>{inv.nummer}</span>
-                              {inv.typ !== "rechnung" && inv.typ !== "angebot" && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                                  {inv.typ === "auftragsbestaetigung" ? "AB"
-                                    : inv.typ === "anzahlungsrechnung" ? "AR"
-                                    : inv.typ === "schlussrechnung" ? "SR"
-                                    : inv.typ === "lieferschein" ? "LS"
-                                    : inv.typ === "gutschrift" ? "GS"
-                                    : inv.typ}
-                                </Badge>
-                              )}
                             </div>
                           </TableCell>
                           <TableCell>{inv.kunde_name}</TableCell>
