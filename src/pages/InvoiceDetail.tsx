@@ -1428,7 +1428,6 @@ export default function InvoiceDetail() {
                         anzahlungsrechnung: t === "auftragsbestaetigung",
                         teilrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung",
                         schlussrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung" || t === "teilrechnung",
-                        lieferschein: t === "auftragsbestaetigung" || t === "angebot",
                       };
                       if (!Object.values(allow).some(Boolean)) return null;
                       return (
@@ -1478,12 +1477,6 @@ export default function InvoiceDetail() {
                                 setSchlussrechnungDialogOpen(true);
                               }}>
                                 Schlussrechnung…
-                              </DropdownMenuItem>
-                            )}
-                            {(allow.auftragsbestaetigung || allow.lieferschein) && <DropdownMenuSeparator />}
-                            {allow.lieferschein && (
-                              <DropdownMenuItem onClick={() => handleConvertTo("lieferschein")}>
-                                Lieferschein
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
