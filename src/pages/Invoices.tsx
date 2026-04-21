@@ -448,8 +448,12 @@ export default function Invoices() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Zahlbare Rechnungstypen: alle Rechnungen vom Kunden an uns.
+  // Gutschrift bewusst ausgeschlossen (geht in die andere Richtung).
+  const _payableInvoiceTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
+
   const isOverdue = (inv: Invoice) =>
-    inv.typ === "rechnung" &&
+    _payableInvoiceTypes.has(inv.typ) &&
     inv.faellig_am &&
     (inv.status === "offen" || inv.status === "teilbezahlt") &&
     isBefore(parseISO(inv.faellig_am), today);
@@ -540,7 +544,7 @@ export default function Invoices() {
           }
           const visibleInvoices = invoices.filter(i => i.typ === filterTyp && i.status !== "storniert");
           const count = visibleInvoices.length;
-          const openBrutto = visibleInvoices.filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
+          const openBrutto = visibleInvoices.filter(i => _payableInvoiceTypes.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt")).reduce((s, i) => s + (Number(i.brutto_summe) - Number(i.bezahlt_betrag || 0)), 0);
           const overdue = visibleInvoices.filter(i => isOverdue(i)).length;
           return (
             <div className="grid grid-cols-3 gap-3 mb-4">
@@ -798,7 +802,7 @@ export default function Invoices() {
                           <TableCell className="text-right font-medium">€ {brutto.toFixed(2)}</TableCell>
                           {filterTyp !== "angebot" && (
                             <TableCell className="text-right">
-                              {inv.typ === "rechnung" ? (
+                              {_payableInvoiceTypes.has(inv.typ) ? (
                                 <div>
                                   {inv.status === "bezahlt" ? (
                                     <span className="text-green-600 font-medium">€ {brutto.toFixed(2)}</span>

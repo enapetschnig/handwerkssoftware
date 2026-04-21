@@ -33,8 +33,23 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
   const [exportAll, setExportAll] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState("");
+  // Standardmäßig werden alle Rechnungs-artigen Typen exportiert
+  // (Rechnung, Anzahlungsrechnung, Schlussrechnung, Gutschrift). User kann
+  // via Checkboxen einzelne Typen ab- bzw. anwählen.
+  const [selectedTypes, setSelectedTypes] = useState<Record<string, boolean>>({
+    rechnung: true,
+    anzahlungsrechnung: true,
+    schlussrechnung: true,
+    gutschrift: true,
+  });
 
   const handleExport = async () => {
+    const activeTypes = Object.entries(selectedTypes).filter(([, v]) => v).map(([k]) => k);
+    if (activeTypes.length === 0) {
+      toast({ variant: "destructive", title: "Keine Dokumenttypen", description: "Wähle mindestens einen Dokumenttyp aus." });
+      return;
+    }
+
     setExporting(true);
     setProgress("Lade Rechnungen...");
 
@@ -43,7 +58,7 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
       let query = supabase
         .from("invoices")
         .select("*")
-        .eq("typ", "rechnung")
+        .in("typ", activeTypes)
         .eq("jahr", parseInt(year));
 
       if (!exportAll) {
@@ -242,6 +257,27 @@ export function ExportInvoicesDialog({ open, onClose, bankData }: ExportInvoices
           <div className="flex items-center gap-2">
             <Checkbox id="includeStorno" checked={includeStorno} onCheckedChange={(c) => setIncludeStorno(!!c)} />
             <Label htmlFor="includeStorno">Stornierte Rechnungen einschließen</Label>
+          </div>
+
+          <div className="space-y-2 pt-1 border-t">
+            <Label className="text-xs text-muted-foreground">Welche Dokumenttypen?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ["rechnung", "Rechnungen"],
+                ["anzahlungsrechnung", "Anzahlungsrechnungen"],
+                ["schlussrechnung", "Schlussrechnungen"],
+                ["gutschrift", "Gutschriften"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`typ-${key}`}
+                    checked={selectedTypes[key]}
+                    onCheckedChange={(c) => setSelectedTypes(prev => ({ ...prev, [key]: !!c }))}
+                  />
+                  <Label htmlFor={`typ-${key}`} className="text-sm">{label}</Label>
+                </div>
+              ))}
+            </div>
           </div>
 
           {exporting && (

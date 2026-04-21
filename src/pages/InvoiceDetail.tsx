@@ -1586,16 +1586,41 @@ export default function InvoiceDetail() {
                                 const rootId = isOnAnzahlung
                                   ? ((form as any).parent_invoice_id || invoiceId)
                                   : invoiceId;
+
+                                // Guard: existiert bereits eine nicht-stornierte Schlussrechnung
+                                // zum selben Auftrag? Dann abbrechen — sonst hätten wir parallele
+                                // SRs mit identischen Abzügen.
+                                const { data: existingSR } = await supabase
+                                  .from("invoices")
+                                  .select("id, nummer, status")
+                                  .eq("parent_invoice_id", rootId)
+                                  .eq("typ", "schlussrechnung")
+                                  .neq("status", "storniert")
+                                  .limit(1);
+                                if (existingSR && existingSR.length > 0) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Schlussrechnung existiert bereits",
+                                    description: `Zu diesem Auftrag gibt es schon die Schlussrechnung ${(existingSR[0] as any).nummer || ""}. Storniere sie zuerst, falls du sie neu erstellen willst.`,
+                                  });
+                                  return;
+                                }
+
+                                // Nur aktive (nicht stornierte) Anzahlungsrechnungen abziehen.
                                 const { data } = await supabase
                                   .from("invoices")
-                                  .select("id")
+                                  .select("id, status")
                                   .eq("parent_invoice_id", rootId)
-                                  .eq("typ", "anzahlungsrechnung");
+                                  .eq("typ", "anzahlungsrechnung")
+                                  .neq("status", "storniert");
                                 const ids = ((data as any[]) || []).map(r => r.id);
                                 // Sicherheitsnetz: wenn der User direkt auf einer Anzahlungs-
                                 // rechnung steht, die (z.B. durch manuelle Erstellung) nicht
-                                // über parent_invoice_id gefunden wurde, trotzdem abziehen.
-                                if (isOnAnzahlung && !ids.includes(invoiceId)) ids.push(invoiceId);
+                                // über parent_invoice_id gefunden wurde, trotzdem abziehen —
+                                // aber nur wenn sie selbst nicht storniert ist.
+                                if (isOnAnzahlung && form.status !== "storniert" && !ids.includes(invoiceId)) {
+                                  ids.push(invoiceId);
+                                }
                                 handleConvertTo("schlussrechnung", { abzug_ids: ids, from_doc_id: rootId });
                               }}>
                                 Schlussrechnung

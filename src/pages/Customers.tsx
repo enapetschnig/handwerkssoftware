@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, Search, Users, X, Receipt, ArrowLeft } from "lucide-react";
+import { getDocConfig } from "@/lib/documentTypes";
 import { PageHeader } from "@/components/PageHeader";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
@@ -356,8 +357,13 @@ export default function Customers() {
 
   // Customer detail view
   if (selectedCustomer) {
+    // Alle zahlbaren Rechnungstypen (auch Anzahlungs-/Schlussrechnung) zählen zum Umsatz.
+    // Gutschrift geht in die andere Richtung und wird (aktuell) nicht abgezogen.
+    const _payableInvoiceTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
+    const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
+    const _angebotLikeTypes = new Set(["angebot", "auftragsbestaetigung"]);
     const umsatz = customerInvoices
-      .filter(i => i.typ === "rechnung" && i.status === "bezahlt")
+      .filter(i => _payableInvoiceTypes.has(i.typ) && i.status === "bezahlt")
       .reduce((sum, i) => sum + Number(i.brutto_summe), 0);
 
     return (
@@ -395,13 +401,13 @@ export default function Customers() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Rechnungen</CardDescription>
-                <CardTitle className="text-2xl">{customerInvoices.filter(i => i.typ === "rechnung").length}</CardTitle>
+                <CardTitle className="text-2xl">{customerInvoices.filter(i => _invoiceLikeTypes.has(i.typ)).length}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Angebote</CardDescription>
-                <CardTitle className="text-2xl">{customerInvoices.filter(i => i.typ === "angebot").length}</CardTitle>
+                <CardTitle className="text-2xl">{customerInvoices.filter(i => _angebotLikeTypes.has(i.typ)).length}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -464,8 +470,8 @@ export default function Customers() {
                       <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/invoices/${inv.id}`)}>
                         <TableCell className="font-mono">{inv.nummer}</TableCell>
                         <TableCell>
-                          <Badge variant={inv.typ === "rechnung" ? "default" : "secondary"}>
-                            {inv.typ === "rechnung" ? "Rechnung" : "Angebot"}
+                          <Badge variant={_invoiceLikeTypes.has(inv.typ) ? "default" : "secondary"}>
+                            {getDocConfig(inv.typ).label}
                           </Badge>
                         </TableCell>
                         <TableCell>{format(parseISO(inv.datum), "dd.MM.yyyy", { locale: de })}</TableCell>
