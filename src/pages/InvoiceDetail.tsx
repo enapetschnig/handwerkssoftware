@@ -3068,7 +3068,18 @@ export default function InvoiceDetail() {
             mahnstufe: form.mahnstufe,
             skonto_prozent: form.skonto_prozent,
             skonto_tage: form.skonto_tage,
-          }}
+            // Ohne diese Felder sieht die PDF-Vorschau weder den eingegebenen
+            // Kunden-Ansprechpartner noch die Kundennummer / Anzahlungs-Prozent.
+            // Eigene Typdeklaration von InvoiceHtmlData kennt sie nicht; wir
+            // reichen sie als loose Props durch (pdfGenerator liest sie via
+            // (invoice as any).ansprechpartner_*).
+            kundennummer: (form as any).kundennummer || "",
+            ansprechpartner_name: (form as any).ansprechpartner_name || "",
+            ansprechpartner_telefon: (form as any).ansprechpartner_telefon || "",
+            ansprechpartner_email: (form as any).ansprechpartner_email || "",
+            anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
+            anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
+          } as any}
           items={items.map((item, idx) => ({
             position: idx + 1,
             beschreibung: item.beschreibung,
@@ -3078,6 +3089,7 @@ export default function InvoiceDetail() {
             einheit: item.einheit,
             einzelpreis: item.einzelpreis,
             gesamtpreis: item.gesamtpreis,
+            mwst_exempt: !!(item as any).mwst_exempt,
           }))}
         />
 
