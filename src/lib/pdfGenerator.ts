@@ -65,12 +65,15 @@ export async function generateInvoicePdf(
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const ml = 25; // margin left – DIN 676: Fensterkuvert linker Rand
+  const ml = 25; // margin left – DIN 5008 Form B: Textbereich 25mm
   const mr = 15; // margin right
   const contentWidth = pageWidth - ml - mr;
-  // Briefkopf-Bereich (Logo + Firmeninfo) endet frühestens bei 45mm,
-  // damit die Empfängeradresse sauber im Fensterkuvert erscheint.
-  const LETTERHEAD_MIN_BOTTOM = 45;
+  // DIN 5008 Form B Positionen (A4, Fensterkuvert DIN-lang):
+  //   Absenderzeile (klein, unterstrichen): y = 45 mm
+  //   Anschriftenfeld (Empfänger):          y = 50 … 90 mm (40 mm hoch, 85 mm breit)
+  //   Informationsblock (Meta rechts):      y = 50 mm parallel zur Anschrift
+  const DIN_SENDER_Y = 45;
+  const DIN_RECIPIENT_Y = 50;
 
   // ======= HEADER (only first page) =======
   let y = 15;
@@ -119,9 +122,18 @@ export async function generateInvoicePdf(
     }
   }
 
-  // Briefkopf muss mindestens bis LETTERHEAD_MIN_BOTTOM reichen,
-  // damit der Empfängerblock im Fensterkuvert sichtbar ist.
-  y = Math.max(logoBottomY + 4, LETTERHEAD_MIN_BOTTOM);
+  // Falzmarken nach DIN 5008 (links am Blattrand, dezent grau):
+  //   1. Falz bei 105 mm, 2. Falz bei 210 mm, Lochmarke bei 148,5 mm.
+  pdf.setDrawColor(180, 180, 180);
+  pdf.setLineWidth(0.15);
+  pdf.line(3, 105, 6, 105);       // Falzmarke oben
+  pdf.line(1.5, 148.5, 5, 148.5); // Lochmarke Mitte
+  pdf.line(3, 210, 6, 210);       // Falzmarke unten
+
+  // Falls der Briefkopf weiter unten enden würde als die Absenderzeile,
+  // warnen wir implizit: das Logo darf höchstens bis y=43mm ragen.
+  // DIN 5008: Absenderzeile fest bei 45 mm, Empfänger ab 50 mm.
+  y = DIN_SENDER_Y;
 
   // Sender line (Absenderzeile über dem Empfänger, klein + unterstrichen)
   pdf.setFontSize(7);
@@ -133,7 +145,8 @@ export async function generateInvoicePdf(
   pdf.setDrawColor(180, 180, 180);
   pdf.setLineWidth(0.2);
   pdf.line(ml, y + 1.5, ml + senderWidth, y + 1.5);
-  y += 6;
+  // Empfängeradresse startet gemäß DIN bei exakt 50 mm
+  y = DIN_RECIPIENT_Y;
 
   // Recipient
   const kundeAnrede = (invoice as any).kunde_anrede || "";
@@ -166,9 +179,11 @@ export async function generateInvoicePdf(
     y += 5;
   }
 
-  // Meta info (right side)
+  // Meta info (right side) – Informationsblock nach DIN 5008:
+  //   Startet auf gleicher Höhe wie das Anschriftenfeld (y = 50 mm),
+  //   rechts daneben in einer Spalte.
   const metaX = pageWidth - mr - 60;
-  let metaY = y - 14;
+  let metaY = DIN_RECIPIENT_Y;
   pdf.setFontSize(9);
   const datumFormatted = fmtDate(invoice.datum);
   const kundennummer = (invoice as any).kundennummer || "";
