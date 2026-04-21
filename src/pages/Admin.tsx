@@ -32,9 +32,10 @@ import { MahnungSettings } from "@/components/admin/MahnungSettings";
 import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings";
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
+import { VehicleManager } from "@/components/admin/VehicleManager";
 import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
-import { Cloud, Building, AlertTriangle } from "lucide-react";
+import { Cloud, Building, AlertTriangle, Truck, Briefcase, HardHat } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -1195,6 +1196,10 @@ export default function Admin() {
             <ConfigOptionsManager kategorie="wetter" title="Wetter-Optionen" description="Wetteroptionen für Bautagesberichte" icon={<Cloud className="h-5 w-5" />} showFarbe />
             <ConfigOptionsManager kategorie="projektart" title="Projektarten" description="Typen von Bauprojekten" icon={<Building className="h-5 w-5" />} />
             <ConfigOptionsManager kategorie="prioritaet" title="Prioritäten" description="Prioritätsstufen für Projekte" icon={<AlertTriangle className="h-5 w-5" />} showFarbe />
+            <ConfigOptionsManager kategorie="taetigkeit" title="Tätigkeiten (Zeiterfassung)" description="Auswahlliste für das Tätigkeits-Feld bei Stundenbuchungen" icon={<Clock className="h-5 w-5" />} />
+            <ConfigOptionsManager kategorie="firma_intern" title="Firma intern (Ersttermin)" description="Auswahl interner Firmen/Bereiche bei Ersttermin-Protokollen" icon={<Briefcase className="h-5 w-5" />} />
+            <ConfigOptionsManager kategorie="firma_extern" title="Firma extern (Ersttermin)" description="Auswahl externer Firmen/Subunternehmer bei Ersttermin-Protokollen" icon={<HardHat className="h-5 w-5" />} />
+            <VehicleManager />
           </TabsContent>
 
           {/* ===== TAB 6: BERECHTIGUNGEN ===== */}

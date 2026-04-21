@@ -57,6 +57,9 @@ interface TimeBlock {
   disturbanceId: string;
   selectedDisturbanceIds: string[];
   wetterschichtStunden: string; // Regenstunden, nur Info — leer wenn nicht relevant
+  kfzId: string;
+  kmStart: string;
+  kmEnde: string;
 }
 
 type Disturbance = {
@@ -81,11 +84,16 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   disturbanceId: "",
   selectedDisturbanceIds: [],
   wetterschichtStunden: "",
+  kfzId: "",
+  kmStart: "",
+  kmEnde: "",
 });
 
 const TimeTracking = () => {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [vehicles, setVehicles] = useState<{ id: string; bezeichnung: string; kennzeichen: string | null }[]>([]);
+  const [taetigkeitOptions, setTaetigkeitOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -189,6 +197,23 @@ const TimeTracking = () => {
   useEffect(() => {
     fetchProjects();
     fetchDisturbances();
+
+    // Fahrzeuge + Tätigkeitsliste einmalig laden
+    (async () => {
+      const [{ data: vehData }, { data: taetData }] = await Promise.all([
+        (supabase.from("vehicles" as never) as any)
+          .select("id, bezeichnung, kennzeichen")
+          .eq("aktiv", true)
+          .order("bezeichnung"),
+        (supabase.from("admin_config_options" as never) as any)
+          .select("label, sort_order")
+          .eq("kategorie", "taetigkeit")
+          .eq("is_active", true)
+          .order("sort_order"),
+      ]);
+      if (vehData) setVehicles(vehData as any);
+      if (taetData) setTaetigkeitOptions(((taetData as any[]) || []).map(o => o.label));
+    })();
 
     // Check if user is admin
     (async () => {
@@ -663,6 +688,10 @@ const TimeTracking = () => {
         return isNaN(v) || v <= 0 ? null : v;
       })();
 
+      // KFZ + Kilometerstände (optional)
+      const kmStartNum = block.kmStart ? parseInt(block.kmStart, 10) : null;
+      const kmEndeNum = block.kmEnde ? parseInt(block.kmEnde, 10) : null;
+
       // Prepare main entry for current user
       const mainEntry = {
         user_id: user.id,
@@ -680,6 +709,9 @@ const TimeTracking = () => {
         notizen: regieNotizen,
         week_type: null,
         wetterschicht_stunden: wetterschichtVal,
+        kfz_id: block.kfzId || null,
+        km_start: kmStartNum,
+        km_ende: kmEndeNum,
       };
 
       // Prepare team entries
@@ -970,24 +1002,87 @@ const TimeTracking = () => {
                           </div>
                         )}
 
-                        {/* Activity - optional (not for Regie, auto-set) */}
+                        {/* Activity - Combobox (vorgeschlagene Werte + freie Eingabe) */}
                         {block.locationType !== "regie" ? (
                           <div className="space-y-2">
                             <Label>Tätigkeit <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input
+                              list={`taetigkeit-options-${block.id}`}
                               value={block.taetigkeit}
                               onChange={(e) => updateBlock(block.id, { taetigkeit: e.target.value })}
                               placeholder="z.B. Montage, Aufmaß..."
                             />
+                            <datalist id={`taetigkeit-options-${block.id}`}>
+                              {taetigkeitOptions.map((opt) => (
+                                <option key={opt} value={opt} />
+                              ))}
+                            </datalist>
                           </div>
                         ) : (
                           <div className="space-y-2">
                             <Label>Tätigkeit</Label>
                             <Input
+                              list={`taetigkeit-options-${block.id}`}
                               value={block.taetigkeit}
                               onChange={(e) => updateBlock(block.id, { taetigkeit: e.target.value })}
                               placeholder="Regiearbeit"
                             />
+                            <datalist id={`taetigkeit-options-${block.id}`}>
+                              {taetigkeitOptions.map((opt) => (
+                                <option key={opt} value={opt} />
+                              ))}
+                            </datalist>
+                          </div>
+                        )}
+
+                        {/* KFZ + Kilometerstände (optional) */}
+                        {vehicles.length > 0 && (
+                          <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                            <Label className="text-sm">KFZ & Kilometerstand <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div>
+                                <Label className="text-xs">Fahrzeug</Label>
+                                <Select
+                                  value={block.kfzId || "none"}
+                                  onValueChange={(v) => updateBlock(block.id, { kfzId: v === "none" ? "" : v })}
+                                >
+                                  <SelectTrigger><SelectValue placeholder="Kein Fahrzeug" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Kein Fahrzeug</SelectItem>
+                                    {vehicles.map((v) => (
+                                      <SelectItem key={v.id} value={v.id}>
+                                        {v.bezeichnung}{v.kennzeichen ? ` (${v.kennzeichen})` : ""}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">km Start</Label>
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  value={block.kmStart}
+                                  onChange={(e) => updateBlock(block.id, { kmStart: e.target.value })}
+                                  placeholder="z.B. 42130"
+                                  disabled={!block.kfzId}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">km Ende</Label>
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  value={block.kmEnde}
+                                  onChange={(e) => updateBlock(block.id, { kmEnde: e.target.value })}
+                                  placeholder="z.B. 42187"
+                                  disabled={!block.kfzId}
+                                />
+                              </div>
+                            </div>
+                            {block.kmStart && block.kmEnde && Number(block.kmEnde) >= Number(block.kmStart) && (
+                              <p className="text-xs text-muted-foreground">Gefahren: {Number(block.kmEnde) - Number(block.kmStart)} km</p>
+                            )}
                           </div>
                         )}
 

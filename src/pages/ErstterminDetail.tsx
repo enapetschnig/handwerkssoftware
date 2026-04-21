@@ -83,6 +83,8 @@ export default function ErstterminDetail() {
   const [leistungsbeschreibung, setLeistungsbeschreibung] = useState("");
   const [firmenIntern, setFirmenIntern] = useState("");
   const [firmenExtern, setFirmenExtern] = useState("");
+  const [firmenInternOptions, setFirmenInternOptions] = useState<{ value: string; label: string }[]>([]);
+  const [firmenExternOptions, setFirmenExternOptions] = useState<{ value: string; label: string }[]>([]);
   const [flaecheAufmass, setFlaecheAufmass] = useState("");
   const [anmerkungen, setAnmerkungen] = useState("");
 
@@ -145,6 +147,26 @@ export default function ErstterminDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { init(); }, [id]);
+
+  // Auswahllisten für Firma intern / Firma extern laden
+  useEffect(() => {
+    (async () => {
+      const [{ data: internData }, { data: externData }] = await Promise.all([
+        (supabase.from("admin_config_options" as never) as any)
+          .select("wert, label, sort_order")
+          .eq("kategorie", "firma_intern")
+          .eq("is_active", true)
+          .order("sort_order"),
+        (supabase.from("admin_config_options" as never) as any)
+          .select("wert, label, sort_order")
+          .eq("kategorie", "firma_extern")
+          .eq("is_active", true)
+          .order("sort_order"),
+      ]);
+      setFirmenInternOptions(((internData as any[]) || []).map(o => ({ value: o.wert, label: o.label })));
+      setFirmenExternOptions(((externData as any[]) || []).map(o => ({ value: o.wert, label: o.label })));
+    })();
+  }, []);
 
   const init = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -887,8 +909,80 @@ export default function ErstterminDetail() {
           <CardHeader><CardTitle>Angebotsvorbereitung</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {field("Kurzbeschreibung / Kundenwunsch", leistungsbeschreibung, setLeistungsbeschreibung, 3)}
-            {field("Firmen intern", firmenIntern, setFirmenIntern, 2)}
-            {field("Firmen extern", firmenExtern, setFirmenExtern, 2)}
+            {/* Firmen intern — Mehrfachauswahl aus admin_config_options + Freitext */}
+            <div className="space-y-1">
+              <Label>Firmen intern</Label>
+              {firmenInternOptions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {firmenInternOptions.map((opt) => {
+                    const active = firmenIntern.split(/,\s*/).filter(Boolean).includes(opt.label);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const parts = firmenIntern.split(/,\s*/).filter(Boolean);
+                          const next = active
+                            ? parts.filter(p => p !== opt.label)
+                            : [...parts, opt.label];
+                          setFirmenIntern(next.join(", "));
+                        }}
+                        className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                          active
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-muted border-input"
+                        }`}
+                      >
+                        {active ? "✓ " : "+ "}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <Textarea
+                value={firmenIntern}
+                onChange={(e) => setFirmenIntern(e.target.value)}
+                rows={2}
+                placeholder="Mehrere Firmen mit Komma trennen — oder oben auswählen"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Firmen extern</Label>
+              {firmenExternOptions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {firmenExternOptions.map((opt) => {
+                    const active = firmenExtern.split(/,\s*/).filter(Boolean).includes(opt.label);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const parts = firmenExtern.split(/,\s*/).filter(Boolean);
+                          const next = active
+                            ? parts.filter(p => p !== opt.label)
+                            : [...parts, opt.label];
+                          setFirmenExtern(next.join(", "));
+                        }}
+                        className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                          active
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-muted border-input"
+                        }`}
+                      >
+                        {active ? "✓ " : "+ "}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <Textarea
+                value={firmenExtern}
+                onChange={(e) => setFirmenExtern(e.target.value)}
+                rows={2}
+                placeholder="Mehrere Firmen mit Komma trennen — oder oben auswählen"
+              />
+            </div>
             {field("Fläche / Aufmaß", flaecheAufmass, setFlaecheAufmass, 2)}
             {field("Bemerkung / Anmerkungen", anmerkungen, setAnmerkungen, 3)}
           </CardContent>
