@@ -240,7 +240,15 @@ export async function generateInvoicePdf(
     if (bksEmail) { pdf.text(bksEmail, metaX, metaY); metaY += 4; }
   }
 
-  y = Math.max(y, metaY) + 4;
+  // C4-Fenster-Compliance:
+  //   DIN 5008 Form B: Fensterkuvert C4 hat ein Fenster 55×90 mm bei
+  //   X=20mm, Y=57mm. Durch das Fenster sieht man also Y=57–112 mm.
+  //   In diesem Bereich darf NICHTS außer dem Empfänger-Adressblock
+  //   stehen — vor allem NICHT der Dokumententitel "Angebot – …".
+  //   Darum wird y vor dem Titel mindestens auf Y=115 mm gesetzt
+  //   (3 mm Sicherheitsabstand unter dem Fenster-Ende).
+  const C4_WINDOW_BOTTOM = 115;
+  y = Math.max(y, metaY, C4_WINDOW_BOTTOM) + 4;
 
   // Document title: "Angebot - <betreff>" (ohne Nummer; die steht rechts oben)
   pdf.setFont("helvetica", "bold");
