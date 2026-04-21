@@ -146,6 +146,29 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
     setFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // Kamera-Fotos sind oft 5-12 MB. Die OpenAI-Vision-API hat ein
+  // effektives Limit von ~20 MB Payload, aber die Supabase-Edge-Function
+  // soll nicht umsonst die Vollauflösung durch OCR jagen. Wir
+  // verkleinern auf max. 2000 px Langseite und 85% JPEG-Qualität.
+  const compressImage = async (file: File, maxDim = 2000, quality = 0.85): Promise<string> => {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      image.src = url;
+    });
+    const ratio = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.round(img.width * ratio);
+    const h = Math.round(img.height * ratio);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas-Context nicht verfügbar");
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", quality);
+  };
+
   // KI-Scan: Rechnungsdaten aus einer Datei extrahieren und Form vorausfüllen.
   // Funktioniert mit Bildern (direkt) UND PDFs (1. Seite → JPEG-Rendering).
   const scanFileWithAi = async (file: File) => {
@@ -158,12 +181,19 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
         const { pdfFirstPageToJpegDataUrl } = await import("@/lib/pdfToImage");
         dataUrl = await pdfFirstPageToJpegDataUrl(file);
       } else if (file.type.startsWith("image/")) {
-        dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        });
+        // Fotos/Scans: auf max 2000px/85% runterrechnen. Spart Upload-Zeit
+        // + verhindert "Request entity too large".
+        try {
+          dataUrl = await compressImage(file);
+        } catch (compressErr) {
+          console.warn("Compression failed, using original:", compressErr);
+          dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+        }
       } else {
         setScanning(false);
         return;
@@ -172,8 +202,26 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
       const { data, error } = await supabase.functions.invoke("parse-invoice-document", {
         body: { imageBase64: dataUrl },
       });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      // Supabase-Funktionsfehler zeigt im .message nur "non-2xx status".
+      // Den echten Fehler liefert .context als Response — Body auslesen.
+      if (error) {
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.clone === "function") {
+            const body = await ctx.clone().text();
+            console.error("parse-invoice-document raw response:", ctx.status, body);
+            try {
+              const j = JSON.parse(body);
+              detail = j?.details || j?.error || body || detail;
+            } catch {
+              if (body) detail = body;
+            }
+          }
+        } catch { /* ignore */ }
+        throw new Error(detail);
+      }
+      if (data?.error) throw new Error(data.details || data.error);
 
       const parsed = data?.data;
       if (!parsed) throw new Error("Keine Daten erkannt");
