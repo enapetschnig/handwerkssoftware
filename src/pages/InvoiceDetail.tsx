@@ -2062,7 +2062,7 @@ export default function InvoiceDetail() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Wird beim Kunden-/Projekt-Wechsel automatisch aus den Kundendaten (Ansprechpartner + Telefon + E-Mail) übernommen. Leer = im PDF erscheint „Kein Ansprechpartner hinterlegt".
+                  Wird beim Kunden-/Projekt-Wechsel automatisch aus den Kundendaten (Ansprechpartner + Telefon + E-Mail) übernommen. Leer = im PDF wird kein Ansprechpartner-Block angezeigt.
                 </p>
               </div>
 

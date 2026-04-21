@@ -208,31 +208,25 @@ export async function generateInvoicePdf(
   });
 
   // Ansprechpartner unter der Meta-Box. Quelle: ausschließlich die am
-  // Dokument gespeicherten Felder invoice.ansprechpartner_* (die
-  // wiederum beim Projekt-Wechsel aus projects.projekt_kontakt_*
-  // importiert werden). Kein globaler Fallback mehr.
+  // Dokument gespeicherten Felder invoice.ansprechpartner_*.
+  // Der Block wird KOMPLETT ausgeblendet, wenn nichts eingetragen ist —
+  // auch Überschrift und Platzhaltertext fehlen dann auf dem PDF.
   const contactName = ((invoice as any).ansprechpartner_name || "").toString().trim();
   const contactPhone = ((invoice as any).ansprechpartner_telefon || "").toString().trim();
   const contactEmail = ((invoice as any).ansprechpartner_email || "").toString().trim();
   const hasContact = !!(contactName || contactPhone || contactEmail);
-  metaY += 2;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(100, 100, 100);
-  pdf.text("Ihr Ansprechpartner:", metaX, metaY);
-  metaY += 4;
   if (hasContact) {
+    metaY += 2;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text("Ansprechpartner:", metaX, metaY);
+    metaY += 4;
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(9);
     if (contactName) { pdf.text(contactName, metaX, metaY); metaY += 4; }
     if (contactPhone) { pdf.text(contactPhone, metaX, metaY); metaY += 4; }
     if (contactEmail) { pdf.text(contactEmail, metaX, metaY); metaY += 4; }
-  } else {
-    pdf.setFont("helvetica", "italic");
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text("Kein Ansprechpartner hinterlegt", metaX, metaY);
-    metaY += 4;
   }
 
   y = Math.max(y, metaY) + 4;
