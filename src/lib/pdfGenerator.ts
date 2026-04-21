@@ -164,6 +164,17 @@ export async function generateInvoicePdf(
   const displayName = kundeTitel ? `${kundeTitel} ${invoice.kunde_name}` : (invoice.kunde_name || "–");
   pdf.text(displayName, ml, y + 2);
   y += 6;
+  // Kundenseitiger Ansprechpartner direkt unter der Firmen-/Kundenzeile,
+  // DIN-5008-konform als "z.Hd." — so sieht der Empfänger sofort, an
+  // wen auf seiner Seite das Dokument gerichtet ist.
+  const custContactName = ((invoice as any).ansprechpartner_name || "").toString().trim();
+  if (custContactName) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`z.Hd. ${custContactName}`, ml, y + 2);
+    y += 5;
+  }
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
@@ -207,15 +218,15 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
-  // Ansprechpartner unter der Meta-Box. Quelle: ausschließlich die am
-  // Dokument gespeicherten Felder invoice.ansprechpartner_*.
-  // Der Block wird KOMPLETT ausgeblendet, wenn nichts eingetragen ist —
-  // auch Überschrift und Platzhaltertext fehlen dann auf dem PDF.
-  const contactName = ((invoice as any).ansprechpartner_name || "").toString().trim();
-  const contactPhone = ((invoice as any).ansprechpartner_telefon || "").toString().trim();
-  const contactEmail = ((invoice as any).ansprechpartner_email || "").toString().trim();
-  const hasContact = !!(contactName || contactPhone || contactEmail);
-  if (hasContact) {
+  // "Ihr Ansprechpartner bei uns" unter der Meta-Box. Das ist der
+  // Sachbearbeiter / Verkäufer auf BKS-Seite, der diesen Kunden betreut.
+  // Quelle: layout.contact (in den Firmen-/Layout-Einstellungen gepflegt,
+  // einmal für die gesamte Firma). Fallback: invoice.ansprechpartner_*
+  // (Legacy-Daten aus einer früheren Version).
+  const bksName  = (L.contact?.name  || "").trim() || ((invoice as any).ansprechpartner_name  || "").trim();
+  const bksPhone = (L.contact?.phone || "").trim() || ((invoice as any).ansprechpartner_telefon || "").trim();
+  const bksEmail = (L.contact?.email || "").trim() || ((invoice as any).ansprechpartner_email  || "").trim();
+  if (bksName || bksPhone || bksEmail) {
     metaY += 2;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
@@ -224,9 +235,9 @@ export async function generateInvoicePdf(
     metaY += 4;
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(9);
-    if (contactName) { pdf.text(contactName, metaX, metaY); metaY += 4; }
-    if (contactPhone) { pdf.text(contactPhone, metaX, metaY); metaY += 4; }
-    if (contactEmail) { pdf.text(contactEmail, metaX, metaY); metaY += 4; }
+    if (bksName)  { pdf.text(bksName,  metaX, metaY); metaY += 4; }
+    if (bksPhone) { pdf.text(bksPhone, metaX, metaY); metaY += 4; }
+    if (bksEmail) { pdf.text(bksEmail, metaX, metaY); metaY += 4; }
   }
 
   y = Math.max(y, metaY) + 4;
@@ -537,11 +548,32 @@ export async function generateInvoicePdf(
   // "sofort" / "prompt" / sonstige Texte ohne Zahl → direkt den Text nehmen.
   const isZahlungSofort = /sofort|umgehend|prompt/i.test(zahlungsbedingungen);
   const customClosing = (invoice as any).custom_closing_text as string | undefined;
+  // Placeholder-Interpolation für den Angebots-Schlusstext:
+  //   {{gueltig_bis}} → ausformuliertes Gültigkeitsdatum aus dem Dokument
+  //   {{tage}}        → Restlaufzeit ab heute in Tagen
+  // Wenn kein gueltig_bis gesetzt ist, werden die Platzhalter entfernt,
+  // ohne unschönen Rest-Text ("Dieses Angebot ist bis zum gültig.").
+  const angebotsClosing = (() => {
+    let txt = L.closing_text_angebot || "";
+    if (invoice.gueltig_bis) {
+      const fmt = fmtDate(invoice.gueltig_bis);
+      const msPerDay = 86400000;
+      const bis = new Date((invoice.gueltig_bis as string) + "T12:00:00");
+      const heute = new Date();
+      const tageRest = Math.max(0, Math.round((bis.getTime() - heute.getTime()) / msPerDay));
+      txt = txt.replace(/\{\{gueltig_bis\}\}/g, fmt).replace(/\{\{tage\}\}/g, String(tageRest));
+    } else {
+      // Kein Datum → Platzhalter weglöschen, damit kein komischer Lücken-Satz entsteht
+      txt = txt.replace(/\s*bis zum\s*\{\{gueltig_bis\}\}/g, "").replace(/\{\{gueltig_bis\}\}/g, "").replace(/\{\{tage\}\}/g, "");
+    }
+    return txt.replace(/\s{2,}/g, " ").trim();
+  })();
+
   if (customClosing) {
     pdf.text(customClosing, ml, y, { maxWidth: contentWidth });
     y += 8;
   } else if (isAngebot) {
-    pdf.text(L.closing_text_angebot, ml, y, { maxWidth: contentWidth });
+    pdf.text(angebotsClosing, ml, y, { maxWidth: contentWidth });
     y += 8;
   } else if (docCfg.isInvoiceLike) {
     let closingText: string;

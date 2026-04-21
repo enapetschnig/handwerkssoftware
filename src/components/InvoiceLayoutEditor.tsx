@@ -422,6 +422,11 @@ export function InvoiceLayoutEditor() {
               onChange={(e) => setForm((prev) => ({ ...prev, closing_text_angebot: e.target.value }))}
               rows={3}
             />
+            <p className="text-xs text-muted-foreground">
+              Platzhalter: <code className="bg-muted px-1 rounded">{"{{gueltig_bis}}"}</code> für das
+              Gültigkeitsdatum, <code className="bg-muted px-1 rounded">{"{{tage}}"}</code> für die
+              Restlaufzeit in Tagen.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -431,6 +436,57 @@ export function InvoiceLayoutEditor() {
               value={form.danke_text}
               onChange={(e) => setForm((prev) => ({ ...prev, danke_text: e.target.value }))}
             />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── Section 5b: Ansprechpartner (BKS-Seite) ── */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+            Ihr Ansprechpartner (erscheint rechts oben im PDF)
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Diese Angaben erscheinen auf allen Angeboten und Rechnungen rechts oben als
+            „Ihr Ansprechpartner" — also der Kontakt auf eurer Seite, an den der Kunde
+            sich bei Rückfragen wenden kann.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="contact_name">Name</Label>
+              <Input
+                id="contact_name"
+                value={form.contact?.name || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), name: e.target.value } }))
+                }
+                placeholder="z.B. Max Mustermann"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact_phone">Telefon</Label>
+              <Input
+                id="contact_phone"
+                value={form.contact?.phone || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), phone: e.target.value } }))
+                }
+                placeholder="+43 …"
+                type="tel"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact_email">E-Mail</Label>
+              <Input
+                id="contact_email"
+                value={form.contact?.email || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, contact: { ...(prev.contact || { name: "", phone: "", email: "" }), email: e.target.value } }))
+                }
+                placeholder="kontakt@…"
+                type="email"
+              />
+            </div>
           </div>
         </div>
 

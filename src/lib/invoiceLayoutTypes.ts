@@ -69,7 +69,7 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   },
   sender_line: "",
   closing_text_invoice: "Wir bitten um Überweisung innerhalb von {{tage}} Tagen auf das unten angegebene Konto.",
-  closing_text_angebot: "Dieses Angebot ist 30 Tage gültig. Wir freuen uns auf Ihren Auftrag!",
+  closing_text_angebot: "Dieses Angebot ist bis zum {{gueltig_bis}} gültig. Wir freuen uns auf Ihren Auftrag!",
   danke_text: "Vielen Dank für Ihren Auftrag!",
   accent_color: "#0077CC", /* BKS Blau */
   contact: { name: "", phone: "", email: "" },

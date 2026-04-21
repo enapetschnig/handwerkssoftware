@@ -247,11 +247,19 @@ export function buildInvoiceHtml(
     : "14";
 
   // Editierbarer Closing-Text aus document_texts hat Vorrang.
+  // Für Angebote wird das Gültigkeitsdatum aus invoice.gueltig_bis ins
+  // Default-Closing eingesetzt, falls gesetzt.
+  const gueltigBisFmt = invoice.gueltig_bis
+    ? new Date((invoice.gueltig_bis as string) + "T12:00:00").toLocaleDateString("de-AT")
+    : "";
   const customClosing = (invoice as any).custom_closing_text as string | undefined;
+  const angebotClosingDefault = gueltigBisFmt
+    ? `Dieses Angebot ist bis zum ${gueltigBisFmt} gültig. Wir freuen uns auf Ihren Auftrag!`
+    : `Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.`;
   const closingText = customClosing
     ? `<div class="closing-text">${escapeHtml(customClosing)}</div>`
     : isAngebot
-      ? `<div class="closing-text">Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.</div>`
+      ? `<div class="closing-text">${escapeHtml(angebotClosingDefault)}</div>`
       : `<div class="closing-text">Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.</div>`;
 
   // Anzahlungs-Hinweis aus document_texts — nur bei Anzahlungsrechnung gerendert.
@@ -359,6 +367,10 @@ ${mahnBanner}
   <div class="recipient">
     <div class="sender-line">${L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" · ")}</div>
     <div class="recipient-name">${invoice.kunde_name || "–"}</div>
+    ${(() => {
+      const zHd = ((invoice as any).ansprechpartner_name || "").toString().trim();
+      return zHd ? `<div class="recipient-addr" style="margin-top:2px;">z.Hd. ${escapeHtml(zHd)}</div>` : "";
+    })()}
     <div class="recipient-addr">
       ${invoice.kunde_adresse ? `${invoice.kunde_adresse}<br>` : ""}
       ${invoice.kunde_plz || invoice.kunde_ort ? `${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}<br>` : ""}
