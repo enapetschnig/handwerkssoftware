@@ -174,25 +174,27 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
   const scanFileWithAi = async (file: File) => {
     setScanning(true);
     try {
-      let dataUrl: string;
+      // Für mehrseitige PDFs: ALLE Seiten rendern → an GPT schicken.
+      // Bei Rechnungen steht der Brutto-/Gesamtbetrag oft auf der letzten Seite,
+      // deshalb ist die Gesamtsicht entscheidend für korrekte Extraktion.
+      let imagesBase64: string[] = [];
 
       if (file.type === "application/pdf") {
-        // PDF → erste Seite als JPEG rendern (GPT-4 Vision akzeptiert nur Bilder)
-        const { pdfFirstPageToJpegDataUrl } = await import("@/lib/pdfToImage");
-        dataUrl = await pdfFirstPageToJpegDataUrl(file);
+        const { pdfAllPagesToJpegDataUrls } = await import("@/lib/pdfToImage");
+        imagesBase64 = await pdfAllPagesToJpegDataUrls(file);
       } else if (file.type.startsWith("image/")) {
-        // Fotos/Scans: auf max 2000px/85% runterrechnen. Spart Upload-Zeit
-        // + verhindert "Request entity too large".
+        // Fotos/Scans: auf max 2400px/92% runterrechnen.
         try {
-          dataUrl = await compressImage(file);
+          imagesBase64 = [await compressImage(file)];
         } catch (compressErr) {
           console.warn("Compression failed, using original:", compressErr);
-          dataUrl = await new Promise<string>((resolve, reject) => {
+          const raw = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result as string);
             reader.onerror = () => reject(reader.error);
             reader.readAsDataURL(file);
           });
+          imagesBase64 = [raw];
         }
       } else {
         setScanning(false);
@@ -200,7 +202,10 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
       }
 
       const { data, error } = await supabase.functions.invoke("parse-invoice-document", {
-        body: { imageBase64: dataUrl },
+        // imagesBase64 (Array, mehrere Seiten) wird bevorzugt; fallback imageBase64
+        body: imagesBase64.length > 1
+          ? { imagesBase64 }
+          : { imageBase64: imagesBase64[0] },
       });
       // Supabase-Funktionsfehler zeigt im .message nur "non-2xx status".
       // Den echten Fehler liefert .context als Response — Body auslesen.

@@ -55,15 +55,25 @@ GIB NUR JSON ZURÜCK (kein Markdown, keine Erklärung), genau in diesem Schema:
 ══════════════════════════════════════════════════════════════
 KRITISCHE REGELN FÜR BRUTTO-BETRAG (absolut wichtig):
 ══════════════════════════════════════════════════════════════
-1. betrag_brutto = der FINALE ZAHLBETRAG in Euro (oft mit "Rechnungsbetrag",
-   "Gesamtbetrag", "Zu zahlen", "Summe Brutto", "Total", "Endbetrag"
-   beschriftet). Typischerweise der GRÖSSTE Betrag am Ende der Rechnung,
-   meist FETT gedruckt oder hervorgehoben.
-2. NIEMALS eine Zwischensumme, einen Positionspreis, einen Rabatt oder
-   eine USt-Zeile als Brutto verwenden. Wenn mehrere Zahlen zur Auswahl
-   stehen, nimm die letzte/unterste/größte.
-3. Bei Teilzahlungen: "Offener Betrag" bzw. "Zu zahlen" hat Vorrang vor
+0. WENN MEHRERE SEITEN übergeben werden: Schau dir ALLE Seiten an, vor
+   allem die LETZTE. Der Gesamtbetrag steht fast immer ganz unten auf
+   der LETZTEN Seite — viele Rechnungen haben auf Seite 1 nur Positionen
+   ohne Summen. Ignoriere Zwischensummen auf früheren Seiten.
+1. betrag_brutto = der FINALE ZAHLBETRAG in Euro. Typische Beschriftungen:
+   "Rechnungsbetrag", "Gesamtbetrag", "Summe Brutto", "Gesamt brutto",
+   "Zu zahlen", "Zahlbetrag", "Endbetrag", "Total", "Gesamtbetrag inkl.
+   USt", "Rechnungssumme". Typischerweise die GRÖSSTE Zahl, meist FETT
+   gedruckt oder optisch hervorgehoben, am absoluten Ende.
+2. NIEMALS eine Zwischensumme, einen Positionspreis, einen Rabatt, eine
+   Skonto-Zeile oder eine USt-Zeile als Brutto verwenden. Wenn mehrere
+   Zahlen zur Auswahl stehen, nimm die UNTERSTE/LETZTE.
+3. Unterscheidung Netto vs Brutto: Brutto enthält die USt, Netto nicht.
+   Wenn auf der Rechnung beides steht, ist Brutto die GRÖSSERE Zahl.
+4. Bei Teilzahlungen: "Offener Betrag" bzw. "Zu zahlen" hat Vorrang vor
    "Rechnungsbetrag". Wenn beide existieren, nimm den finalen Zahlbetrag.
+5. SELBSTKONTROLLE: Rechne nach: betrag_netto + ust_betrag ≈ betrag_brutto
+   (Toleranz 0,02 €). Wenn nicht, hast du wahrscheinlich netto und brutto
+   verwechselt – korrigiere, bevor du antwortest.
 
 ZAHLENFORMATIERUNG (Österreich/Deutschland):
 - Dezimaltrennzeichen ist das Komma: "1.234,56" → 1234.56
@@ -230,20 +240,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    const { imageBase64 } = await req.json();
-    if (!imageBase64 || typeof imageBase64 !== "string") {
-      return new Response(JSON.stringify({ error: "imageBase64 required" }), {
+    const body = await req.json();
+    // Akzeptiere sowohl einzelnes Bild als auch Array (mehrseitige PDFs)
+    const rawImages: string[] = Array.isArray(body?.imagesBase64)
+      ? body.imagesBase64.filter((x: any) => typeof x === "string" && x.length > 0)
+      : typeof body?.imageBase64 === "string" && body.imageBase64.length > 0
+        ? [body.imageBase64]
+        : [];
+
+    if (rawImages.length === 0) {
+      return new Response(JSON.stringify({ error: "imageBase64 oder imagesBase64 erforderlich" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const dataUrl = imageBase64.startsWith("data:")
-      ? imageBase64
-      : `data:image/jpeg;base64,${imageBase64}`;
+    const dataUrls = rawImages.map((s) =>
+      s.startsWith("data:") ? s : `data:image/jpeg;base64,${s}`
+    );
 
     const kategorieValues = await loadKategorieValues();
     const systemPrompt = buildSystemPrompt(kategorieValues);
+
+    const userContent: any[] = [
+      {
+        type: "text",
+        text: dataUrls.length > 1
+          ? `Extrahiere die Rechnungsdaten aus den folgenden ${dataUrls.length} Rechnungs-Seiten. Der Brutto-Gesamtbetrag steht meist auf der LETZTEN Seite (als "Gesamtbetrag", "Rechnungsbetrag" oder "Zu zahlen") – schau dir ALLE Seiten an und nimm den finalen Endbetrag.`
+          : "Extrahiere die Rechnungsdaten aus diesem Bild. Achte besonders auf den Brutto-Gesamtbetrag (den zu zahlenden Endbetrag) – dieser ist am wichtigsten und muss exakt stimmen.",
+      },
+      ...dataUrls.map((url) => ({ type: "image_url", image_url: { url, detail: "high" } })),
+    ];
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -253,17 +280,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
       body: JSON.stringify({
         // gpt-4o hat deutlich präzisere OCR-Genauigkeit als gpt-4o-mini.
-        // Kosten pro Rechnung: ca. 1-2 Cent. Für den Anwendungszweck vertretbar.
+        // Bei mehrseitigen PDFs werden alle Seiten in einem Call analysiert.
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extrahiere die Rechnungsdaten aus diesem Bild. Achte besonders auf den Brutto-Gesamtbetrag (den zu zahlenden Endbetrag) – dieser ist am wichtigsten und muss exakt stimmen." },
-              { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
-            ],
-          },
+          { role: "user", content: userContent },
         ],
         temperature: 0,
         max_tokens: 1500,
@@ -312,7 +333,72 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    const validated = validateInvoice(parsedRaw);
+    let validated = validateInvoice(parsedRaw);
+
+    // Zweiter Durchgang, wenn das erste Ergebnis verdächtig ist:
+    //   - kein Brutto-Betrag erkannt, oder
+    //   - Plausi-Check ausgelöst (netto + ust ≠ brutto), oder
+    //   - Brutto unrealistisch klein (< 1 €).
+    // Wir fragen gezielt nach dem Gesamtbetrag und übergeben dasselbe
+    // Bild-Set + die vorherige Antwort zur Kontrolle.
+    const needsSecondPass =
+      !validated.betrag_brutto ||
+      validated.betrag_brutto < 1 ||
+      validated.warnings.length > 0;
+
+    if (needsSecondPass) {
+      try {
+        const followUpPrompt = `Du hast gerade folgendes JSON extrahiert:\n${JSON.stringify(parsedRaw)}\n\nBitte überprüfe den Brutto-Gesamtbetrag NOCHMAL anhand der Bilder. Besonders wichtig: der zu zahlende Endbetrag (nicht Netto, nicht Zwischensumme). Schau nochmal auf die LETZTE Seite, ganz unten. Antworte erneut im selben JSON-Schema mit KORREKTEN Werten.`;
+        const res2 = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userContent },
+              { role: "assistant", content: JSON.stringify(parsedRaw) },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: followUpPrompt },
+                  ...dataUrls.map((url) => ({ type: "image_url", image_url: { url, detail: "high" } })),
+                ] as any,
+              },
+            ],
+            temperature: 0,
+            max_tokens: 1500,
+            response_format: { type: "json_object" },
+          }),
+        });
+        if (res2.ok) {
+          const d2 = await res2.json();
+          const c2 = d2.choices?.[0]?.message?.content;
+          if (c2) {
+            let j2t = c2.trim();
+            const m2 = j2t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (m2) j2t = m2[1];
+            try {
+              const parsed2 = JSON.parse(j2t);
+              const v2 = validateInvoice(parsed2);
+              // Zweiten Versuch nur übernehmen, wenn er mindestens so
+              // konsistent ist (keine Warnings) oder einen plausiblen
+              // Brutto-Betrag liefert, wo vorher keiner war.
+              if (
+                (v2.warnings.length < validated.warnings.length && v2.betrag_brutto) ||
+                (!validated.betrag_brutto && v2.betrag_brutto) ||
+                (v2.betrag_brutto && validated.betrag_brutto && v2.betrag_brutto > validated.betrag_brutto && v2.warnings.length === 0)
+              ) {
+                validated = v2;
+              }
+            } catch { /* keep first result */ }
+          }
+        }
+      } catch (e) { console.error("Second-pass failed:", e); }
+    }
 
     return new Response(JSON.stringify({ success: true, data: validated }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
