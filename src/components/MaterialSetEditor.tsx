@@ -148,7 +148,18 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
         );
         if (useExisting) {
           if (dup.ist_set) {
-            toast({ variant: "destructive", title: "Kein Set als Komponente", description: "Das bestehende Material ist selbst ein Set. Sets können keine anderen Sets als Komponenten haben." });
+            // Das bestehende Material ist selbst ein Set — kann nicht als
+            // Komponente dienen. Statt festzustecken: in den Such-Modus
+            // zurückkehren und dem User erklären, dass er einen anderen
+            // Namen wählen oder ein Material ohne Set-Konflikt suchen soll.
+            toast({
+              variant: "destructive",
+              title: "Kein Set als Komponente",
+              description: `"${dup.kurzbezeichnung || dup.name}" ist selbst eine Stückliste. Wähle ein Einzelmaterial oder verwende einen anderen Namen.`,
+              duration: 6000,
+            });
+            setQuickCreateMode(false);
+            setPickerSearch("");
             setQuickSaving(false);
             return;
           }

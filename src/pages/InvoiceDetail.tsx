@@ -362,7 +362,7 @@ export default function InvoiceDetail() {
             parent_invoice_id: fromDocId,
           } as any));
           const srcItems = (itemsRes.data || []) as any[];
-          let nextItems = srcItems.map((it, idx) => ({
+          let nextItems: InvoiceItem[] = srcItems.map((it, idx) => ({
             position: idx + 1,
             beschreibung: it.beschreibung || "",
             kurztext: it.kurztext || it.beschreibung || "",
@@ -663,8 +663,9 @@ export default function InvoiceDetail() {
   const addFromTemplate = async (t: TemplateItem) => {
     // Set (Stückliste): alle Komponenten des Sets aus der DB laden und
     // als einzelne Positionen in die Rechnung einfügen. Mengen = Komponenten-
-    // Menge × 1 (Benutzer kann Set-Menge danach an der Position editieren).
+    // Menge × Set-Menge (aus dem Template-Picker; Default 1).
     if ((t as any).ist_set) {
+      const setMenge = Number(templateMengen[t.id]) > 0 ? Number(templateMengen[t.id]) : 1;
       const { data: comps } = await (supabase as any)
         .from("invoice_template_components")
         .select("menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, langbezeichnung, einheit, einzelpreis, produktnummer)")
@@ -678,7 +679,7 @@ export default function InvoiceDetail() {
       const newItems: InvoiceItem[] = rows.map((r, idx) => {
         const c = r.component || {};
         const netto = Number(c.einzelpreis) || 0;
-        const menge = Number(r.menge) || 1;
+        const menge = Math.round((Number(r.menge) || 1) * setMenge * 1000) / 1000;
         return {
           position: idx + 1,
           beschreibung: c.kurzbezeichnung || c.name || "",
@@ -693,7 +694,10 @@ export default function InvoiceDetail() {
         };
       });
       setItems(prev => mergeItems(prev, newItems));
-      toast({ title: `Set hinzugefügt: ${t.name}`, description: `${newItems.length} Komponenten aufgeschlüsselt.` });
+      toast({
+        title: `Set hinzugefügt: ${t.name}${setMenge !== 1 ? ` × ${setMenge}` : ""}`,
+        description: `${newItems.length} Komponenten aufgeschlüsselt${setMenge !== 1 ? ` (Komponenten-Mengen × ${setMenge})` : ""}.`,
+      });
       return;
     }
 
@@ -769,7 +773,11 @@ export default function InvoiceDetail() {
   const restBetrag = r2(bruttoSumme - form.bezahlt_betrag);
 
   const canDelete = form.typ === "angebot";
-  const canCancel = !isNew && !!invoiceId && id !== "new" && form.typ === "rechnung" && form.status !== "storniert";
+  // Stornieren ist für alle rechnungs-artigen Dokumente möglich
+  // (Rechnung, Anzahlungsrechnung, Schlussrechnung, Gutschrift) —
+  // AT-Rechtsvorschrift: ein Rechnungsbeleg muss stornierbar sein.
+  const _cancelableTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
+  const canCancel = !isNew && !!invoiceId && id !== "new" && _cancelableTypes.has(form.typ) && form.status !== "storniert";
 
   const handleSave = async (): Promise<boolean> => {
     // Double-click protection — SOFORT setzen um Race-Condition bei schnellen Klicks zu verhindern
@@ -790,7 +798,7 @@ export default function InvoiceDetail() {
 
     // Rechnungsbetrag muss > 0 sein (außer bei Entwürfen)
     const saveBrutto = validItems.reduce((sum, item) => {
-      const netto = item.menge * item.einzelpreis * (1 - (item.rabatt || 0) / 100);
+      const netto = item.menge * item.einzelpreis * (1 - (item.rabatt_prozent || 0) / 100);
       return sum + netto * (1 + (form.mwst_satz / 100));
     }, 0);
     if (saveBrutto <= 0 && form.status !== "entwurf") {
@@ -811,14 +819,14 @@ export default function InvoiceDetail() {
     }
 
     // Rabatt-Betrag darf den Netto-Summe nicht überschreiten
-    const positionenNetto = validItems.reduce((sum, item) => sum + item.menge * item.einzelpreis * (1 - (item.rabatt || 0) / 100), 0);
+    const positionenNetto = validItems.reduce((sum, item) => sum + item.menge * item.einzelpreis * (1 - (item.rabatt_prozent || 0) / 100), 0);
     if (form.rabatt_betrag > positionenNetto) {
       toast({ variant: "destructive", title: "Ungültiger Rabatt", description: `Rabatt-Betrag (€${form.rabatt_betrag.toFixed(2)}) darf die Netto-Summe (€${positionenNetto.toFixed(2)}) nicht überschreiten` });
       return false;
     }
 
     // Pro-Position Rabatt prüfen
-    const invalidRabatt = items.find(i => (i.rabatt ?? 0) < 0 || (i.rabatt ?? 0) > 100);
+    const invalidRabatt = items.find(i => (i.rabatt_prozent ?? 0) < 0 || (i.rabatt_prozent ?? 0) > 100);
     if (invalidRabatt) {
       toast({ variant: "destructive", title: "Ungültiger Positions-Rabatt", description: "Rabatt pro Position muss zwischen 0% und 100% liegen" });
       return false;
@@ -905,6 +913,29 @@ export default function InvoiceDetail() {
       // Rechnungen sind immer mindestens "offen", Angebote behalten ihren Status (auch "entwurf")
       const saveStatus = form.typ === "rechnung" ? "offen" : (form.status || "offen");
 
+      // Defensive Parent-Normalisierung: für AR/SR muss parent_invoice_id
+      // auf einen echten Positionsträger (Angebot oder AB) zeigen — niemals
+      // auf eine andere Rechnung oder AR. Wenn der Form-State einen
+      // "verkürzten" Parent hat (z.B. durch manuelle Manipulation oder
+      // ältere Daten), wandern wir hoch und korrigieren das vor dem Save.
+      let normalizedParentId: string | null = (form as any).parent_invoice_id || null;
+      if (normalizedParentId && (form.typ === "anzahlungsrechnung" || form.typ === "schlussrechnung")) {
+        let cursor: string | null = normalizedParentId;
+        for (let i = 0; i < 5 && cursor; i++) {
+          const { data: parentRow } = await supabase
+            .from("invoices")
+            .select("id, typ, parent_invoice_id")
+            .eq("id", cursor)
+            .maybeSingle();
+          const pt = (parentRow as any)?.typ;
+          if (pt === "angebot" || pt === "auftragsbestaetigung") {
+            normalizedParentId = cursor;
+            break;
+          }
+          cursor = (parentRow as any)?.parent_invoice_id || null;
+        }
+      }
+
       const invoicePayload = {
         status: saveStatus,
         kunde_name: form.kunde_name,
@@ -938,7 +969,7 @@ export default function InvoiceDetail() {
         skonto_prozent: form.skonto_prozent || 0,
         skonto_tage: form.skonto_tage || 0,
         kundennummer: (form as any).kundennummer || null,
-        parent_invoice_id: (form as any).parent_invoice_id || null,
+        parent_invoice_id: normalizedParentId,
         anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
         anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
         ansprechpartner_name: (form as any).ansprechpartner_name?.trim() || null,
@@ -1010,8 +1041,30 @@ export default function InvoiceDetail() {
       }
 
       // Mark original Angebot as "verrechnet" when saving the converted Rechnung
-      if (fromAngebotId && form.typ === "rechnung") {
-        await supabase.from("invoices").update({ status: "verrechnet" }).eq("id", fromAngebotId);
+      // Wenn eine rechnungs-artige Konvertierung gespeichert wurde
+      // (Rechnung / AR / SR), alle Angebot-/AB-Vorfahren in der Kette
+      // auf "verrechnet" setzen. Wir wandern per parent_invoice_id hoch
+      // (max. 5 Hops als Safety-Net gegen Datenfehler) und markieren
+      // jeden Angebot-/AB-Knoten. Zwischenknoten vom Typ Rechnung oder
+      // AR werden dabei einfach übersprungen (ihr Status behält seine
+      // eigene Bedeutung: offen/teilbezahlt/bezahlt).
+      const _invoiceLikeTypesForVerrechnet = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
+      if (fromAngebotId && _invoiceLikeTypesForVerrechnet.has(form.typ)) {
+        let hopCursor: string | null = fromAngebotId;
+        for (let i = 0; i < 5 && hopCursor; i++) {
+          const { data: hop } = await supabase
+            .from("invoices")
+            .select("id, typ, status, parent_invoice_id")
+            .eq("id", hopCursor)
+            .maybeSingle();
+          const hopTyp = (hop as any)?.typ;
+          if (hopTyp === "angebot" || hopTyp === "auftragsbestaetigung") {
+            if ((hop as any)?.status !== "verrechnet" && (hop as any)?.status !== "storniert") {
+              await supabase.from("invoices").update({ status: "verrechnet" }).eq("id", hopCursor);
+            }
+          }
+          hopCursor = (hop as any)?.parent_invoice_id || null;
+        }
         setFromAngebotId(null);
       }
 
@@ -1446,14 +1499,19 @@ export default function InvoiceDetail() {
     try {
       const stornoNummer = `S-${form.nummer || invoiceId.substring(0, 8)}`;
       const stornoDatum = new Date().toISOString().split("T")[0];
+      // bezahlt_betrag beim Storno auf 0 — sonst bleibt der Teilzahlungs-
+      // Wert stehen und verzerrt Umsatz-/Offen-Statistiken. Die
+      // tatsächliche Zahlung wird bei Bedarf über eine Gutschrift
+      // dokumentiert.
       const { error } = await supabase.from("invoices").update({
         status: "storniert",
         storno_nummer: stornoNummer,
         storno_datum: stornoDatum,
         storno_grund: "Storniert durch Benutzer",
+        bezahlt_betrag: 0,
       }).eq("id", invoiceId);
       if (error) throw error;
-      setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: "Storniert durch Benutzer" }));
+      setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: "Storniert durch Benutzer", bezahlt_betrag: 0 }));
 
       // Stornobeleg sofort erstellen und herunterladen
       try {
@@ -2624,9 +2682,19 @@ export default function InvoiceDetail() {
                         return kb.includes(acQuery) || pn.includes(acQuery) || lb.includes(acQuery) || pg.includes(acQuery);
                       }).slice(0, 20) : [];
 
+                      const isExempt = !!(item as any).mwst_exempt;
                       return (
-                      <TableRow key={idx}>
-                        <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                      <TableRow key={idx} className={isExempt ? "bg-rose-50/60 border-l-4 border-l-rose-300" : ""}>
+                        <TableCell className="text-muted-foreground text-xs align-top">
+                          <div className="flex items-center gap-1">
+                            <span>{idx + 1}</span>
+                            {isExempt && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-rose-300 text-rose-700 bg-white">
+                                MwSt-frei
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="relative">
                             <Input
@@ -2639,6 +2707,8 @@ export default function InvoiceDetail() {
                               onFocus={() => setAutocompleteIdx(idx)}
                               onBlur={() => setTimeout(() => setAutocompleteIdx(null), 200)}
                               placeholder="Kurzbezeichnung"
+                              disabled={isExempt}
+                              title={isExempt ? "Automatischer Anzahlungs-Abzug — nicht manuell editierbar. Entferne die Zeile, wenn die Anzahlung nicht abgezogen werden soll." : undefined}
                             />
                             {/* Autocomplete dropdown */}
                             {acResults.length > 0 && (
@@ -2693,11 +2763,11 @@ export default function InvoiceDetail() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Input type="number" value={item.menge} onChange={(e) => updateItem(idx, "menge", Number(e.target.value))} min={0} step={0.01} className="text-right" />
+                          <Input type="number" value={item.menge} onChange={(e) => updateItem(idx, "menge", Number(e.target.value))} min={0} step={0.01} className="text-right h-10 md:h-9" disabled={isExempt} />
                         </TableCell>
                         <TableCell>
-                          <Select value={item.einheit || "Stk."} onValueChange={(v) => updateItem(idx, "einheit", v)}>
-                            <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
+                          <Select value={item.einheit || "Stk."} onValueChange={(v) => updateItem(idx, "einheit", v)} disabled={isExempt}>
+                            <SelectTrigger className="w-[90px] h-10 md:h-9"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {einheiten.map(e => (
                                 <SelectItem key={e} value={e}>{e}</SelectItem>
@@ -2706,10 +2776,10 @@ export default function InvoiceDetail() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Input type="number" value={item.einzelpreis} onChange={(e) => updateItem(idx, "einzelpreis", Number(e.target.value))} min={0} step={0.01} className="text-right" />
+                          <Input type="number" value={item.einzelpreis} onChange={(e) => updateItem(idx, "einzelpreis", Number(e.target.value))} step={0.01} className="text-right h-10 md:h-9" disabled={isExempt} />
                         </TableCell>
                         <TableCell>
-                          <Input type="number" value={item.rabatt_prozent || ""} onChange={(e) => updateItem(idx, "rabatt_prozent", Number(e.target.value))} min={0} max={100} step={0.5} className="text-right" placeholder="0" />
+                          <Input type="number" value={item.rabatt_prozent || ""} onChange={(e) => updateItem(idx, "rabatt_prozent", Number(e.target.value))} min={0} max={100} step={0.5} className="text-right h-10 md:h-9" placeholder="0" disabled={isExempt} />
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           € {item.gesamtpreis.toFixed(2)}
@@ -2718,17 +2788,17 @@ export default function InvoiceDetail() {
                           <div className="flex items-center gap-0.5">
                             {!isLocked && (
                               <>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={idx === 0} onClick={() => moveItem(idx, "up")}>
-                                  <ChevronUp className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8" disabled={idx === 0} onClick={() => moveItem(idx, "up")}>
+                                  <ChevronUp className="w-4 h-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={idx === items.length - 1} onClick={() => moveItem(idx, "down")}>
-                                  <ChevronDown className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8" disabled={idx === items.length - 1} onClick={() => moveItem(idx, "down")}>
+                                  <ChevronDown className="w-4 h-4" />
                                 </Button>
                               </>
                             )}
                             {items.length > 1 && !isLocked && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
-                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                              <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8" onClick={() => removeItem(idx)}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
                             )}
                           </div>

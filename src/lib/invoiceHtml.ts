@@ -247,19 +247,32 @@ export function buildInvoiceHtml(
     : "14";
 
   // Editierbarer Closing-Text aus document_texts hat Vorrang.
-  // Für Angebote wird das Gültigkeitsdatum aus invoice.gueltig_bis ins
-  // Default-Closing eingesetzt, falls gesetzt.
+  // Bei Angeboten greift sonst der Layout-Text L.closing_text_angebot
+  // mit Interpolation von {{gueltig_bis}} und {{tage}} — analog zu
+  // pdfGenerator, damit PDF und HTML identisch bleiben.
   const gueltigBisFmt = invoice.gueltig_bis
     ? new Date((invoice.gueltig_bis as string) + "T12:00:00").toLocaleDateString("de-AT")
     : "";
+  const tageRest = (() => {
+    if (!invoice.gueltig_bis) return 0;
+    const bis = new Date((invoice.gueltig_bis as string) + "T12:00:00").getTime();
+    const heute = Date.now();
+    return Math.max(0, Math.round((bis - heute) / 86400000));
+  })();
+  const renderAngebotClosing = () => {
+    let txt = L.closing_text_angebot || "";
+    if (gueltigBisFmt) {
+      txt = txt.replace(/\{\{gueltig_bis\}\}/g, gueltigBisFmt).replace(/\{\{tage\}\}/g, String(tageRest));
+    } else {
+      txt = txt.replace(/\s*bis zum\s*\{\{gueltig_bis\}\}/g, "").replace(/\{\{gueltig_bis\}\}/g, "").replace(/\{\{tage\}\}/g, "");
+    }
+    return txt.replace(/\s{2,}/g, " ").trim();
+  };
   const customClosing = (invoice as any).custom_closing_text as string | undefined;
-  const angebotClosingDefault = gueltigBisFmt
-    ? `Dieses Angebot ist bis zum ${gueltigBisFmt} gültig. Wir freuen uns auf Ihren Auftrag!`
-    : `Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit gerne zur Verfügung.`;
   const closingText = customClosing
     ? `<div class="closing-text">${escapeHtml(customClosing)}</div>`
     : isAngebot
-      ? `<div class="closing-text">${escapeHtml(angebotClosingDefault)}</div>`
+      ? `<div class="closing-text">${escapeHtml(renderAngebotClosing())}</div>`
       : `<div class="closing-text">Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.</div>`;
 
   // Anzahlungs-Hinweis aus document_texts — nur bei Anzahlungsrechnung gerendert.
