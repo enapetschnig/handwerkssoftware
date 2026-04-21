@@ -1731,12 +1731,24 @@ export default function InvoiceDetail() {
                   const projectId = v === "none" ? null : v;
                   updateField("project_id", projectId);
                   if (projectId) {
-                    const project = projects.find(p => p.id === projectId);
-                    if (project && (project as any).customer_id) {
+                    // Projekt-Details inkl. Kontakt-am-Leistungsort direkt laden
+                    const { data: projFull } = await (supabase.from("projects" as never) as any)
+                      .select("customer_id, projekt_kontakt_name, projekt_kontakt_telefon")
+                      .eq("id", projectId)
+                      .maybeSingle();
+                    // Ansprechpartner aus Projekt in die Invoice-Felder übernehmen
+                    if (projFull) {
+                      updateField("ansprechpartner_name" as any, projFull.projekt_kontakt_name || "");
+                      updateField("ansprechpartner_telefon" as any, projFull.projekt_kontakt_telefon || "");
+                      // E-Mail kennen wir nicht aus dem Projekt; freilassen
+                      updateField("ansprechpartner_email" as any, "");
+                    }
+                    const custId = projFull?.customer_id || (projects.find(p => p.id === projectId) as any)?.customer_id;
+                    if (custId) {
                       const { data: cust } = await supabase
                         .from("customers")
                         .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
-                        .eq("id", (project as any).customer_id)
+                        .eq("id", custId)
                         .single();
                       if (cust) {
                         setForm(prev => ({
@@ -1765,7 +1777,7 @@ export default function InvoiceDetail() {
                             updateField("faellig_am", due.toISOString().split("T")[0]);
                           }
                         }
-                        toast({ title: "Kundendaten vom Projekt übernommen", description: cust.name });
+                        toast({ title: "Projektdaten übernommen", description: cust.name });
                       }
                     }
                   }
@@ -2001,7 +2013,7 @@ export default function InvoiceDetail() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Leer lassen → es wird der globale Ansprechpartner aus dem Rechnungs-Layout verwendet.
+                  Wird beim Projekt-Wechsel automatisch aus den Projektdaten übernommen. Leer = im PDF erscheint „Kein Ansprechpartner hinterlegt".
                 </p>
               </div>
 

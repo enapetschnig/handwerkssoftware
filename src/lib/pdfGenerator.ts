@@ -207,31 +207,32 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
-  // Ansprechpartner unter der Meta-Box (Name + Telefon + E-Mail).
-  // Priorität: invoice.ansprechpartner_* → layout.contact (Fallback).
-  const invAnsp = {
-    name: ((invoice as any).ansprechpartner_name || "").toString(),
-    phone: ((invoice as any).ansprechpartner_telefon || "").toString(),
-    email: ((invoice as any).ansprechpartner_email || "").toString(),
-  };
-  const layoutContact = L.contact || { name: "", phone: "", email: "" };
-  const contact = {
-    name: invAnsp.name || layoutContact.name,
-    phone: invAnsp.phone || layoutContact.phone,
-    email: invAnsp.email || layoutContact.email,
-  };
-  if (contact.name || contact.phone || contact.email) {
-    metaY += 2;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8);
-    pdf.setTextColor(100, 100, 100);
-    pdf.text("Ihr Ansprechpartner:", metaX, metaY);
-    metaY += 4;
+  // Ansprechpartner unter der Meta-Box. Quelle: ausschließlich die am
+  // Dokument gespeicherten Felder invoice.ansprechpartner_* (die
+  // wiederum beim Projekt-Wechsel aus projects.projekt_kontakt_*
+  // importiert werden). Kein globaler Fallback mehr.
+  const contactName = ((invoice as any).ansprechpartner_name || "").toString().trim();
+  const contactPhone = ((invoice as any).ansprechpartner_telefon || "").toString().trim();
+  const contactEmail = ((invoice as any).ansprechpartner_email || "").toString().trim();
+  const hasContact = !!(contactName || contactPhone || contactEmail);
+  metaY += 2;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text("Ihr Ansprechpartner:", metaX, metaY);
+  metaY += 4;
+  if (hasContact) {
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(9);
-    if (contact.name) { pdf.text(contact.name, metaX, metaY); metaY += 4; }
-    if (contact.phone) { pdf.text(contact.phone, metaX, metaY); metaY += 4; }
-    if (contact.email) { pdf.text(contact.email, metaX, metaY); metaY += 4; }
+    if (contactName) { pdf.text(contactName, metaX, metaY); metaY += 4; }
+    if (contactPhone) { pdf.text(contactPhone, metaX, metaY); metaY += 4; }
+    if (contactEmail) { pdf.text(contactEmail, metaX, metaY); metaY += 4; }
+  } else {
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text("Kein Ansprechpartner hinterlegt", metaX, metaY);
+    metaY += 4;
   }
 
   y = Math.max(y, metaY) + 4;
