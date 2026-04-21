@@ -48,6 +48,7 @@ export interface CustomerData {
   telefon?: string;
   uid_nummer?: string;
   kundennummer?: string;
+  ansprechpartner?: string;
 }
 
 interface CustomerSelectProps {
@@ -94,7 +95,7 @@ export function CustomerSelect({
     const { data } = await supabase
       .from("customers")
       .select(
-        "id, name, anrede, titel, adresse, plz, ort, land, email, telefon, uid_nummer, kundennummer"
+        "id, name, anrede, titel, adresse, plz, ort, land, email, telefon, uid_nummer, kundennummer, ansprechpartner"
       )
       .order("name");
     if (data) {
@@ -161,7 +162,7 @@ export function CustomerSelect({
         .from("customers")
         .insert(insertData as any)
         .select(
-          "id, name, anrede, titel, adresse, plz, ort, land, email, telefon, uid_nummer, kundennummer"
+          "id, name, anrede, titel, adresse, plz, ort, land, email, telefon, uid_nummer, kundennummer, ansprechpartner"
         )
         .single();
 

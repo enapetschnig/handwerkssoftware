@@ -353,19 +353,21 @@ export async function generateInvoicePdf(
   // Spaltenbreite für Beschreibungsspalte berechnen (für Höhen-Schätzung).
   const fixedWidths = hidePrices ? 12 + 18 + 18 : 12 + 18 + 18 + 24 + 26;
   const descWidth = contentWidth - fixedWidths - 4; // grob; Padding/Border
-  // autoTable rendert den Body. margin.bottom reserviert Platz für die
-  // Closing-Section + Footer → autoTable bricht selbst rechtzeitig auf die
-  // nächste Seite um, ohne dass wir Rows duplizieren müssen.
-  // Zusätzlich korrigieren wir in didParseCell die Zellen-Höhe, wenn ein
-  // Langtext vorhanden ist, damit das autoTable nicht für 9pt Langtext
-  // Platz reserviert (der Langtext wird in 7.5pt gerendert).
+  // autoTable rendert den Body. WICHTIG: margin.bottom reserviert nur den
+  // Footer + einen kleinen Puffer – nicht den kompletten Closing-Bereich.
+  // Sonst hätte autoTable auf Rechnungen (closingH >80mm mit Bank, Skonto,
+  // Fälligkeit) zu wenig Platz und würde die erste Position sofort auf
+  // Seite 2 schieben → Seite 1 bliebe leer.
+  //
+  // Stattdessen prüfen wir NACH autoTable, ob das Closing noch auf die
+  // aktuelle Seite passt; wenn nein, addPage() (siehe unten).
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: footerH + closingH + 6 },
+    margin: { left: ml, right: mr, bottom: footerH + 12 },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -448,6 +450,16 @@ export async function generateInvoicePdf(
   });
 
   y = (pdf as any).lastAutoTable.finalY;
+
+  // Prüfen: passt das Closing (Totals + Zahlungstext + evtl. Skonto +
+  // Bank + Reverse-Charge + Notizen) noch auf die aktuelle Seite?
+  // Falls nicht → addPage und Closing auf neuer Seite zeichnen.
+  // Keine Row-Duplikation, autoTable hat alle Rows schon korrekt verteilt.
+  const spaceLeft = pageHeight - footerH - 4 - y;
+  if (spaceLeft < closingH) {
+    pdf.addPage();
+    y = 20;
+  }
 
   // ======= TOTALS (manually drawn, not in autoTable) =======
   y += 2;

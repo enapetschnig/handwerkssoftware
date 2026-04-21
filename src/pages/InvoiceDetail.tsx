@@ -405,26 +405,19 @@ export default function InvoiceDetail() {
         }
       })();
     } else if (isNew && defaultProjectId) {
-      // Kein from_doc, aber ?project=... → Projekt + Kunden + Projekt-Kontakt
+      // Kein from_doc, aber ?project=... → Projekt + Kunden
       // automatisch ins Formular übernehmen (aus dem Projekt heraus gestartet).
       (async () => {
         try {
           const { data: projFull } = await (supabase.from("projects" as never) as any)
-            .select("customer_id, projekt_kontakt_name, projekt_kontakt_telefon")
+            .select("customer_id")
             .eq("id", defaultProjectId)
             .maybeSingle();
-          if (!projFull) return;
-          // Ansprechpartner aus Projekt
-          setForm(prev => ({
-            ...prev,
-            ansprechpartner_name: projFull.projekt_kontakt_name || "",
-            ansprechpartner_telefon: projFull.projekt_kontakt_telefon || "",
-          } as any));
-          if (!projFull.customer_id) return;
+          if (!projFull?.customer_id) return;
           // Kundendaten laden
           const { data: cust } = await supabase
             .from("customers")
-            .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
+            .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, ansprechpartner, skonto_prozent, skonto_tage, nettofrist")
             .eq("id", projFull.customer_id)
             .maybeSingle();
           if (!cust) return;
@@ -442,6 +435,10 @@ export default function InvoiceDetail() {
             kunde_anrede: (cust as any).anrede || "",
             kunde_titel: (cust as any).titel || "",
             kundennummer: cust.kundennummer || "",
+            // Ansprechpartner = Kontaktperson des Kunden
+            ansprechpartner_name: (cust as any).ansprechpartner || "",
+            ansprechpartner_telefon: cust.telefon || "",
+            ansprechpartner_email: cust.email || "",
             skonto_prozent: Number(cust.skonto_prozent) || 0,
             skonto_tage: Number(cust.skonto_tage) || 0,
           } as any));
@@ -1780,23 +1777,16 @@ export default function InvoiceDetail() {
                   const projectId = v === "none" ? null : v;
                   updateField("project_id", projectId);
                   if (projectId) {
-                    // Projekt-Details inkl. Kontakt-am-Leistungsort direkt laden
+                    // Projekt-Details laden (nur für customer_id).
                     const { data: projFull } = await (supabase.from("projects" as never) as any)
-                      .select("customer_id, projekt_kontakt_name, projekt_kontakt_telefon")
+                      .select("customer_id")
                       .eq("id", projectId)
                       .maybeSingle();
-                    // Ansprechpartner aus Projekt in die Invoice-Felder übernehmen
-                    if (projFull) {
-                      updateField("ansprechpartner_name" as any, projFull.projekt_kontakt_name || "");
-                      updateField("ansprechpartner_telefon" as any, projFull.projekt_kontakt_telefon || "");
-                      // E-Mail kennen wir nicht aus dem Projekt; freilassen
-                      updateField("ansprechpartner_email" as any, "");
-                    }
                     const custId = projFull?.customer_id || (projects.find(p => p.id === projectId) as any)?.customer_id;
                     if (custId) {
                       const { data: cust } = await supabase
                         .from("customers")
-                        .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, skonto_prozent, skonto_tage, nettofrist")
+                        .select("id, name, anrede, titel, uid_nummer, adresse, plz, ort, land, email, telefon, kundennummer, ansprechpartner, skonto_prozent, skonto_tage, nettofrist")
                         .eq("id", custId)
                         .single();
                       if (cust) {
@@ -1814,6 +1804,10 @@ export default function InvoiceDetail() {
                           kunde_anrede: cust.anrede || "",
                           kunde_titel: cust.titel || "",
                           kundennummer: cust.kundennummer || "",
+                          // Ansprechpartner = Kontaktperson des Kunden
+                          ansprechpartner_name: (cust as any).ansprechpartner || "",
+                          ansprechpartner_telefon: cust.telefon || "",
+                          ansprechpartner_email: cust.email || "",
                           skonto_prozent: Number(cust.skonto_prozent) || 0,
                           skonto_tage: Number(cust.skonto_tage) || 0,
                         } as any));
@@ -1898,6 +1892,10 @@ export default function InvoiceDetail() {
                       kunde_anrede: customer.anrede || "",
                       kunde_titel: customer.titel || "",
                       kundennummer: customer.kundennummer || "",
+                      // Ansprechpartner = Kontaktperson des Kunden
+                      ansprechpartner_name: (customer as any).ansprechpartner || "",
+                      ansprechpartner_telefon: customer.telefon || "",
+                      ansprechpartner_email: customer.email || "",
                     };
                     // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
                     const hints: string[] = [];
@@ -2012,9 +2010,9 @@ export default function InvoiceDetail() {
               )}
               {/* Ansprechpartner für dieses Dokument */}
               <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2">
                   <p className="text-xs font-medium text-muted-foreground">Ansprechpartner (erscheint rechts oben im PDF)</p>
-                  {form.project_id && (
+                  {form.customer_id && (
                     <Button
                       type="button"
                       variant="outline"
@@ -2022,20 +2020,22 @@ export default function InvoiceDetail() {
                       className="h-7 text-xs"
                       disabled={isLocked}
                       onClick={async () => {
-                        const { data: proj } = await (supabase.from("projects" as never) as any)
-                          .select("projekt_kontakt_name, projekt_kontakt_telefon")
-                          .eq("id", form.project_id)
+                        const { data: cust } = await supabase
+                          .from("customers")
+                          .select("ansprechpartner, telefon, email")
+                          .eq("id", form.customer_id)
                           .maybeSingle();
-                        if (proj && (proj.projekt_kontakt_name || proj.projekt_kontakt_telefon)) {
-                          updateField("ansprechpartner_name" as any, proj.projekt_kontakt_name || "");
-                          updateField("ansprechpartner_telefon" as any, proj.projekt_kontakt_telefon || "");
-                          toast({ title: "Ansprechpartner übernommen", description: "Aus den Projektdaten geladen." });
+                        if (cust && ((cust as any).ansprechpartner || cust.telefon || cust.email)) {
+                          updateField("ansprechpartner_name" as any, (cust as any).ansprechpartner || "");
+                          updateField("ansprechpartner_telefon" as any, cust.telefon || "");
+                          updateField("ansprechpartner_email" as any, cust.email || "");
+                          toast({ title: "Ansprechpartner übernommen", description: "Aus den Kundendaten geladen." });
                         } else {
-                          toast({ variant: "destructive", title: "Kein Kontakt hinterlegt", description: "Im Projekt ist kein Ansprechpartner vor Ort eingetragen." });
+                          toast({ variant: "destructive", title: "Kein Kontakt hinterlegt", description: "Beim Kunden ist kein Ansprechpartner eingetragen." });
                         }
                       }}
                     >
-                      Aus Projekt übernehmen
+                      Aus Kunde übernehmen
                     </Button>
                   )}
                 </div>
@@ -2062,7 +2062,7 @@ export default function InvoiceDetail() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Wird beim Projekt-Wechsel automatisch aus den Projektdaten übernommen. Leer = im PDF erscheint „Kein Ansprechpartner hinterlegt".
+                  Wird beim Kunden-/Projekt-Wechsel automatisch aus den Kundendaten (Ansprechpartner + Telefon + E-Mail) übernommen. Leer = im PDF erscheint „Kein Ansprechpartner hinterlegt".
                 </p>
               </div>
 
