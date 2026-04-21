@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Trash2, Save, Package, Search, Filter, Upload, Star, TrendingUp, Percent, Euro } from "lucide-react";
+import { Plus, Trash2, Save, Package, Search, Filter, Upload, Star, TrendingUp, Percent, Euro, ImagePlus, X, Boxes } from "lucide-react";
 import { MaterialFileImport } from "@/components/MaterialFileImport";
 import { Textarea } from "@/components/ui/textarea";
 import { useEinheiten } from "@/hooks/useEinheiten";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MaterialSetEditor, type SetComponent } from "@/components/MaterialSetEditor";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,8 @@ interface Template {
   ist_lagerartikel: boolean;
   lieferant: string | null;
   ist_favorit: boolean;
+  foto_path: string | null;
+  ist_set: boolean;
 }
 
 export default function InvoiceTemplates() {
@@ -54,10 +57,21 @@ export default function InvoiceTemplates() {
     name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
     produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
     ist_lagerartikel: false, lieferant: "", produktgruppe: "",
+    foto_path: null as string | null,
+    ist_set: false,
   });
   const [importOpen, setImportOpen] = useState(false);
   const [priceAdjustMode, setPriceAdjustMode] = useState<"prozent" | "euro">("prozent");
   const [priceAdjustValue, setPriceAdjustValue] = useState("");
+  // Foto-Vorschau-URLs (signed) für Katalog-Liste + Edit-Dialog
+  const [fotoUrls, setFotoUrls] = useState<Record<string, string>>({});
+  // Komponenten des aktuell editierten Sets (im Dialog lokal gehalten, wird
+  // beim Save synchron in invoice_template_components geschrieben)
+  const [setComponents, setSetComponents] = useState<SetComponent[]>([]);
+  // Merker: welche Komponenten-Row-IDs waren beim Öffnen da? Für Diff beim Save.
+  const [originalComponentIds, setOriginalComponentIds] = useState<string[]>([]);
+  const [fotoUploading, setFotoUploading] = useState(false);
+  const [editFotoUrl, setEditFotoUrl] = useState<string | null>(null);
   const { toast } = useToast();
   const einheiten = useEinheiten();
 
@@ -72,7 +86,7 @@ export default function InvoiceTemplates() {
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Materialien konnten nicht geladen werden" });
     } else {
-      setTemplates((data || []).map(t => ({
+      const rows = (data || []).map(t => ({
         ...t,
         einzelpreis: Number(t.einzelpreis),
         netto_preis: Number((t as any).netto_preis) || Number(t.einzelpreis),
@@ -87,7 +101,27 @@ export default function InvoiceTemplates() {
         langbezeichnung: (t as any).langbezeichnung || null,
         lieferant: (t as any).lieferant || null,
         ist_favorit: (t as any).ist_favorit || false,
-      })));
+        foto_path: (t as any).foto_path || null,
+        ist_set: !!(t as any).ist_set,
+      })) as Template[];
+      setTemplates(rows);
+
+      // Signed URLs für alle Fotos parallel generieren (1h gültig)
+      const withFotos = rows.filter(r => r.foto_path);
+      if (withFotos.length > 0) {
+        const urls: Record<string, string> = {};
+        await Promise.all(withFotos.map(async (r) => {
+          try {
+            const { data: signed } = await supabase.storage
+              .from("project-materials")
+              .createSignedUrl(r.foto_path!, 3600);
+            if (signed?.signedUrl) urls[r.id] = signed.signedUrl;
+          } catch {}
+        }));
+        setFotoUrls(urls);
+      } else {
+        setFotoUrls({});
+      }
     }
     setLoading(false);
   };
@@ -121,11 +155,15 @@ export default function InvoiceTemplates() {
       name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
       produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
       ist_lagerartikel: false, lieferant: "", produktgruppe: "",
+      foto_path: null, ist_set: false,
     });
+    setSetComponents([]);
+    setOriginalComponentIds([]);
+    setEditFotoUrl(null);
     setDialogOpen(true);
   };
 
-  const openEdit = (t: Template) => {
+  const openEdit = async (t: Template) => {
     setEditId(t.id);
     setForm({
       name: t.name, beschreibung: t.beschreibung, einheit: t.einheit, einzelpreis: t.einzelpreis,
@@ -134,9 +172,69 @@ export default function InvoiceTemplates() {
       langbezeichnung: t.langbezeichnung || t.beschreibung, netto_preis: t.netto_preis,
       brutto_preis: t.brutto_preis, ust_satz: t.ust_satz, ist_lagerartikel: t.ist_lagerartikel,
       lieferant: t.lieferant || "", produktgruppe: t.produktgruppe || t.kategorie,
+      foto_path: t.foto_path,
+      ist_set: t.ist_set,
     });
     setPriceAdjustValue("");
+    setEditFotoUrl(t.foto_path ? (fotoUrls[t.id] || null) : null);
     setDialogOpen(true);
+
+    // Komponenten für Sets laden
+    if (t.ist_set) {
+      const { data } = await (supabase as any)
+        .from("invoice_template_components")
+        .select("id, component_template_id, menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, einheit, einzelpreis)")
+        .eq("parent_template_id", t.id)
+        .order("sort_order");
+      const rows = ((data as any[]) || []).map(r => ({
+        id: r.id,
+        component_template_id: r.component_template_id,
+        component_name: r.component?.kurzbezeichnung || r.component?.name || "?",
+        component_einheit: r.component?.einheit || "Stk.",
+        component_netto_preis: Number(r.component?.einzelpreis) || 0,
+        menge: Number(r.menge) || 1,
+        sort_order: Number(r.sort_order) || 0,
+      })) as SetComponent[];
+      setSetComponents(rows);
+      setOriginalComponentIds(rows.map(r => r.id!).filter(Boolean));
+    } else {
+      setSetComponents([]);
+      setOriginalComponentIds([]);
+    }
+  };
+
+  // Foto-Upload in den bestehenden project-materials-Bucket. Pfad ist
+  // material-fotos/<templateId>.<ext>. Bei neuem Material gibt es noch
+  // keine ID — wir erzeugen daher eine temporäre uuid, die wir beim Save
+  // in foto_path speichern.
+  const handleFotoSelect = async (file: File) => {
+    setFotoUploading(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      // Eindeutiger Pfad: template-ID wenn vorhanden, sonst zufällige UUID
+      const base = editId || crypto.randomUUID();
+      const path = `material-fotos/${base}.${ext}`;
+      const { error } = await supabase.storage.from("project-materials")
+        .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+      if (error) throw error;
+      setForm(f => ({ ...f, foto_path: path }));
+      const { data: signed } = await supabase.storage
+        .from("project-materials").createSignedUrl(path, 3600);
+      setEditFotoUrl(signed?.signedUrl || null);
+      toast({ title: "Foto hochgeladen" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: err.message });
+    } finally {
+      setFotoUploading(false);
+    }
+  };
+
+  const handleFotoRemove = async () => {
+    if (form.foto_path) {
+      try { await supabase.storage.from("project-materials").remove([form.foto_path]); } catch {}
+    }
+    setForm(f => ({ ...f, foto_path: null }));
+    setEditFotoUrl(null);
   };
 
   const handleSave = async () => {
@@ -157,7 +255,7 @@ export default function InvoiceTemplates() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const payload = {
+    const payload: any = {
       name: form.kurzbezeichnung || form.name,
       beschreibung: form.langbezeichnung || form.beschreibung || form.kurzbezeichnung || form.name,
       einheit: form.einheit,
@@ -173,17 +271,55 @@ export default function InvoiceTemplates() {
       ust_satz: form.ust_satz,
       ist_lagerartikel: form.ist_lagerartikel,
       lieferant: form.lieferant || null,
+      foto_path: form.foto_path,
+      ist_set: form.ist_set,
     };
 
+    let templateId = editId;
     if (editId) {
       const { error } = await supabase.from("invoice_templates").update(payload).eq("id", editId);
       if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
-      toast({ title: "Gespeichert" });
     } else {
-      const { error } = await supabase.from("invoice_templates").insert({ ...payload, user_id: user.id });
+      const { data, error } = await supabase.from("invoice_templates")
+        .insert({ ...payload, user_id: user.id })
+        .select("id")
+        .single();
       if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
-      toast({ title: "Erstellt" });
+      templateId = (data as any)?.id || null;
     }
+
+    // Komponenten-Diff synchronisieren (nur relevant für Sets)
+    if (form.ist_set && templateId) {
+      // Alte Rows entfernen, die nicht mehr in setComponents vorhanden sind
+      const currentIds = setComponents.map(c => c.id).filter(Boolean) as string[];
+      const toDelete = originalComponentIds.filter(id => !currentIds.includes(id));
+      if (toDelete.length > 0) {
+        await (supabase as any).from("invoice_template_components")
+          .delete().in("id", toDelete);
+      }
+      // Insert / Update pro Komponente
+      for (const c of setComponents) {
+        if (c.id) {
+          await (supabase as any).from("invoice_template_components")
+            .update({ menge: c.menge, sort_order: c.sort_order })
+            .eq("id", c.id);
+        } else {
+          await (supabase as any).from("invoice_template_components")
+            .insert({
+              parent_template_id: templateId,
+              component_template_id: c.component_template_id,
+              menge: c.menge,
+              sort_order: c.sort_order,
+            });
+        }
+      }
+    } else if (!form.ist_set && originalComponentIds.length > 0 && templateId) {
+      // Vom Set zum normalen Material zurück → alle Komponenten löschen
+      await (supabase as any).from("invoice_template_components")
+        .delete().eq("parent_template_id", templateId);
+    }
+
+    toast({ title: editId ? "Gespeichert" : "Erstellt" });
     setDialogOpen(false);
     fetchTemplates();
   };
@@ -270,6 +406,7 @@ export default function InvoiceTemplates() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
+                      <TableHead className="w-14">Foto</TableHead>
                       <TableHead>Prod.-Nr.</TableHead>
                       <TableHead>Kurzbezeichnung</TableHead>
                       <TableHead>Langbezeichnung</TableHead>
@@ -294,8 +431,32 @@ export default function InvoiceTemplates() {
                             <Star className={`w-4 h-4 ${t.ist_favorit ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
                           </Button>
                         </TableCell>
+                        <TableCell>
+                          {t.foto_path && fotoUrls[t.id] ? (
+                            <img
+                              src={fotoUrls[t.id]}
+                              alt=""
+                              className="w-10 h-10 object-cover rounded border"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded border bg-muted flex items-center justify-center">
+                              <Package className="w-4 h-4 text-muted-foreground/40" />
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{t.produktnummer || t.artikelnummer || "–"}</TableCell>
-                        <TableCell className="font-medium max-w-[200px] truncate">{t.kurzbezeichnung || t.name}</TableCell>
+                        <TableCell className="font-medium max-w-[200px] truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span>{t.kurzbezeichnung || t.name}</span>
+                            {t.ist_set && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 gap-1 border-primary/40 text-primary">
+                                <Boxes className="w-3 h-3" />
+                                Set
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground max-w-[250px] truncate text-xs">{t.langbezeichnung || t.beschreibung}</TableCell>
                         <TableCell className="text-xs">{t.einheit}</TableCell>
                         <TableCell className="text-xs">{t.ust_satz}%</TableCell>
@@ -370,7 +531,60 @@ export default function InvoiceTemplates() {
               </div>
               <div>
                 <Label>Langbezeichnung</Label>
-                <Textarea value={form.langbezeichnung} onChange={(e) => setForm(f => ({ ...f, langbezeichnung: e.target.value }))} placeholder="Ausführliche Beschreibung (wird auf PDF angezeigt)" rows={2} />
+                <Textarea
+                  value={form.langbezeichnung}
+                  onChange={(e) => setForm(f => ({ ...f, langbezeichnung: e.target.value }))}
+                  placeholder="Detaillierte Beschreibung für Angebot/Rechnung (Plain-Text, Zeilenumbrüche erlaubt)"
+                  rows={6}
+                />
+              </div>
+
+              {/* Foto-Upload */}
+              <div className="border rounded-lg p-3 bg-muted/20">
+                <Label className="text-sm font-medium flex items-center gap-1.5">
+                  <ImagePlus className="w-4 h-4" /> Foto (optional)
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Wird nur im Katalog + diesem Dialog angezeigt, nicht auf dem PDF.
+                </p>
+                <div className="flex items-center gap-3">
+                  {editFotoUrl ? (
+                    <img
+                      src={editFotoUrl}
+                      alt="Material-Foto"
+                      className="w-20 h-20 object-cover rounded border shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded border bg-background flex items-center justify-center shrink-0">
+                      <ImagePlus className="w-6 h-6 text-muted-foreground/50" />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFotoSelect(file);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <Button type="button" variant="outline" size="sm" disabled={fotoUploading} asChild>
+                        <span className="cursor-pointer">
+                          {fotoUploading ? "Lädt..." : (editFotoUrl ? "Foto austauschen" : "Foto hochladen")}
+                        </span>
+                      </Button>
+                    </label>
+                    {editFotoUrl && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleFotoRemove}>
+                        <X className="w-4 h-4 mr-1" /> Entfernen
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
@@ -499,12 +713,35 @@ export default function InvoiceTemplates() {
                 </div>
               )}
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Checkbox id="lagerartikel" checked={form.ist_lagerartikel} onCheckedChange={(c) => setForm(f => ({ ...f, ist_lagerartikel: !!c }))} />
                   <Label htmlFor="lagerartikel" className="cursor-pointer">Lagerartikel</Label>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="ist_set" checked={form.ist_set} onCheckedChange={(c) => setForm(f => ({ ...f, ist_set: !!c }))} />
+                  <Label htmlFor="ist_set" className="cursor-pointer flex items-center gap-1.5">
+                    <Boxes className="w-4 h-4" />
+                    Dies ist ein Set / Stückliste
+                  </Label>
+                </div>
               </div>
+
+              {/* Set-Editor: nur sichtbar wenn ist_set=true */}
+              {form.ist_set && (
+                <MaterialSetEditor
+                  components={setComponents}
+                  onChange={setSetComponents}
+                  onRecalcPrice={(netto) => {
+                    setForm(f => ({
+                      ...f,
+                      netto_preis: netto,
+                      brutto_preis: Math.round(netto * (1 + f.ust_satz / 100) * 100) / 100,
+                    }));
+                    toast({ title: "Preis übernommen", description: `Netto-Preis des Sets auf € ${netto.toFixed(2)} gesetzt.` });
+                  }}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Abbrechen</Button>

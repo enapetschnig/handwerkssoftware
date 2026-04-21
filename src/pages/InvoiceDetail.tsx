@@ -125,6 +125,7 @@ interface TemplateItem {
   einzelpreis: number;
   kategorie: string;
   ist_favorit?: boolean;
+  ist_set?: boolean;
 }
 
 interface StoredPdf {
@@ -659,7 +660,43 @@ export default function InvoiceDetail() {
     }]);
   };
 
-  const addFromTemplate = (t: TemplateItem) => {
+  const addFromTemplate = async (t: TemplateItem) => {
+    // Set (Stückliste): alle Komponenten des Sets aus der DB laden und
+    // als einzelne Positionen in die Rechnung einfügen. Mengen = Komponenten-
+    // Menge × 1 (Benutzer kann Set-Menge danach an der Position editieren).
+    if ((t as any).ist_set) {
+      const { data: comps } = await (supabase as any)
+        .from("invoice_template_components")
+        .select("menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, langbezeichnung, einheit, einzelpreis, produktnummer)")
+        .eq("parent_template_id", t.id)
+        .order("sort_order");
+      const rows = ((comps as any[]) || []);
+      if (rows.length === 0) {
+        toast({ variant: "destructive", title: "Set ist leer", description: `${t.name} hat keine Komponenten.` });
+        return;
+      }
+      const newItems: InvoiceItem[] = rows.map((r, idx) => {
+        const c = r.component || {};
+        const netto = Number(c.einzelpreis) || 0;
+        const menge = Number(r.menge) || 1;
+        return {
+          position: idx + 1,
+          beschreibung: c.kurzbezeichnung || c.name || "",
+          kurztext: c.kurzbezeichnung || c.name || "",
+          langtext: (c.langbezeichnung && c.langbezeichnung !== (c.kurzbezeichnung || c.name)) ? c.langbezeichnung : "",
+          menge,
+          einheit: c.einheit || "Stk.",
+          einzelpreis: netto,
+          rabatt_prozent: 0,
+          produktnummer: c.produktnummer || "",
+          gesamtpreis: Math.round(menge * netto * 100) / 100,
+        };
+      });
+      setItems(prev => mergeItems(prev, newItems));
+      toast({ title: `Set hinzugefügt: ${t.name}`, description: `${newItems.length} Komponenten aufgeschlüsselt.` });
+      return;
+    }
+
     const netto = Number((t as any).netto_preis) || t.einzelpreis;
     const newItem: InvoiceItem = {
       position: 1,
@@ -2947,7 +2984,14 @@ export default function InvoiceDetail() {
                         setSelectedTemplateIds(prev => isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]);
                         if (!isSelected) setTemplateMengen(prev => ({ ...prev, [t.id]: 1 }));
                       }}>
-                        <p className="font-medium truncate">{(t as any).kurzbezeichnung || t.name}</p>
+                        <p className="font-medium truncate flex items-center gap-1.5">
+                          {(t as any).kurzbezeichnung || t.name}
+                          {(t as any).ist_set && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-primary/40 text-primary shrink-0">
+                              Set
+                            </Badge>
+                          )}
+                        </p>
                         {(t as any).langbezeichnung && <p className="text-xs text-muted-foreground truncate">{(t as any).langbezeichnung}</p>}
                       </div>
                       {isSelected && (
