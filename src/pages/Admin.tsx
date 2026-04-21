@@ -620,15 +620,19 @@ export default function Admin() {
           setEmployeeRole("mitarbeiter");
         }
       })();
-      // Aktive Projekte + aktuelle Zuordnungen + volle Relations laden
+      // Volle Relations laden (pro Projekt: sources = assigned|bauleiter|verantwortl.).
+      // Die Haken-IDs werden direkt daraus abgeleitet → eine Quelle der Wahrheit,
+      // keine Race-Condition zwischen zwei separaten Queries.
       Promise.all([
         listAllActiveProjects(),
-        getEmployeeAccessibleProjectIds(selectedEmployee.id),
         loadEmployeeProjectRelations(selectedEmployee.id),
-      ]).then(([projects, accessIds, relations]) => {
+      ]).then(([projects, relations]) => {
         setAllActiveProjects(projects);
-        setEmployeeProjectIds(accessIds);
         setProjectRelations(relations);
+        // Haken = alle Projekte, in denen der Mitarbeiter via zugewiesene_mitarbeiter drin ist.
+        setEmployeeProjectIds(
+          relations.filter(r => r.sources.includes("assigned")).map(r => r.projectId)
+        );
       });
       // Diagnose: was sieht dieser User wirklich (via RPC)?
       if (selectedEmployee.user_id) {

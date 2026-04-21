@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Palette, Save } from "lucide-react";
+import { Palette, Save, CheckCheck } from "lucide-react";
+import { DEFAULT_EMPLOYEE_COLORS, getDefaultEmployeeColor } from "./employeeColorDefaults";
 
 interface EmployeeColor {
   employee_id: string;
@@ -19,18 +20,7 @@ interface Employee {
   nachname: string;
 }
 
-const DEFAULT_COLORS = [
-  { bg: "#3b82f6", text: "#ffffff" }, // Blue
-  { bg: "#1F3A5F", text: "#ffffff" }, // BKS Dunkelblau
-  { bg: "#10b981", text: "#ffffff" }, // Green
-  { bg: "#8b5cf6", text: "#ffffff" }, // Purple
-  { bg: "#ef4444", text: "#ffffff" }, // Red
-  { bg: "#f59e0b", text: "#ffffff" }, // Amber
-  { bg: "#06b6d4", text: "#ffffff" }, // Cyan
-  { bg: "#ec4899", text: "#ffffff" }, // Pink
-  { bg: "#14b8a6", text: "#ffffff" }, // Teal
-  { bg: "#6366f1", text: "#ffffff" }, // Indigo
-];
+const DEFAULT_COLORS = DEFAULT_EMPLOYEE_COLORS;
 
 export function EmployeeColorSettings() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -64,8 +54,37 @@ export function EmployeeColorSettings() {
 
   function getColor(empId: string, idx: number): EmployeeColor {
     if (colors[empId]) return colors[empId];
-    const def = DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+    const def = getDefaultEmployeeColor(idx);
     return { employee_id: empId, bg_color: def.bg, text_color: def.text };
+  }
+
+  /** Schreibt die aktuell angezeigten Farben (DB oder Default) für ALLE
+   *  Mitarbeiter in die DB. So entsteht nach einem Klick ein konsistenter
+   *  Zustand zwischen Admin und Plantafel, auch ohne dass der User
+   *  einzeln gespeichert hat. */
+  async function applyDefaultsToAll() {
+    setSaving(true);
+    try {
+      const rows = employees.map((emp, idx) => {
+        const c = getColor(emp.id, idx);
+        return { employee_id: emp.id, bg_color: c.bg_color, text_color: c.text_color };
+      });
+      // Nur einfügen, wo noch nichts gespeichert ist
+      const missing = rows.filter(r => !colors[r.employee_id]);
+      for (const row of missing) {
+        await supabase.from("employee_schedule_colors").upsert(row, { onConflict: "employee_id" });
+      }
+      // Lokalen State aktualisieren
+      setColors(prev => {
+        const next = { ...prev };
+        missing.forEach(r => { next[r.employee_id] = { ...r }; });
+        return next;
+      });
+      toast({ title: `${missing.length} Default-Farben übernommen`, description: missing.length === 0 ? "Es waren bereits alle Mitarbeiter gespeichert." : undefined });
+    } catch {
+      toast({ title: "Fehler beim Übernehmen", variant: "destructive" });
+    }
+    setSaving(false);
   }
 
   function setColorFor(empId: string, field: "bg_color" | "text_color", value: string) {
@@ -157,10 +176,21 @@ export function EmployeeColorSettings() {
           );
         })}
 
-        <Button onClick={handleSave} disabled={saving} className="w-full">
-          <Save className="h-4 w-4 mr-2" />
-          {saving ? "Speichern..." : "Farben speichern"}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={applyDefaultsToAll} disabled={saving} variant="outline" className="flex-1">
+            <CheckCheck className="h-4 w-4 mr-2" />
+            Default-Farben für alle übernehmen
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="flex-1">
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? "Speichern..." : "Farben speichern"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Die bunten Farben oben sind Vorschläge. Klick „Für alle übernehmen", um sie für alle
+          noch nicht gespeicherten Mitarbeiter in die Datenbank zu schreiben — erst dann erscheinen
+          sie in der Plantafel. „Farben speichern" schreibt die aktuellen (auch geänderten) Werte.
+        </p>
       </CardContent>
     </Card>
   );

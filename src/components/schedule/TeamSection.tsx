@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, Plus, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { EinsatzBar } from "./EinsatzBar";
+import { getDefaultEmployeeColor } from "./employeeColorDefaults";
 import {
   getEinsaetzeForUser,
   getEinsatzColumns,
@@ -119,13 +120,18 @@ export function TeamSection({
       rowIdx <= Math.max(dragStartRowIdx, dragEndRowIdx);
 
     const empColor = employeeColors?.[profile.id];
-    const sidebarStyle: React.CSSProperties = empColor
-      ? { width: 280, backgroundColor: empColor.bg_color, color: empColor.text_color }
-      : { width: 280 };
+    const fallback = getDefaultEmployeeColor(rowIdx);
+    const bg = empColor?.bg_color ?? fallback.bg;
+    const fg = empColor?.text_color ?? fallback.text;
+    const sidebarStyle: React.CSSProperties = {
+      width: 280,
+      backgroundColor: bg,
+      color: fg,
+    };
     return (
       <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
         <div
-          className={`flex items-center px-3 py-1 border-r shrink-0 ${empColor ? "" : "bg-white"}`}
+          className="flex items-center px-3 py-1 border-r shrink-0"
           style={sidebarStyle}
         >
           <span className="text-sm truncate pl-4 font-medium">{profile.vorname} {profile.nachname}</span>

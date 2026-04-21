@@ -10,6 +10,7 @@ import {
   isWeekendDay,
   getProjectColor,
 } from "./scheduleUtils";
+import { getDefaultEmployeeColor } from "./employeeColorDefaults";
 import type {
   Profile,
   Einsatz,
@@ -82,19 +83,25 @@ export function MitarbeiterSection({
     return () => window.removeEventListener("mouseup", onMouseUp);
   }, [dragUserId, dragStartIdx, dragEndIdx, days, onCellClick]);
 
-  function renderMemberRow(profile: Profile) {
+  function renderMemberRow(profile: Profile, idx: number) {
     const userEinsaetze = getEinsaetzeForUser(einsaetze, profile.id);
 
-    // Individuelle Farbe aus Admin-Einstellung (falls vorhanden).
+    // Individuelle Farbe aus Admin-Einstellung; Fallback = gleicher
+    // Default wie im Admin-UI (deterministisch über den Listen-Index).
     const empColor = employeeColors?.[profile.id];
-    const sidebarStyle: React.CSSProperties = empColor
-      ? { width: 280, backgroundColor: empColor.bg_color, color: empColor.text_color }
-      : { width: 280 };
+    const fallback = getDefaultEmployeeColor(idx);
+    const bg = empColor?.bg_color ?? fallback.bg;
+    const fg = empColor?.text_color ?? fallback.text;
+    const sidebarStyle: React.CSSProperties = {
+      width: 280,
+      backgroundColor: bg,
+      color: fg,
+    };
     return (
       <div key={profile.id} className="flex border-t" style={{ minHeight: 36 }}>
         {/* Sidebar */}
         <div
-          className={`flex items-center px-3 py-1 border-r shrink-0 ${empColor ? "" : "bg-white"}`}
+          className="flex items-center px-3 py-1 border-r shrink-0"
           style={sidebarStyle}
         >
           <span className="text-sm truncate font-medium">{profile.vorname} {profile.nachname}</span>
