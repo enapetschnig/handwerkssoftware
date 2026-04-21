@@ -87,6 +87,19 @@ export function usePermissions() {
     load();
   }, [load]);
 
+  // Auth-State-Listener: wenn der User sich neu anmeldet (z. B. nach Token-
+  // Refresh oder frischer Session), die Permissions komplett neu laden. Ohne
+  // diesen Listener konnten frisch eingeloggte User manchmal mit einem leeren
+  // Permissions-Map starten, weil getUser() beim ersten Render noch null war.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        load();
+      }
+    });
+    return () => { subscription.unsubscribe(); };
+  }, [load]);
+
   useEffect(() => {
     const ch = supabase
       .channel("perms-live")
