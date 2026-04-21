@@ -261,37 +261,45 @@ export async function generateInvoicePdf(
     ? [["Pos.", "Menge", "Einheit", "Beschreibung"]]
     : [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
 
-  // Langtext sauber trennen: pro Position zwei Rows — Haupt + Langtext.
-  // Langtext-Row: kleinere Schrift, italic, grau. Border unten gehört zur
-  // Langtext-Row (bzw. zur Haupt-Row wenn kein Langtext).
-  // rowMeta erlaubt uns in didParseCell die Rows unterschiedlich zu stylen.
-  type RowMeta = { kind: "main" | "lang"; hasLang: boolean };
-  const rowMeta: RowMeta[] = [];
+  // Kurz- und Langtext bleiben IN EINER Zelle (kombiniert mit \n), damit
+  // autoTable sie als Einheit behandelt und rowPageBreak="avoid" sie nie
+  // über einen Seitenumbruch zerreißt. Der Langtext wird später in
+  // didDrawCell in kleinerer, kursiver, grauer Schrift neu gerendert.
+  // Die Zellen-Höhe passt dann exakt, weil wir autoTable sagen, wie viel
+  // Platz wir tatsächlich brauchen (willParseCell setzt minCellHeight).
+  const KURZ_FONT_SIZE = 9;
+  const LANG_FONT_SIZE = 7.5;
+  const LINE_HEIGHT_FACTOR = 1.15;
+  const ptToMm = (pt: number) => pt * 0.3528;
+  const linesHeightMm = (n: number, pt: number) => n * ptToMm(pt) * LINE_HEIGHT_FACTOR;
+  const CELL_PAD_TOP = 3;
+  const CELL_PAD_BOTTOM = 3;
+  const LANG_GAP = 1.5;         // mm Abstand zwischen Kurz- und Langtext
+
+  const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
   const tableBody: string[][] = [];
-  items.forEach((item) => {
+  items.forEach((item, idx) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
-    const hasLang = !!(langtext && langtext !== kurztext);
-
-    const mainRow = [
+    let cellText = kurztext;
+    if (langtext && langtext !== kurztext) {
+      langtextInfo[idx] = { kurztext, langtext };
+      // Wir brauchen den Langtext im Text-Feld, damit autoTable die
+      // benötigte Zellenhöhe berücksichtigt. Größe korrigieren wir in
+      // didParseCell über minCellHeight (siehe unten).
+      cellText = `${kurztext}\n${langtext}`;
+    }
+    const row = [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      kurztext,
+      cellText,
     ];
     if (!hidePrices) {
-      mainRow.push(fmtCurrency(Number(item.einzelpreis)));
-      mainRow.push(fmtCurrency(Number(item.gesamtpreis)));
+      row.push(fmtCurrency(Number(item.einzelpreis)));
+      row.push(fmtCurrency(Number(item.gesamtpreis)));
     }
-    tableBody.push(mainRow);
-    rowMeta.push({ kind: "main", hasLang });
-
-    if (hasLang) {
-      const langRow = ["", "", "", langtext];
-      if (!hidePrices) { langRow.push("", ""); }
-      tableBody.push(langRow);
-      rowMeta.push({ kind: "lang", hasLang: false });
-    }
+    tableBody.push(row);
   });
 
   // Build totals rows for the table footer
@@ -334,9 +342,15 @@ export async function generateInvoicePdf(
   const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
   const footerH = 8 + footerLines.length * 4 + (L.footer.show_page_numbers ? 4 : 0);
 
+  // Spaltenbreite für Beschreibungsspalte berechnen (für Höhen-Schätzung).
+  const fixedWidths = hidePrices ? 12 + 18 + 18 : 12 + 18 + 18 + 24 + 26;
+  const descWidth = contentWidth - fixedWidths - 4; // grob; Padding/Border
   // autoTable rendert den Body. margin.bottom reserviert Platz für die
   // Closing-Section + Footer → autoTable bricht selbst rechtzeitig auf die
   // nächste Seite um, ohne dass wir Rows duplizieren müssen.
+  // Zusätzlich korrigieren wir in didParseCell die Zellen-Höhe, wenn ein
+  // Langtext vorhanden ist, damit das autoTable nicht für 9pt Langtext
+  // Platz reserviert (der Langtext wird in 7.5pt gerendert).
   autoTable(pdf, {
     startY: y,
     head: tableHead,
@@ -354,8 +368,8 @@ export async function generateInvoicePdf(
       lineColor: [0, 0, 0],
     },
     bodyStyles: {
-      fontSize: 9,
-      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      fontSize: KURZ_FONT_SIZE,
+      cellPadding: { top: CELL_PAD_TOP, bottom: CELL_PAD_BOTTOM, left: 2, right: 2 },
       textColor: [0, 0, 0],
       lineWidth: { bottom: 0.2 },
       lineColor: [180, 180, 180],
@@ -368,24 +382,65 @@ export async function generateInvoicePdf(
       4: { halign: "right", cellWidth: 24 },
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
-    // Per-Row-Styling: Langtext-Rows kriegen italic + 7.5pt + grau +
-    // oben keine Border (gehört zur Haupt-Row darüber) + unten die
-    // Trenn-Linie. Haupt-Rows mit Folgelang verlieren die Border unten.
     didParseCell: (data: any) => {
-      if (data.section !== "body") return;
-      const meta = rowMeta[data.row.index];
-      if (!meta) return;
-      if (meta.kind === "lang") {
-        data.cell.styles.fontSize = 7.5;
-        data.cell.styles.fontStyle = "italic";
-        data.cell.styles.textColor = [120, 120, 120];
-        data.cell.styles.cellPadding = { top: 0.5, bottom: 2.5, left: 2, right: 2 };
-        // Sichtbare Trenn-Linie nur unten (oben an Haupt-Row anschließen)
-        data.cell.styles.lineWidth = { top: 0, bottom: 0.2, left: 0, right: 0 };
-      } else if (meta.hasLang) {
-        // Haupt-Row mit nachfolgendem Langtext: Trenn-Linie weg
-        data.cell.styles.cellPadding = { top: 3, bottom: 1, left: 2, right: 2 };
-        data.cell.styles.lineWidth = { top: 0, bottom: 0, left: 0, right: 0 };
+      // Wenn Langtext vorhanden: autoTable denkt, alle Zeilen sind 9pt.
+      // Das produziert zu viel Höhe. Wir setzen minCellHeight exakt auf
+      // das, was wir brauchen (Kurztext in 9pt + Langtext in 7.5pt).
+      if (data.section === "body" && data.column.index === 3) {
+        const info = langtextInfo[data.row.index];
+        if (info) {
+          try {
+            pdf.setFontSize(KURZ_FONT_SIZE);
+            const kurzLines = pdf.splitTextToSize(info.kurztext, descWidth);
+            pdf.setFontSize(LANG_FONT_SIZE);
+            const langLines = pdf.splitTextToSize(info.langtext, descWidth);
+            pdf.setFontSize(KURZ_FONT_SIZE);
+            const h = CELL_PAD_TOP
+              + linesHeightMm(kurzLines.length, KURZ_FONT_SIZE)
+              + LANG_GAP
+              + linesHeightMm(langLines.length, LANG_FONT_SIZE)
+              + CELL_PAD_BOTTOM;
+            data.cell.styles.minCellHeight = h;
+          } catch { /* fallback: lass autoTable selber schätzen */ }
+        }
+      }
+    },
+    didDrawCell: (data: any) => {
+      // Langtext nachträglich in kleinerer, kursiver, grauer Schrift malen.
+      if (data.section === "body" && data.column.index === 3) {
+        const info = langtextInfo[data.row.index];
+        if (info) {
+          try {
+            const cellW = data.cell.width - 4;
+            const cellX = data.cell.x + 2;
+            // 1. Zelleninhalt weiß übermalen (der kombinierte Text wurde schon gezeichnet)
+            pdf.setFillColor(255, 255, 255);
+            pdf.rect(data.cell.x + 0.2, data.cell.y + 0.2, data.cell.width - 0.4, data.cell.height - 0.4, "F");
+            // 2. Kurztext in 9pt normal
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(KURZ_FONT_SIZE);
+            pdf.setTextColor(0, 0, 0);
+            const kurzLines = pdf.splitTextToSize(info.kurztext, cellW);
+            const kurzBaselineY = data.cell.y + CELL_PAD_TOP + ptToMm(KURZ_FONT_SIZE);
+            pdf.text(kurzLines, cellX, kurzBaselineY);
+            const kurzH = linesHeightMm(kurzLines.length, KURZ_FONT_SIZE);
+            // 3. Langtext darunter in 7.5pt italic grau
+            pdf.setFont("helvetica", "italic");
+            pdf.setFontSize(LANG_FONT_SIZE);
+            pdf.setTextColor(120, 120, 120);
+            const langLines = pdf.splitTextToSize(info.langtext, cellW);
+            const langBaselineY = data.cell.y + CELL_PAD_TOP + kurzH + LANG_GAP + ptToMm(LANG_FONT_SIZE);
+            pdf.text(langLines, cellX, langBaselineY);
+            // 4. Bottom-Border nachzeichnen (wurde vom weißen Rect überdeckt)
+            pdf.setDrawColor(180, 180, 180);
+            pdf.setLineWidth(0.2);
+            pdf.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+            // Reset
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(KURZ_FONT_SIZE);
+            pdf.setTextColor(0, 0, 0);
+          } catch { /* ignore */ }
+        }
       }
     },
   });

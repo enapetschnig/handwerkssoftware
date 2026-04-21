@@ -55,6 +55,7 @@ const ProjectOverview = () => {
     bereich: "",
     projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
     budget: "", auftragsvolumen: "", bauleiter_id: "",
+    zugewiesene_mitarbeiter: [] as string[],
   });
   const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
   const [customerData, setCustomerData] = useState<any>(null);
@@ -223,6 +224,9 @@ const ProjectOverview = () => {
       budget: (proj as any).budget != null ? String((proj as any).budget) : "",
       auftragsvolumen: (proj as any).auftragsvolumen != null ? String((proj as any).auftragsvolumen) : "",
       bauleiter_id: (proj as any).bauleiter_id || "",
+      zugewiesene_mitarbeiter: Array.isArray((proj as any).zugewiesene_mitarbeiter)
+        ? ((proj as any).zugewiesene_mitarbeiter as string[])
+        : [],
     });
     setEditDialogOpen(true);
   };
@@ -269,6 +273,9 @@ const ProjectOverview = () => {
       budget: editForm.budget ? parseFloat(editForm.budget) : null,
       auftragsvolumen: editForm.auftragsvolumen ? parseFloat(editForm.auftragsvolumen) : null,
       bauleiter_id: editForm.bauleiter_id || null,
+      zugewiesene_mitarbeiter: editForm.zugewiesene_mitarbeiter.length > 0
+        ? editForm.zugewiesene_mitarbeiter
+        : [],
     } as any).eq("id", projectId);
     // Update or create customer
     if (editForm.customer_id && editForm.kunde_name.trim()) {
@@ -1064,6 +1071,38 @@ const ProjectOverview = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              {/* Zugewiesene Mitarbeiter – steuert den Zugriff auf das Projekt */}
+              <div>
+                <Label className="mb-2 block">Zugewiesene Mitarbeiter</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Nur diese Mitarbeiter sehen das Projekt in der App und können Fotos/Stunden dafür buchen. Administrator und Vorarbeiter sehen alle Projekte.
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                  {employees.length > 0 ? employees.map((e) => {
+                    const checked = editForm.zugewiesene_mitarbeiter.includes(e.id);
+                    return (
+                      <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(ev) => {
+                            setEditForm(f => ({
+                              ...f,
+                              zugewiesene_mitarbeiter: ev.target.checked
+                                ? [...f.zugewiesene_mitarbeiter, e.id]
+                                : f.zugewiesene_mitarbeiter.filter(x => x !== e.id),
+                            }));
+                          }}
+                          className="rounded"
+                        />
+                        {e.vorname} {e.nachname}
+                      </label>
+                    );
+                  }) : (
+                    <p className="text-sm text-muted-foreground col-span-2">Keine aktiven Mitarbeiter gefunden.</p>
+                  )}
+                </div>
               </div>
             </div>
 

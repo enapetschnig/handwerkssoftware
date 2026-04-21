@@ -181,6 +181,62 @@ async function findEmployeeByPhone(phone: string) {
   return valid.find((c: any) => c.telefon === cleanedMatch) || valid[0];
 }
 
+// ─── Projekt-Zugriff für Bot-User ────────────────────────
+// Admin/Vorarbeiter: alle Projekte. Mitarbeiter: nur eigene
+// (verantwortlicher_id/bauleiter_id = employee.id oder in
+//  zugewiesene_mitarbeiter-Liste).
+async function getBotUserRole(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  const roles = ((data as any[]) || []).map(r => r.role);
+  if (roles.includes("administrator")) return "administrator";
+  if (roles.includes("vorarbeiter")) return "vorarbeiter";
+  if (roles.includes("mitarbeiter")) return "mitarbeiter";
+  return null;
+}
+
+type ProjectLite = { id: string; name: string };
+
+/**
+ * Lädt die für diesen Employee sichtbaren Projekte.
+ * opts.onlyActive=true (default): status != Abgeschlossen.
+ */
+async function listProjectsForEmployee(
+  employee: { id: string; user_id: string | null } | null,
+  opts: { onlyActive?: boolean } = {},
+): Promise<ProjectLite[]> {
+  const onlyActive = opts.onlyActive !== false;
+  const role = employee?.user_id ? await getBotUserRole(employee.user_id) : null;
+  const isElevated = role === "administrator" || role === "vorarbeiter";
+
+  if (isElevated) {
+    let q = supabase.from("projects").select("id, name").order("name");
+    if (onlyActive) q = q.not("status", "eq", "Abgeschlossen");
+    const { data } = await q;
+    return ((data as any[]) || []) as ProjectLite[];
+  }
+
+  // Mitarbeiter: filter lokal nach employee.id
+  if (!employee) return [];
+  let q = supabase
+    .from("projects")
+    .select("id, name, verantwortlicher_id, bauleiter_id, zugewiesene_mitarbeiter")
+    .order("name");
+  if (onlyActive) q = q.not("status", "eq", "Abgeschlossen");
+  const { data } = await q;
+  const empId = employee.id;
+  return ((data as any[]) || [])
+    .filter((p: any) =>
+      p.verantwortlicher_id === empId ||
+      p.bauleiter_id === empId ||
+      (Array.isArray(p.zugewiesene_mitarbeiter) && p.zugewiesene_mitarbeiter.includes(empId))
+    )
+    .map((p: any) => ({ id: p.id, name: p.name }));
+}
+
 // ─── Conversation persistence ────────────────────────────
 
 async function loadHistory(phone: string, limit = 6): Promise<ConversationEntry[]> {
@@ -237,7 +293,10 @@ function getRegelarbeitszeitForDate(d: Date): number {
 
 // ─── Rich context (the "brain" per employee) ─────────────
 
-async function gatherContext(userId: string) {
+async function gatherContext(
+  userId: string,
+  employee?: { id: string; user_id: string | null } | null,
+) {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const dayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -250,9 +309,12 @@ async function gatherContext(userId: string) {
   sunday.setDate(sunday.getDate() + 6);
   const sundayStr = sunday.toISOString().split("T")[0];
 
-  const [projectsRes, todayEntriesRes, assignmentsRes, weekEntriesRes] =
+  // Projekte: nur die für den User sichtbaren (Mitarbeiter bekommen
+  // nur seine zugewiesenen, Admin/Vorarbeiter sehen alles).
+  const accessibleProjects = await listProjectsForEmployee(employee || null);
+
+  const [todayEntriesRes, assignmentsRes, weekEntriesRes] =
     await Promise.all([
-      supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name"),
       supabase.from("time_entries")
         .select("id, stunden, taetigkeit, project_id, projects(name), created_at")
         .eq("user_id", userId).eq("datum", today)
@@ -273,7 +335,7 @@ async function gatherContext(userId: string) {
         .order("datum", { ascending: true }),
     ]);
 
-  const projects = projectsRes.data || [];
+  const projects = accessibleProjects;
   const todayEntries = todayEntriesRes.data || [];
   const assignments = (assignmentsRes.data || []) as any[];
   const weekEntries = (weekEntriesRes.data || []) as any[];
@@ -519,8 +581,19 @@ async function executeTool(
   userId: string,
   senderName: string,
   mediaRef?: string,
-  cachedImageBuffer?: ArrayBuffer | null
+  cachedImageBuffer?: ArrayBuffer | null,
+  employee?: { id: string; user_id: string | null } | null,
 ): Promise<string> {
+  // Nur sichtbare Projekte für diesen User. Admin/Vorarbeiter: "elevated"
+  // → keine Einschränkung. Mitarbeiter: nur eigene Projekte.
+  const botRole = employee?.user_id ? await getBotUserRole(employee.user_id) : null;
+  const isElevated = botRole === "administrator" || botRole === "vorarbeiter";
+  const accessibleProjects: ProjectLite[] = isElevated
+    ? []
+    : await listProjectsForEmployee(employee || null);
+  const accessibleIds = new Set(accessibleProjects.map(p => p.id));
+  const canAccessProject = (pid: string | null | undefined) =>
+    isElevated || !pid || accessibleIds.has(pid);
   const today = new Date().toISOString().split("T")[0];
 
   // arbeitsort normalisieren: Aliase erlauben
@@ -535,29 +608,28 @@ async function executeTool(
   if ((input.arbeitsort === undefined || input.arbeitsort === "baustelle")
       && !input.project_id && input.project_name) {
     const searchTerm = input.project_name.trim();
-    const { data: matches } = await supabase
-      .from("projects")
-      .select("id, name")
-      .not("status", "eq", "Abgeschlossen")
-      .ilike("name", `%${searchTerm}%`)
-      .limit(5);
+    // Only search within the user's accessible projects.
+    const visibleProjects = isElevated
+      ? (await supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen")).data || []
+      : accessibleProjects;
+    const needle = searchTerm.toLowerCase();
+    const matches = (visibleProjects as any[]).filter((p: any) =>
+      (p.name || "").toLowerCase().includes(needle)
+    ).slice(0, 5);
 
-    if (!matches || matches.length === 0) {
+    if (matches.length === 0) {
       // Try even fuzzier: split search term and match any word
       const words = searchTerm.split(/\s+/).filter((w: string) => w.length > 2);
       let fuzzyMatch = null;
       if (words.length > 0) {
-        const { data: allProjects } = await supabase
-          .from("projects").select("id, name").not("status", "eq", "Abgeschlossen");
-        fuzzyMatch = (allProjects || []).find((p: any) =>
-          words.some((w: string) => p.name.toLowerCase().includes(w.toLowerCase()))
+        fuzzyMatch = (visibleProjects as any[]).find((p: any) =>
+          words.some((w: string) => (p.name || "").toLowerCase().includes(w.toLowerCase()))
         );
       }
       if (fuzzyMatch) {
         input.project_id = fuzzyMatch.id;
       } else {
-        const { data: allP } = await supabase.from("projects").select("name").not("status", "eq", "Abgeschlossen");
-        const list = (allP || []).map((p: any, i: number) => `${i + 1}. ${p.name}`).join("\n");
+        const list = (visibleProjects as any[]).map((p: any, i: number) => `${i + 1}. ${p.name}`).join("\n");
         return `FEHLER: Kein Projekt "${searchTerm}" gefunden. Aktive Projekte:\n${list}`;
       }
     } else if (matches.length === 1) {
@@ -681,6 +753,7 @@ async function executeTool(
 
     case "foto_hochladen": {
       if (!input.project_id) return "FEHLER: Kein Projekt angegeben. Bitte Projektname nennen.";
+      if (!canAccessProject(input.project_id)) return "FEHLER: Du hast keinen Zugriff auf dieses Projekt.";
       try {
         console.log(`[foto_hochladen] Start user=${userId} project=${input.project_id}`);
         // ALLE pending Fotos des Users einholen (max 30min alt, nicht verarbeitet)
@@ -852,9 +925,7 @@ async function executeTool(
     }
 
     case "projekte_anzeigen": {
-      const { data: projects } = await supabase
-        .from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name");
-
+      const projects = await listProjectsForEmployee(employee || null);
       if (!projects?.length) return "Keine aktiven Projekte.";
       return "AKTIVE PROJEKTE:\n" + projects.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
     }
@@ -890,10 +961,11 @@ async function executeTool(
       if (input.start_time) update.start_time = input.start_time;
       if (input.end_time) update.end_time = input.end_time;
       if (input.neues_projekt_name) {
-        const { data: projs } = await supabase
-          .from("projects").select("id, name").not("status", "eq", "Abgeschlossen");
+        const projs = isElevated
+          ? ((await supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen")).data || [])
+          : accessibleProjects;
         const needle = String(input.neues_projekt_name).toLowerCase();
-        const match = (projs || []).find((p: any) => p.name.toLowerCase().includes(needle));
+        const match = (projs as any[]).find((p: any) => p.name.toLowerCase().includes(needle));
         if (!match) return `ERROR: Projekt "${input.neues_projekt_name}" nicht gefunden.`;
         update.project_id = match.id;
       }
@@ -1023,7 +1095,8 @@ async function askGPT(
   userId: string,
   senderName: string,
   mediaRef?: string,
-  cachedImageBuffer?: ArrayBuffer | null
+  cachedImageBuffer?: ArrayBuffer | null,
+  employee?: { id: string; user_id: string | null } | null,
 ): Promise<string> {
   const messages: any[] = [
     { role: "system", content: systemPrompt },
@@ -1053,7 +1126,7 @@ async function askGPT(
 
     for (const tc of msg.tool_calls || []) {
       const args = JSON.parse(tc.function.arguments);
-      const output = await executeTool(tc.function.name, args, userId, senderName, mediaRef, cachedImageBuffer);
+      const output = await executeTool(tc.function.name, args, userId, senderName, mediaRef, cachedImageBuffer, employee);
       messages.push({ role: "tool", tool_call_id: tc.id, content: output });
     }
 
@@ -1549,7 +1622,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       const [ctxData, history] = await Promise.all([
-        gatherContext(userId),
+        gatherContext(userId, emp),
         loadHistory(phone, 6),
       ]);
 
@@ -1587,7 +1660,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const mediaRef = cachedImageBuffer ? "__cached__" : undefined;
 
       const reply = await askGPT(
-        systemPrompt, history, userMessage, userId, name, mediaRef, cachedImageBuffer
+        systemPrompt, history, userMessage, userId, name, mediaRef, cachedImageBuffer, emp
       );
 
       await saveMsg(phone, "outgoing", reply, emp.id, userId);
