@@ -255,34 +255,43 @@ export async function generateInvoicePdf(
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
 
-  // ======= ITEMS TABLE with TOTALS as table footer =======
-  // autoTable keeps footer together with last body rows — never alone on new page!
+  // ======= ITEMS TABLE =======
   // Lieferschein: ohne Preisspalten
   const tableHead = hidePrices
     ? [["Pos.", "Menge", "Einheit", "Beschreibung"]]
     : [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
-  // Langtext: put BOTH in cell so autoTable handles height perfectly.
-  // In didDrawCell we paint over the langtext area and redraw in italic/gray.
-  const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
-  const tableBody = items.map((item, idx) => {
+
+  // Langtext sauber trennen: pro Position zwei Rows — Haupt + Langtext.
+  // Langtext-Row: kleinere Schrift, italic, grau. Border unten gehört zur
+  // Langtext-Row (bzw. zur Haupt-Row wenn kein Langtext).
+  // rowMeta erlaubt uns in didParseCell die Rows unterschiedlich zu stylen.
+  type RowMeta = { kind: "main" | "lang"; hasLang: boolean };
+  const rowMeta: RowMeta[] = [];
+  const tableBody: string[][] = [];
+  items.forEach((item) => {
     const kurztext = (item as any).kurztext || item.beschreibung;
     const langtext = (item as any).langtext || "";
-    let cellText = kurztext;
-    if (langtext && langtext !== kurztext) {
-      langtextInfo[idx] = { kurztext, langtext };
-      cellText = `${kurztext}\n${langtext}`;
-    }
-    const row = [
+    const hasLang = !!(langtext && langtext !== kurztext);
+
+    const mainRow = [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
-      cellText, // Both in cell — autoTable handles sizing, didDrawCell handles styling
+      kurztext,
     ];
     if (!hidePrices) {
-      row.push(fmtCurrency(Number(item.einzelpreis)));
-      row.push(fmtCurrency(Number(item.gesamtpreis)));
+      mainRow.push(fmtCurrency(Number(item.einzelpreis)));
+      mainRow.push(fmtCurrency(Number(item.gesamtpreis)));
     }
-    return row;
+    tableBody.push(mainRow);
+    rowMeta.push({ kind: "main", hasLang });
+
+    if (hasLang) {
+      const langRow = ["", "", "", langtext];
+      if (!hidePrices) { langRow.push("", ""); }
+      tableBody.push(langRow);
+      rowMeta.push({ kind: "lang", hasLang: false });
+    }
   });
 
   // Build totals rows for the table footer
@@ -325,15 +334,16 @@ export async function generateInvoicePdf(
   const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
   const footerH = 8 + footerLines.length * 4 + (L.footer.show_page_numbers ? 4 : 0);
 
-  // autoTable: body rows ONLY (no footer/totals). Small margin → pages fill up fully.
-  // Totals + closing drawn manually after, with page break if needed.
+  // autoTable rendert den Body. margin.bottom reserviert Platz für die
+  // Closing-Section + Footer → autoTable bricht selbst rechtzeitig auf die
+  // nächste Seite um, ohne dass wir Rows duplizieren müssen.
   autoTable(pdf, {
     startY: y,
     head: tableHead,
     body: tableBody,
     theme: "plain",
     rowPageBreak: "avoid",
-    margin: { left: ml, right: mr, bottom: footerH + 10 },
+    margin: { left: ml, right: mr, bottom: footerH + closingH + 6 },
     headStyles: {
       fillColor: [240, 240, 240],
       textColor: [0, 0, 0],
@@ -358,95 +368,29 @@ export async function generateInvoicePdf(
       4: { halign: "right", cellWidth: 24 },
       5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
-    didDrawCell: (data: any) => {
-      if (data.section === "body" && data.column.index === 3) {
-        const info = langtextInfo[data.row.index];
-        if (info) {
-          try {
-            const cellW = data.cell.width - 4;
-            const cellX = data.cell.x + 2;
-            // autoTable drew BOTH kurztext+langtext in same font.
-            // Find where langtext starts, paint white over it, redraw in italic/gray.
-            const kurztextLines = pdf.splitTextToSize(info.kurztext, cellW);
-            const lineH = 9 * 0.3528 * 1.15; // 9pt line height
-            const kurztextH = kurztextLines.length * lineH;
-            // White rect over langtext area (from after kurztext to cell bottom)
-            const coverY = data.cell.y + 3 + kurztextH + 0.5;
-            const coverH = data.cell.y + data.cell.height - coverY;
-            pdf.setFillColor(255, 255, 255);
-            pdf.rect(data.cell.x, coverY, data.cell.width, coverH, "F");
-            // Redraw langtext in italic gray with small gap after kurztext
-            const ltY = data.cell.y + 3 + kurztextH + 2;
-            const ltLines = pdf.splitTextToSize(info.langtext, cellW);
-            pdf.setFont("helvetica", "italic");
-            pdf.setFontSize(7.5);
-            pdf.setTextColor(120, 120, 120);
-            pdf.text(ltLines, cellX, ltY);
-            // Redraw bottom border (white rect covered it)
-            const borderY = data.cell.y + data.cell.height;
-            pdf.setDrawColor(180, 180, 180);
-            pdf.setLineWidth(0.2);
-            pdf.line(data.cell.x, borderY, data.cell.x + data.cell.width, borderY);
-            // Reset
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(9);
-            pdf.setTextColor(0, 0, 0);
-          } catch {}
-        }
+    // Per-Row-Styling: Langtext-Rows kriegen italic + 7.5pt + grau +
+    // oben keine Border (gehört zur Haupt-Row darüber) + unten die
+    // Trenn-Linie. Haupt-Rows mit Folgelang verlieren die Border unten.
+    didParseCell: (data: any) => {
+      if (data.section !== "body") return;
+      const meta = rowMeta[data.row.index];
+      if (!meta) return;
+      if (meta.kind === "lang") {
+        data.cell.styles.fontSize = 7.5;
+        data.cell.styles.fontStyle = "italic";
+        data.cell.styles.textColor = [120, 120, 120];
+        data.cell.styles.cellPadding = { top: 0.5, bottom: 2.5, left: 2, right: 2 };
+        // Sichtbare Trenn-Linie nur unten (oben an Haupt-Row anschließen)
+        data.cell.styles.lineWidth = { top: 0, bottom: 0.2, left: 0, right: 0 };
+      } else if (meta.hasLang) {
+        // Haupt-Row mit nachfolgendem Langtext: Trenn-Linie weg
+        data.cell.styles.cellPadding = { top: 3, bottom: 1, left: 2, right: 2 };
+        data.cell.styles.lineWidth = { top: 0, bottom: 0, left: 0, right: 0 };
       }
     },
   });
 
   y = (pdf as any).lastAutoTable.finalY;
-
-  // Check: does the entire closing section (totals + notes + closing text etc.) fit?
-  // If not → new page with the last position repeated so it's not empty.
-  const spaceLeft = (pageHeight - footerH - 4) - y;
-  if (spaceLeft < closingH) {
-    pdf.addPage();
-    y = 20;
-    // Redraw the last position on the new page so it's not empty
-    if (tableBody.length > 0) {
-      const lastRow = [tableBody[tableBody.length - 1]];
-      autoTable(pdf, {
-        startY: y,
-        head: tableHead,
-        body: lastRow,
-        theme: "plain",
-        rowPageBreak: "avoid",
-        margin: { left: ml, right: mr, bottom: footerH + 10 },
-        headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, lineWidth: { bottom: 0.5 }, lineColor: [0, 0, 0] },
-        bodyStyles: { fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, textColor: [0, 0, 0], lineWidth: { bottom: 0.2 }, lineColor: [180, 180, 180] },
-        columnStyles: { 0: { halign: "center", cellWidth: 12 }, 1: { halign: "right", cellWidth: 18 }, 2: { halign: "center", cellWidth: 18 }, 3: { halign: "left" }, 4: { halign: "right", cellWidth: 24 }, 5: { halign: "right", cellWidth: 26, fontStyle: "bold" } },
-        didDrawCell: (data: any) => {
-          if (data.section === "body" && data.column.index === 3) {
-            const lastIdx = items.length - 1;
-            const info = langtextInfo[lastIdx];
-            if (info) {
-              try {
-                const cw = data.cell.width - 4, cx = data.cell.x + 2;
-                const kl = pdf.splitTextToSize(info.kurztext, cw);
-                const kh = kl.length * (9 * 0.3528 * 1.15);
-                const cy = data.cell.y + 3 + kh + 0.5;
-                const ch = data.cell.y + data.cell.height - cy;
-                pdf.setFillColor(255, 255, 255);
-                pdf.rect(data.cell.x, cy, data.cell.width, ch, "F");
-                const ly = data.cell.y + 3 + kh + 2;
-                const ll = pdf.splitTextToSize(info.langtext, cw);
-                pdf.setFont("helvetica", "italic"); pdf.setFontSize(7.5); pdf.setTextColor(120, 120, 120);
-                pdf.text(ll, cx, ly);
-                const by = data.cell.y + data.cell.height;
-                pdf.setDrawColor(180, 180, 180); pdf.setLineWidth(0.2);
-                pdf.line(data.cell.x, by, data.cell.x + data.cell.width, by);
-                pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(0, 0, 0);
-              } catch {}
-            }
-          }
-        },
-      });
-      y = (pdf as any).lastAutoTable.finalY;
-    }
-  }
 
   // ======= TOTALS (manually drawn, not in autoTable) =======
   y += 2;
