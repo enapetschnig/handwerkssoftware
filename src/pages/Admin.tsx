@@ -590,16 +590,20 @@ export default function Admin() {
 
       // Projekt-Zugänge synchronisieren (nur für Nicht-Admins;
       // Administratoren sehen per RLS immer alle Projekte).
+      let syncResult: { added: number; removed: number } | null = null;
       if (selectedEmployee && employeeRole !== "administrator") {
         try {
-          await syncEmployeeProjectAccess(selectedEmployee.id, employeeProjectIds);
+          syncResult = await syncEmployeeProjectAccess(selectedEmployee.id, employeeProjectIds);
         } catch (err: any) {
           console.error("Projekt-Zuordnung fehlgeschlagen:", err);
           toast({ variant: "destructive", title: "Hinweis", description: `Projekt-Zuordnung fehlgeschlagen: ${err.message}` });
         }
       }
 
-      toast({ title: "Erfolg", description: "Änderungen gespeichert" });
+      const syncMsg = syncResult && (syncResult.added > 0 || syncResult.removed > 0)
+        ? ` Projekt-Zugänge aktualisiert (${syncResult.added > 0 ? `+${syncResult.added}` : ""}${syncResult.added > 0 && syncResult.removed > 0 ? " / " : ""}${syncResult.removed > 0 ? `-${syncResult.removed}` : ""}) – sofort aktiv in Zeiterfassung + WhatsApp-Bot.`
+        : "";
+      toast({ title: "Gespeichert", description: `Änderungen übernommen.${syncMsg}` });
       fetchEmployees();
       if (nameChanged) fetchUsers({ silent: true });
       setSelectedEmployee(null);

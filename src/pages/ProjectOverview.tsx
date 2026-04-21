@@ -313,7 +313,13 @@ const ProjectOverview = () => {
     setProjectName(editForm.name.trim());
     setEditSaving(false);
     setEditDialogOpen(false);
-    toast({ title: "Projekt aktualisiert" });
+    const count = editForm.zugewiesene_mitarbeiter?.length || 0;
+    toast({
+      title: "Projekt aktualisiert",
+      description: count > 0
+        ? `${count} Mitarbeiter haben Zugriff — Änderung sofort aktiv in Zeiterfassung + WhatsApp-Bot.`
+        : "Keine Mitarbeiter zugewiesen — nur Bauleiter/Verantwortlicher sehen das Projekt.",
+    });
   };
 
   const selectCustomerForEdit = (c: { id: string; name: string; plz: string | null; ort: string | null }) => {

@@ -223,6 +223,10 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       if (data?.employee_id && form.rolle !== "administrator" && selectedProjects.length > 0) {
         try {
           await syncEmployeeProjectAccess(data.employee_id, selectedProjects);
+          toast({
+            title: "Projekt-Zugänge vergeben",
+            description: `${selectedProjects.length} Projekt${selectedProjects.length === 1 ? "" : "e"} — sofort aktiv in Zeiterfassung + WhatsApp-Bot.`,
+          });
         } catch (e: any) {
           console.error("Projekt-Zuweisung fehlgeschlagen:", e);
           toast({ variant: "destructive", title: "Hinweis", description: `Projekt-Zuweisung fehlgeschlagen: ${e.message}` });
