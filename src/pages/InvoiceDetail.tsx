@@ -1282,9 +1282,13 @@ export default function InvoiceDetail() {
 
   // Umwandlung zu beliebigem Ziel-Dokumenttyp. options steuern Extras
   // (Anzahlungs-Prozent, Abzüge von Anzahlungen).
-  const handleConvertTo = (targetTyp: string, options?: { anzahlung_prozent?: number; anzahlung_betrag?: number; abzug_ids?: string[] }) => {
-    if (!invoiceId) return;
-    const params = new URLSearchParams({ typ: targetTyp, from_doc: invoiceId });
+  const handleConvertTo = (
+    targetTyp: string,
+    options?: { anzahlung_prozent?: number; anzahlung_betrag?: number; abzug_ids?: string[]; from_doc_id?: string },
+  ) => {
+    const sourceId = options?.from_doc_id || invoiceId;
+    if (!sourceId) return;
+    const params = new URLSearchParams({ typ: targetTyp, from_doc: sourceId });
     if (options?.anzahlung_prozent != null) params.set("anzahlung_prozent", String(options.anzahlung_prozent));
     if (options?.anzahlung_betrag != null) params.set("anzahlung_betrag", String(options.anzahlung_betrag));
     if (options?.abzug_ids?.length) params.set("abzug_ids", options.abzug_ids.join(","));
@@ -1570,17 +1574,29 @@ export default function InvoiceDetail() {
                             )}
                             {allow.schlussrechnung && (
                               <DropdownMenuItem onClick={async () => {
-                                // Automatischer Abzug aller Anzahlungsrechnungen zum selben Auftrag.
-                                // Kein Auswahl-Dialog mehr — alle verfügbaren Anzahlungen werden abgezogen.
+                                // Schlussrechnung = ALLE Originalpositionen des Auftrags
+                                // (Angebot/AB) + automatischer Abzug aller Anzahlungs-
+                                // rechnungen. Quelle der Positionen:
+                                //   - User steht auf einer Anzahlungsrechnung → deren parent
+                                //     (AB oder Angebot) ist der Positionsträger.
+                                //   - User steht auf Angebot oder AB → das aktuelle Dokument
+                                //     selbst liefert die Positionen.
                                 if (!invoiceId) return;
-                                const rootId = (form as any).parent_invoice_id || invoiceId;
+                                const isOnAnzahlung = form.typ === "anzahlungsrechnung";
+                                const rootId = isOnAnzahlung
+                                  ? ((form as any).parent_invoice_id || invoiceId)
+                                  : invoiceId;
                                 const { data } = await supabase
                                   .from("invoices")
                                   .select("id")
                                   .eq("parent_invoice_id", rootId)
                                   .eq("typ", "anzahlungsrechnung");
                                 const ids = ((data as any[]) || []).map(r => r.id);
-                                handleConvertTo("schlussrechnung", { abzug_ids: ids });
+                                // Sicherheitsnetz: wenn der User direkt auf einer Anzahlungs-
+                                // rechnung steht, die (z.B. durch manuelle Erstellung) nicht
+                                // über parent_invoice_id gefunden wurde, trotzdem abziehen.
+                                if (isOnAnzahlung && !ids.includes(invoiceId)) ids.push(invoiceId);
+                                handleConvertTo("schlussrechnung", { abzug_ids: ids, from_doc_id: rootId });
                               }}>
                                 Schlussrechnung
                               </DropdownMenuItem>
