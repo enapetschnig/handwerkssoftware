@@ -10,7 +10,7 @@ export interface ProjectLite {
   status?: string | null;
 }
 
-/** Lädt alle aktiven Projekte (nicht abgeschlossen). Für Auswahl-UI. */
+/** Lädt alle aktiven Projekte (nicht abgeschlossen). Für Admin-UI (sieht alles). */
 export async function listAllActiveProjects(): Promise<ProjectLite[]> {
   const { data } = await supabase
     .from("projects")
@@ -18,6 +18,50 @@ export async function listAllActiveProjects(): Promise<ProjectLite[]> {
     .not("status", "eq", "Abgeschlossen")
     .order("name");
   return (data as ProjectLite[]) || [];
+}
+
+/**
+ * Lädt die für den eingeloggten User sichtbaren + aktiven Projekte.
+ * Nutzt das zentrale RPC list_accessible_project_ids_for_user → funktioniert
+ * unabhängig von RLS-Konfiguration und berücksichtigt immer live die
+ * aktuellen Zuweisungen (zugewiesene_mitarbeiter / bauleiter / verantwortlicher).
+ *
+ * Ergebnis: id, name, status. Weitere Felder müssen bei Bedarf nachgeladen werden.
+ */
+export async function fetchMyAccessibleProjects(opts: { onlyActive?: boolean } = {}): Promise<ProjectLite[]> {
+  const onlyActive = opts.onlyActive !== false;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await (supabase.rpc as any)("list_accessible_project_ids_for_user", {
+    p_user_id: user.id,
+    p_only_active: onlyActive,
+  });
+  if (error) {
+    console.error("fetchMyAccessibleProjects RPC failed:", error);
+    return [];
+  }
+  return ((data as any[]) || []).map((p: any) => ({ id: p.id, name: p.name, status: p.status }));
+}
+
+/**
+ * Wie fetchMyAccessibleProjects, aber lädt zusätzlich die übergebenen
+ * Spalten aus der projects-Tabelle für die IDs nach. Für Views, die mehr
+ * als nur id+name brauchen (z.B. Zeiterfassung braucht plz, Plantafel
+ * braucht customer_id etc.).
+ */
+export async function fetchMyAccessibleProjectsFull<T extends Record<string, any>>(
+  selectColumns: string,
+  opts: { onlyActive?: boolean } = {},
+): Promise<T[]> {
+  const base = await fetchMyAccessibleProjects(opts);
+  if (base.length === 0) return [];
+  const ids = base.map((p) => p.id);
+  const { data } = await supabase
+    .from("projects")
+    .select(selectColumns)
+    .in("id", ids)
+    .order("name");
+  return ((data as any[]) || []) as T[];
 }
 
 /** Lädt die IDs aller Projekte, in denen dieser Mitarbeiter (employee.id)

@@ -115,16 +115,34 @@ const Projects = () => {
   };
 
   const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from("projects")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    // Zentrales RPC: liefert nur die für den eingeloggten User sichtbaren +
+    // nicht-abgeschlossenen Projekte. Admin/Vorarbeiter sehen alle;
+    // Mitarbeiter nur ihre zugewiesenen. Anschließend volle Daten laden.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+    const { data: rpcData, error: rpcErr } = await (supabase.rpc as any)(
+      "list_accessible_project_ids_for_user",
+      { p_user_id: user.id, p_only_active: true },
+    );
+    if (rpcErr) {
+      console.error("list_accessible_project_ids_for_user:", rpcErr);
+      // Fallback: RLS-gefilterter Direktzugriff
+      const { data } = await supabase.from("projects").select("*").order("created_at", { ascending: false });
+      setProjects(data || []);
       setLoading(false);
       return;
     }
-
+    const ids = ((rpcData as any[]) || []).map((p: any) => p.id);
+    if (ids.length === 0) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+    const { data } = await supabase
+      .from("projects")
+      .select("*")
+      .in("id", ids)
+      .order("created_at", { ascending: false });
     setProjects(data || []);
     setLoading(false);
   };

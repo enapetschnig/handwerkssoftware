@@ -50,6 +50,18 @@ export function useScheduleData() {
         toDate = format(weekEnd, "yyyy-MM-dd");
       }
 
+      // Zentral filtern: welche Projekte darf der eingeloggte User sehen?
+      // Admin/Vorarbeiter: alle; Mitarbeiter: nur zugewiesene.
+      const { data: { user } } = await supabase.auth.getUser();
+      let accessibleProjectIds: string[] | null = null;
+      if (user) {
+        const { data: rpcData } = await (supabase.rpc as any)(
+          "list_accessible_project_ids_for_user",
+          { p_user_id: user.id, p_only_active: false },
+        );
+        accessibleProjectIds = ((rpcData as any[]) || []).map((p: any) => p.id);
+      }
+
       const [
         { data: profs },
         { data: projs },
@@ -68,10 +80,12 @@ export function useScheduleData() {
           .eq("is_active", true)
           .eq("hidden", false)
           .order("nachname"),
-        supabase
-          .from("projects")
-          .select("id, name, status, geplanter_start, geplantes_ende")
-          .order("name"),
+        // Projekte: nur die für diesen User sichtbaren
+        accessibleProjectIds === null
+          ? supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende").order("name")
+          : accessibleProjectIds.length === 0
+            ? Promise.resolve({ data: [] } as any)
+            : supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende").in("id", accessibleProjectIds).order("name"),
         // Einsaetze that overlap with the visible date range
         // Im Year-Modus werden Einsätze nicht dargestellt → nicht laden (Performance)
         mode === "year"
