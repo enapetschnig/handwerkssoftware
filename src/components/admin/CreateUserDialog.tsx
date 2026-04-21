@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { UserPlus, Eye, EyeOff, Copy, Check, MessageCircle } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { listAllActiveProjects, syncEmployeeProjectAccess, type ProjectLite } from "@/lib/projectAccess";
 
 interface Props {
   open: boolean;
@@ -94,8 +95,16 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
   const [whatsappAktiv, setWhatsappAktiv] = useState(true);
   const [sendWelcome, setSendWelcome] = useState(true);
   const [istFreelancer, setIstFreelancer] = useState(false);
+  const [allProjects, setAllProjects] = useState<ProjectLite[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
   const [form, setForm] = useState(emptyForm);
+
+  // Aktive Projekte laden (für Auswahlliste)
+  useEffect(() => {
+    if (!open) return;
+    listAllActiveProjects().then(setAllProjects);
+  }, [open]);
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -111,6 +120,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
     setWhatsappAktiv(true);
     setSendWelcome(true);
     setIstFreelancer(false);
+    setSelectedProjects([]);
     setOnboardingText(null);
     setCopied(false);
     onOpenChange(false);
@@ -207,6 +217,16 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           }
         }
         if (welcomeError) console.error("Welcome failed:", welcomeError);
+      }
+
+      // Projekt-Zugriffe setzen (nur für Nicht-Admins; Admin sieht ohnehin alles)
+      if (data?.employee_id && form.rolle !== "administrator" && selectedProjects.length > 0) {
+        try {
+          await syncEmployeeProjectAccess(data.employee_id, selectedProjects);
+        } catch (e: any) {
+          console.error("Projekt-Zuweisung fehlgeschlagen:", e);
+          toast({ variant: "destructive", title: "Hinweis", description: `Projekt-Zuweisung fehlgeschlagen: ${e.message}` });
+        }
       }
 
       toast({
@@ -331,6 +351,66 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
                   }}
                 />
               </label>
+
+              {/* Projekt-Zugänge — nur relevant für Mitarbeiter/Vorarbeiter.
+                  Administratoren sehen per RLS immer alle Projekte. */}
+              {form.rolle !== "administrator" && (
+                <div className="rounded-md border p-3 bg-muted/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <Label className="text-sm">Zugang zu Projekten</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Nur die ausgewählten Projekte sieht der Mitarbeiter in der App, in der Zeiterfassung und im WhatsApp-Bot.
+                      </p>
+                    </div>
+                    {allProjects.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedProjects(selectedProjects.length === allProjects.length ? [] : allProjects.map(p => p.id))}
+                      >
+                        {selectedProjects.length === allProjects.length ? "Alle abwählen" : "Alle auswählen"}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-48 overflow-y-auto">
+                    {allProjects.length === 0 ? (
+                      <p className="text-sm text-muted-foreground col-span-2">Keine aktiven Projekte vorhanden.</p>
+                    ) : (
+                      allProjects.map((p) => {
+                        const checked = selectedProjects.includes(p.id);
+                        return (
+                          <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 hover:bg-muted">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedProjects(prev => e.target.checked
+                                  ? [...prev, p.id]
+                                  : prev.filter(x => x !== p.id)
+                                );
+                              }}
+                              className="rounded"
+                            />
+                            <span className="truncate">{p.name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  {allProjects.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {selectedProjects.length} von {allProjects.length} ausgewählt
+                    </p>
+                  )}
+                </div>
+              )}
+              {form.rolle === "administrator" && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-primary">
+                  Administratoren haben automatisch Zugriff auf alle Projekte.
+                </div>
+              )}
             </div>
 
             {/* Persönliche Daten */}

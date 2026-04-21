@@ -33,6 +33,7 @@ import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings"
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
 import { VehicleManager } from "@/components/admin/VehicleManager";
+import { listAllActiveProjects, getEmployeeAccessibleProjectIds, syncEmployeeProjectAccess, type ProjectLite } from "@/lib/projectAccess";
 import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
 import { Cloud, Building, AlertTriangle, Truck, Briefcase, HardHat } from "lucide-react";
@@ -125,6 +126,9 @@ export default function Admin() {
   // Employee management states
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employeeRole, setEmployeeRole] = useState<string | null>(null);
+  const [allActiveProjects, setAllActiveProjects] = useState<ProjectLite[]>([]);
+  const [employeeProjectIds, setEmployeeProjectIds] = useState<string[]>([]);
   const [showSizesDialog, setShowSizesDialog] = useState(false);
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<'stammdaten' | 'dokumente' | 'stunden'>('stammdaten');
@@ -582,6 +586,17 @@ export default function Admin() {
         if (profErr) console.error("Profile name sync failed:", profErr);
       }
 
+      // Projekt-Zugänge synchronisieren (nur für Nicht-Admins;
+      // Administratoren sehen per RLS immer alle Projekte).
+      if (selectedEmployee && employeeRole !== "administrator") {
+        try {
+          await syncEmployeeProjectAccess(selectedEmployee.id, employeeProjectIds);
+        } catch (err: any) {
+          console.error("Projekt-Zuordnung fehlgeschlagen:", err);
+          toast({ variant: "destructive", title: "Hinweis", description: `Projekt-Zuordnung fehlgeschlagen: ${err.message}` });
+        }
+      }
+
       toast({ title: "Erfolg", description: "Änderungen gespeichert" });
       fetchEmployees();
       if (nameChanged) fetchUsers({ silent: true });
@@ -594,6 +609,27 @@ export default function Admin() {
   useEffect(() => {
     if (selectedEmployee) {
       setFormData(selectedEmployee);
+      // Rolle des Users ermitteln (damit Admins "alle Projekte"-Hinweis bekommen)
+      (async () => {
+        if (selectedEmployee.user_id) {
+          const { data: rd } = await supabase.from("user_roles").select("role").eq("user_id", selectedEmployee.user_id).maybeSingle();
+          setEmployeeRole(rd?.role || "mitarbeiter");
+        } else {
+          setEmployeeRole("mitarbeiter");
+        }
+      })();
+      // Aktive Projekte + aktuelle Zuordnungen laden
+      Promise.all([
+        listAllActiveProjects(),
+        getEmployeeAccessibleProjectIds(selectedEmployee.id),
+      ]).then(([projects, accessIds]) => {
+        setAllActiveProjects(projects);
+        setEmployeeProjectIds(accessIds);
+      });
+    } else {
+      setAllActiveProjects([]);
+      setEmployeeProjectIds([]);
+      setEmployeeRole(null);
     }
   }, [selectedEmployee]);
 
@@ -1660,6 +1696,64 @@ export default function Admin() {
                       placeholder="Interne Notizen zum Mitarbeiter..."
                     />
                   </div>
+
+                  {/* Projekt-Zugänge — nur für Mitarbeiter/Vorarbeiter */}
+                  {employeeRole === "administrator" ? (
+                    <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
+                      Administratoren haben automatisch Zugriff auf alle Projekte.
+                    </div>
+                  ) : (
+                    <div className="rounded-md border p-3 bg-muted/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <Label className="text-sm">Zugang zu Projekten</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Nur diese Projekte sieht der Mitarbeiter in der App, in der Zeiterfassung und im WhatsApp-Bot.
+                          </p>
+                        </div>
+                        {allActiveProjects.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEmployeeProjectIds(employeeProjectIds.length === allActiveProjects.length ? [] : allActiveProjects.map(p => p.id))}
+                          >
+                            {employeeProjectIds.length === allActiveProjects.length ? "Alle abwählen" : "Alle auswählen"}
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-60 overflow-y-auto">
+                        {allActiveProjects.length === 0 ? (
+                          <p className="text-sm text-muted-foreground col-span-2">Keine aktiven Projekte vorhanden.</p>
+                        ) : (
+                          allActiveProjects.map((p) => {
+                            const checked = employeeProjectIds.includes(p.id);
+                            return (
+                              <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 hover:bg-muted">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setEmployeeProjectIds(prev => e.target.checked
+                                      ? [...prev, p.id]
+                                      : prev.filter(x => x !== p.id)
+                                    );
+                                  }}
+                                  className="rounded"
+                                />
+                                <span className="truncate">{p.name}</span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                      {allActiveProjects.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {employeeProjectIds.length} von {allActiveProjects.length} ausgewählt
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => setSelectedEmployee(null)}>
