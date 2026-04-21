@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList, UserPlus, MessageSquare } from "lucide-react";
+import { Clock, FolderKanban, Users, BarChart3, LogOut, FileText, ArrowRight, Info, User as UserIcon, Receipt, BookUser, Package, Bell, CalendarDays, LayoutGrid, ClipboardList, UserPlus, MessageSquare, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -360,6 +360,18 @@ export default function Index() {
                 <CardDescription className="text-sm">Rechnungen und Angebote erstellen & verwalten</CardDescription>
               </CardHeader>
               <CardContent><Button className="w-full" size="sm">Rechnungen öffnen</Button></CardContent>
+            </Card>
+          )}
+
+          {/* 1b. Eingangsrechnungen — Belege hochladen (insb. für Handy-Nutzung) */}
+          {canView('eingangsrechnungen') && (
+            <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/eingangsrechnungen")}>
+              <CardHeader className="space-y-2 pb-3">
+                <div className="h-12 w-12 rounded-lg bg-sky-500/10 flex items-center justify-center"><FileDown className="h-6 w-6 text-sky-600" /></div>
+                <CardTitle className="text-lg sm:text-xl">Eingangsrechnungen</CardTitle>
+                <CardDescription className="text-sm">Belege & Lieferanten-Rechnungen hochladen</CardDescription>
+              </CardHeader>
+              <CardContent><Button className="bg-sky-600 hover:bg-sky-700 w-full" size="sm">Hochladen</Button></CardContent>
             </Card>
           )}
 
