@@ -220,7 +220,7 @@ export async function generateInvoicePdf(
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
     pdf.setTextColor(100, 100, 100);
-    pdf.text("Ansprechpartner:", metaX, metaY);
+    pdf.text("Ihr Ansprechpartner:", metaX, metaY);
     metaY += 4;
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(9);
