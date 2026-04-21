@@ -56,6 +56,18 @@ export default function Auth() {
         setLoading(false);
         return;
       }
+
+      // Freelancer → eigene minimale Zeiterfassungs-Seite
+      const { data: emp } = await (supabase.from("employees" as never) as any)
+        .select("ist_freelancer")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      if (emp?.ist_freelancer) {
+        toast({ title: "Willkommen" });
+        navigate("/freelancer");
+        setLoading(false);
+        return;
+      }
     }
 
     toast({ title: "Erfolgreich angemeldet" });

@@ -561,14 +561,8 @@ const TimeTracking = () => {
         return;
       }
 
-      // H-6: Arbeitszeit-Warnung bei > 12h (AT AZG Höchstgrenze)
-      const workMinutes = blockMinutes - pauseMin;
-      if (workMinutes > 12 * 60) {
-        const ok = window.confirm(
-          `Block ${blockNum}: ${(workMinutes/60).toFixed(1)}h Arbeitszeit überschreitet die gesetzliche Höchstgrenze von 12h (AZG).\n\nTrotzdem speichern?`
-        );
-        if (!ok) { setSaving(false); return; }
-      }
+      // Kein Tageslimit mehr — Mitarbeiter dürfen beliebig viel buchen.
+      // (AT-AZG-Warnung bei >12h wurde entfernt auf ausdrücklichen Wunsch.)
 
       // Projekt ist Pflicht bei Baustelle
       if (block.locationType === "baustelle" && !block.projectId) {

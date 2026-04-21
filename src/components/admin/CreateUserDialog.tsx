@@ -81,6 +81,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
   const [copied, setCopied] = useState(false);
   const [whatsappAktiv, setWhatsappAktiv] = useState(true);
   const [sendWelcome, setSendWelcome] = useState(true);
+  const [istFreelancer, setIstFreelancer] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
 
@@ -97,6 +98,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
     setForm(emptyForm);
     setWhatsappAktiv(true);
     setSendWelcome(true);
+    setIstFreelancer(false);
     setOnboardingText(null);
     setCopied(false);
     onOpenChange(false);
@@ -125,7 +127,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
       const hasPhone = !!form.telefon.trim();
       const enableWhatsApp = hasPhone && whatsappAktiv;
       const { data, error } = await supabase.functions.invoke("create-user", {
-        body: { ...form, whatsapp_aktiv: enableWhatsApp },
+        body: { ...form, whatsapp_aktiv: enableWhatsApp, ist_freelancer: istFreelancer },
       });
       if (error) {
         // FunctionsHttpError.context ist eine Response → Body explizit lesen
@@ -298,6 +300,13 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
                   </SelectContent>
                 </Select>
               </div>
+              <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 bg-muted/30">
+                <div className="text-xs">
+                  <span className="font-medium">Freier Mitarbeiter</span>
+                  <p className="text-muted-foreground">Nur Projektzeiterfassung, kein Tagessoll, kein Zeitkonto.</p>
+                </div>
+                <Switch checked={istFreelancer} onCheckedChange={setIstFreelancer} />
+              </label>
             </div>
 
             {/* Persönliche Daten */}

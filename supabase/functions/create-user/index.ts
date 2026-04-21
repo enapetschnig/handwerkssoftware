@@ -50,6 +50,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       adresse, plz, ort,
       geburtsdatum, sv_nummer, eintrittsdatum, stundenlohn,
       whatsapp_aktiv,
+      ist_freelancer,
     } = await req.json();
 
     if (!username || !password || !vorname || !nachname) {
@@ -173,6 +174,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       telefon: telefon || null,
       whatsapp_aktiv: wantsWhatsApp,
       aktiv: true,
+      ist_freelancer: ist_freelancer === true,
     };
 
     const { data: newEmp, error: empErr } = await supabase

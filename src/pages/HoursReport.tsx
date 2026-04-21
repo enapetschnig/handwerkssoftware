@@ -390,18 +390,15 @@ export default function HoursReport() {
               entry.wetterschicht_stunden && entry.wetterschicht_stunden > 0 ? entry.wetterschicht_stunden.toFixed(2) : "",
             ]);
           } else {
-            // Export OHNE Überstunden: Regelarbeitszeiten verwenden
-            const dayOfWeek = dayDate.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const isFridayCheck = dayOfWeek === 5;
-            const regelarbeitszeit = isWeekend ? 0 : (isFridayCheck ? 5 : 8.5);
-            
-            // Regelarbeitszeiten für Zeiten
-            const regelStart = "07:30";
-            const regelMorningEnd = isFridayCheck ? "12:30" : "12:00";
-            const regelPause = isFridayCheck ? "" : "12:00 - 13:00";
-            const regelAfternoonStart = isFridayCheck ? "" : "13:00";
-            const regelEnd = isFridayCheck ? "12:30" : "17:00";
+            // Export OHNE Überstunden: Regelarbeitszeiten aus Lib
+            const regelarbeitszeit = getNormalWorkingHours(dayDate);
+
+            // Regelarbeitszeiten für Zeiten — Mo-Do 07:00-17:30 Pause 12:00-12:30
+            const regelStart = regelarbeitszeit > 0 ? "07:00" : "";
+            const regelMorningEnd = regelarbeitszeit > 0 ? "12:00" : "";
+            const regelPause = regelarbeitszeit > 0 ? "12:00 - 12:30" : "";
+            const regelAfternoonStart = regelarbeitszeit > 0 ? "12:30" : "";
+            const regelEnd = regelarbeitszeit > 0 ? "17:30" : "";
             
             worksheetData.push([
               displayDay,
@@ -428,12 +425,7 @@ export default function HoursReport() {
           if (includeOvertime) {
             worksheetData.push(["", "", "", "", "", "Tagessumme:", dayTotalHours.toFixed(2), dayTotalOvertime > 0 ? dayTotalOvertime.toFixed(2) : "", "", "", "", ""]);
           } else {
-            // Tagessumme mit Regelarbeitszeit
-            const dayOfWeek = dayDate.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const isFridayCheck = dayOfWeek === 5;
-            const regelarbeitszeitTag = isWeekend ? 0 : (isFridayCheck ? 5 : 8.5);
-            // Bei mehreren Einträgen pro Tag: Regelarbeitszeit * Anzahl Einträge oder einfach die Tagessumme der Regelarbeitszeit
+            const regelarbeitszeitTag = getNormalWorkingHours(dayDate);
             worksheetData.push(["", "", "", "", "", "Tagessumme:", (regelarbeitszeitTag * dayEntries.length).toFixed(2), "", "", "", "", ""]);
           }
         }
@@ -447,11 +439,7 @@ export default function HoursReport() {
         const dayDate = new Date(year, month - 1, day);
         const dayEntries = timeEntries.filter((e) => isSameDay(parseISO(e.datum), dayDate));
         if (dayEntries.length > 0) {
-          const dayOfWeek = dayDate.getDay();
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          const isFridayCheck = dayOfWeek === 5;
-          const regelarbeitszeit = isWeekend ? 0 : (isFridayCheck ? 5 : 8.5);
-          summe += regelarbeitszeit * dayEntries.length;
+          summe += getNormalWorkingHours(dayDate) * dayEntries.length;
         }
       }
       return summe;

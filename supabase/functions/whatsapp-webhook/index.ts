@@ -17,12 +17,10 @@ const WAPI_BASE = "https://gate.whapi.cloud";
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Working hours per weekday (matches src/lib/workingHours.ts)
-// Mo-Do: 8.5h, Fr: 5.0h (inkl. 0.5h ZA-Überstunde), Sa-So: 0h
+// Mo-Do: 10h (07:00-17:30, Pause 12:00-12:30). Fr/Sa/So: arbeitsfrei.
 function getRegelarbeitszeit(date: Date = new Date()): number {
   const day = date.getDay();
-  if (day === 0 || day === 6) return 0;    // Weekend
-  if (day >= 1 && day <= 4) return 8.5;    // Mo-Do
-  if (day === 5) return 5.0;              // Fr (inkl. 0.5h Überstunde)
+  if (day >= 1 && day <= 4) return 10;
   return 0;
 }
 
@@ -233,9 +231,7 @@ function getMonday(d: Date): Date {
 
 function getRegelarbeitszeitForDate(d: Date): number {
   const day = d.getDay();
-  if (day === 0 || day === 6) return 0;
-  if (day >= 1 && day <= 4) return 8.5;
-  if (day === 5) return 5.0;
+  if (day >= 1 && day <= 4) return 10;
   return 0;
 }
 
@@ -299,7 +295,7 @@ async function gatherContext(userId: string) {
   });
 
   const weekTotal = Object.values(weekHoursByDay).reduce((a, b) => a + b, 0);
-  const weekTarget = 39; // Mo-Fr Soll
+  const weekTarget = 40; // 4 × 10h (Mo-Do)
 
   // Find missing days (work days with no or too few hours)
   const missingDays: string[] = [];
@@ -620,10 +616,8 @@ async function executeTool(
 
       const bookingDate = new Date(datum + "T12:00:00");
       const dailyTarget = getRegelarbeitszeit(bookingDate);
-
-      if (totalAfter > dailyTarget + 2) {
-        return `FEHLER: Bereits ${alreadyBooked}h gebucht fuer ${datum}. Mit ${h}h waeren es ${totalAfter}h – das ueberschreitet die Regelarbeitszeit (${dailyTarget}h) deutlich. Bitte pruefe die Stunden.`;
-      }
+      // Kein hartes Tageslimit — Mitarbeiter dürfen beliebig viel buchen.
+      // Sanity-Check h > 24 bleibt oben.
 
       const startTime = input.start_time || "07:00";
       let endTime = input.end_time;
@@ -1100,8 +1094,8 @@ Du hast oben den KOMPLETTEN Wochenueberblick dieses Mitarbeiters. Nutze dieses W
 6. Wenn Tagessoll erreicht → kurz bestaetigen: "Heute komplett ✓ Schoenen Feierabend!"
 
 ═══ ARBEITSZEITEN ═══
-Mo–Do: 8,5h (07:00–16:00, Pause 12:00–12:30) | Fr: 5,0h (07:00–12:00, keine Pause) | Wochensoll: 39h
-Nicht mehr als Tagessoll buchen (Ueberstunden nur wenn ausdruecklich bestaetigt).
+Mo–Do: 10h (07:00–17:30, Pause 12:00–12:30) | Fr: arbeitsfrei | Wochensoll: 40h
+Es gibt KEIN Tageslimit — der Mitarbeiter darf beliebig viele Stunden buchen (Überstunden gehen aufs Zeitkonto). Nicht nachfragen, einfach buchen.
 
 ═══ STUNDENBUCHUNG (WICHTIGSTE FUNKTION) ═══
 

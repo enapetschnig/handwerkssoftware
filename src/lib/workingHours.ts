@@ -8,99 +8,65 @@ export interface WorkTimePreset {
 }
 
 /**
- * Gibt die Normalarbeitszeit für einen Tag zurück
- * Mo-Do: 8.5h, Fr: 4.5h (ohne Überstunde), Sa-So: 0h
+ * Regelarbeitszeit pro Werktag.
+ * Mo-Do: 10h (07:00-17:30, Pause 12:00-12:30). Fr/Sa/So: arbeitsfrei.
  */
 export function getNormalWorkingHours(date: Date): number {
   const dayOfWeek = date.getDay();
-  
-  // Wochenende
-  if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
-  
-  // Montag - Donnerstag: 8.5 Stunden
-  if (dayOfWeek >= 1 && dayOfWeek <= 4) return 8.5;
-  
-  // Freitag: 4.5 Stunden (ohne die 0.5h Überstunde)
-  if (dayOfWeek === 5) return 4.5;
-  
+  if (dayOfWeek >= 1 && dayOfWeek <= 4) return 10;
   return 0;
 }
 
 /**
- * Gibt die Freitags-Überstunde zurück (0.5h für ZA)
+ * Früher gab es einen Freitags-Überstundenanteil — entfällt mit neuer
+ * Regelung (Freitag arbeitsfrei). Funktion bleibt für Kompatibilität.
  */
-export function getFridayOvertime(date: Date): number {
-  return date.getDay() === 5 ? 0.5 : 0;
+export function getFridayOvertime(_date: Date): number {
+  return 0;
 }
 
 /**
- * Gibt die tatsächlichen Arbeitsstunden für Freitag zurück (inkl. Überstunde)
- * Mo-Do: 8.5h, Fr: 5.0h (inkl. 0.5h Überstunde), Sa-So: 0h
+ * Gesamte Arbeitsstunden inkl. optionaler Überstunden pro Tag.
+ * Deckungsgleich mit getNormalWorkingHours, da es keine automatischen
+ * Überstundenanteile mehr gibt.
  */
 export function getTotalWorkingHours(date: Date): number {
-  const dayOfWeek = date.getDay();
-  
-  // Wochenende
-  if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
-  
-  // Montag - Donnerstag: 8.5 Stunden
-  if (dayOfWeek >= 1 && dayOfWeek <= 4) return 8.5;
-  
-  // Freitag: 5.0 Stunden (inkl. 0.5h Überstunde)
-  if (dayOfWeek === 5) return 5.0;
-  
-  return 0;
+  return getNormalWorkingHours(date);
 }
 
 /**
- * Gibt die Sollstunden für eine Woche zurück: 39 Stunden
+ * Wochensoll: 4 × 10h = 40 Stunden (Mo-Do).
  */
 export function getWeeklyTargetHours(): number {
-  return 39;
+  return 40;
 }
 
 /**
- * Gibt Standard-Arbeitszeiten für einen Tag zurück
+ * Standard-Arbeitszeiten für einen Tag.
  */
 export function getDefaultWorkTimes(date: Date): WorkTimePreset | null {
   const dayOfWeek = date.getDay();
-  
-  // Wochenende
-  if (dayOfWeek === 0 || dayOfWeek === 6) return null;
-  
-  // Montag - Donnerstag: 07:00 - 16:00, Pause 12:00 - 12:30
+
+  // Mo-Do: 07:00 - 17:30, Pause 12:00 - 12:30 = 10h netto
   if (dayOfWeek >= 1 && dayOfWeek <= 4) {
     return {
       startTime: "07:00",
-      endTime: "16:00",
+      endTime: "17:30",
       pauseStart: "12:00",
       pauseEnd: "12:30",
       pauseMinutes: 30,
-      totalHours: 8.5
+      totalHours: 10,
     };
   }
-  
-  // Freitag: 07:00 - 12:00, keine Pause
-  if (dayOfWeek === 5) {
-    return {
-      startTime: "07:00",
-      endTime: "12:00",
-      pauseStart: "",
-      pauseEnd: "",
-      pauseMinutes: 0,
-      totalHours: 5.0
-    };
-  }
-  
+
+  // Fr/Sa/So: arbeitsfrei
   return null;
 }
 
 /**
- * Prüft ob ein Tag ein arbeitsfreier Tag ist (nur Wochenende)
+ * Arbeitsfrei: Freitag, Samstag, Sonntag.
  */
 export function isNonWorkingDay(date: Date): boolean {
   const dayOfWeek = date.getDay();
-  
-  // Nur Wochenende ist arbeitsfrei
-  return dayOfWeek === 0 || dayOfWeek === 6;
+  return dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
 }
