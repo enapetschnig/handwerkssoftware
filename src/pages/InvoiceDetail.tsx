@@ -1732,16 +1732,36 @@ export default function InvoiceDetail() {
                               <DropdownMenuItem onClick={async () => {
                                 // Schlussrechnung = ALLE Originalpositionen des Auftrags
                                 // (Angebot/AB) + automatischer Abzug aller Anzahlungs-
-                                // rechnungen. Quelle der Positionen:
-                                //   - User steht auf einer Anzahlungsrechnung → deren parent
-                                //     (AB oder Angebot) ist der Positionsträger.
-                                //   - User steht auf Angebot oder AB → das aktuelle Dokument
-                                //     selbst liefert die Positionen.
+                                // rechnungen zum selben Auftrag.
+                                //
+                                // Die Root (Positionsträger) ermitteln wir FRISCH aus der
+                                // DB — unabhängig vom Form-State — indem wir von hier aus
+                                // entlang parent_invoice_id hochwandern bis zum ersten
+                                // Dokument, das KEIN "anzahlungsrechnung" ist (also
+                                // Angebot oder AB). Das macht die Logik robust gegen
+                                // stale Form-Daten und gegen verschachtelte Ketten.
                                 if (!invoiceId) return;
-                                const isOnAnzahlung = form.typ === "anzahlungsrechnung";
-                                const rootId = isOnAnzahlung
-                                  ? ((form as any).parent_invoice_id || invoiceId)
-                                  : invoiceId;
+                                let rootId = invoiceId;
+                                let cursor: string | null = invoiceId;
+                                let cursorTyp = form.typ;
+                                for (let hops = 0; hops < 6 && cursorTyp === "anzahlungsrechnung" && cursor; hops++) {
+                                  const { data: row } = await supabase
+                                    .from("invoices")
+                                    .select("parent_invoice_id")
+                                    .eq("id", cursor)
+                                    .maybeSingle();
+                                  const parent = (row as any)?.parent_invoice_id || null;
+                                  if (!parent) break;
+                                  rootId = parent;
+                                  cursor = parent;
+                                  // Typ des Parents holen, um zu entscheiden, ob wir weiter hoch gehen
+                                  const { data: parentRow } = await supabase
+                                    .from("invoices")
+                                    .select("typ")
+                                    .eq("id", parent)
+                                    .maybeSingle();
+                                  cursorTyp = (parentRow as any)?.typ || "";
+                                }
 
                                 // Guard: existiert bereits eine nicht-stornierte Schlussrechnung
                                 // zum selben Auftrag? Dann abbrechen — sonst hätten wir parallele
@@ -1762,7 +1782,7 @@ export default function InvoiceDetail() {
                                   return;
                                 }
 
-                                // Nur aktive (nicht stornierte) Anzahlungsrechnungen abziehen.
+                                // Alle nicht-stornierten Anzahlungen zum gleichen Auftrag finden
                                 const { data } = await supabase
                                   .from("invoices")
                                   .select("id, status")
@@ -1770,11 +1790,10 @@ export default function InvoiceDetail() {
                                   .eq("typ", "anzahlungsrechnung")
                                   .neq("status", "storniert");
                                 const ids = ((data as any[]) || []).map(r => r.id);
-                                // Sicherheitsnetz: wenn der User direkt auf einer Anzahlungs-
-                                // rechnung steht, die (z.B. durch manuelle Erstellung) nicht
-                                // über parent_invoice_id gefunden wurde, trotzdem abziehen —
-                                // aber nur wenn sie selbst nicht storniert ist.
-                                if (isOnAnzahlung && form.status !== "storniert" && !ids.includes(invoiceId)) {
+                                // Sicherheitsnetz: aktuelles Dokument ist eine nicht-stornierte
+                                // Anzahlungsrechnung, die (z.B. durch inkonsistente
+                                // parent_invoice_id) nicht in der Liste steht → trotzdem abziehen.
+                                if (form.typ === "anzahlungsrechnung" && form.status !== "storniert" && !ids.includes(invoiceId)) {
                                   ids.push(invoiceId);
                                 }
                                 handleConvertTo("schlussrechnung", { abzug_ids: ids, from_doc_id: rootId });
