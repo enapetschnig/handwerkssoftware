@@ -202,39 +202,25 @@ type ProjectLite = { id: string; name: string };
 
 /**
  * Lädt die für diesen Employee sichtbaren Projekte.
- * opts.onlyActive=true (default): status != Abgeschlossen.
+ * Nutzt das zentrale RPC list_accessible_project_ids_for_user,
+ * damit Bot, Onboarding, Daily-Reminder und Frontend immer dieselbe
+ * Sicht haben.
  */
 async function listProjectsForEmployee(
   employee: { id: string; user_id: string | null } | null,
   opts: { onlyActive?: boolean } = {},
 ): Promise<ProjectLite[]> {
   const onlyActive = opts.onlyActive !== false;
-  const role = employee?.user_id ? await getBotUserRole(employee.user_id) : null;
-  const isElevated = role === "administrator" || role === "vorarbeiter";
-
-  if (isElevated) {
-    let q = supabase.from("projects").select("id, name").order("name");
-    if (onlyActive) q = q.not("status", "eq", "Abgeschlossen");
-    const { data } = await q;
-    return ((data as any[]) || []) as ProjectLite[];
+  if (!employee?.user_id) return [];
+  const { data, error } = await supabase.rpc("list_accessible_project_ids_for_user", {
+    p_user_id: employee.user_id,
+    p_only_active: onlyActive,
+  });
+  if (error) {
+    console.error("RPC list_accessible_project_ids_for_user:", error);
+    return [];
   }
-
-  // Mitarbeiter: filter lokal nach employee.id
-  if (!employee) return [];
-  let q = supabase
-    .from("projects")
-    .select("id, name, verantwortlicher_id, bauleiter_id, zugewiesene_mitarbeiter")
-    .order("name");
-  if (onlyActive) q = q.not("status", "eq", "Abgeschlossen");
-  const { data } = await q;
-  const empId = employee.id;
-  return ((data as any[]) || [])
-    .filter((p: any) =>
-      p.verantwortlicher_id === empId ||
-      p.bauleiter_id === empId ||
-      (Array.isArray(p.zugewiesene_mitarbeiter) && p.zugewiesene_mitarbeiter.includes(empId))
-    )
-    .map((p: any) => ({ id: p.id, name: p.name }));
+  return ((data as any[]) || []).map((p: any) => ({ id: p.id, name: p.name }));
 }
 
 // ─── Conversation persistence ────────────────────────────

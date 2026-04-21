@@ -288,13 +288,39 @@ const TimeTracking = () => {
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase
-      .from("projects")
-      .select("id, name, status, plz")
-      .not("status", "eq", "Abgeschlossen")
-      .order("name");
+    // Nur die für diesen User sichtbaren Projekte laden.
+    // Zentrale Quelle der Wahrheit: RPC list_accessible_project_ids_for_user.
+    // Unabhängig von RLS → eindeutig konsistent mit WhatsApp-Bot etc.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
 
-    if (data) setProjects(data);
+    const { data: rpcData, error: rpcErr } = await (supabase.rpc as any)(
+      "list_accessible_project_ids_for_user",
+      { p_user_id: user.id, p_only_active: true },
+    );
+    if (rpcErr) {
+      console.error("RPC list_accessible_project_ids_for_user:", rpcErr);
+      // Fallback auf RLS-gefilterten Direktzugriff
+      const { data } = await supabase
+        .from("projects")
+        .select("id, name, status, plz")
+        .not("status", "eq", "Abgeschlossen")
+        .order("name");
+      if (data) setProjects(data);
+    } else if (rpcData) {
+      // RPC liefert nur id, name, status — plz nachladen für UI
+      const ids = (rpcData as any[]).map((p: any) => p.id);
+      if (ids.length > 0) {
+        const { data: full } = await supabase
+          .from("projects")
+          .select("id, name, status, plz")
+          .in("id", ids)
+          .order("name");
+        if (full) setProjects(full);
+      } else {
+        setProjects([]);
+      }
+    }
     setLoading(false);
   };
 

@@ -129,6 +129,7 @@ export default function Admin() {
   const [employeeRole, setEmployeeRole] = useState<string | null>(null);
   const [allActiveProjects, setAllActiveProjects] = useState<ProjectLite[]>([]);
   const [employeeProjectIds, setEmployeeProjectIds] = useState<string[]>([]);
+  const [accessDiagnose, setAccessDiagnose] = useState<{ role: string | null; accessible: number; total: number } | null>(null);
   const [showSizesDialog, setShowSizesDialog] = useState(false);
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<'stammdaten' | 'dokumente' | 'stunden'>('stammdaten');
@@ -626,10 +627,26 @@ export default function Admin() {
         setAllActiveProjects(projects);
         setEmployeeProjectIds(accessIds);
       });
+      // Diagnose: was sieht dieser User wirklich (via RPC)?
+      if (selectedEmployee.user_id) {
+        (supabase.rpc as any)("debug_user_project_access", { p_user_id: selectedEmployee.user_id })
+          .then(({ data, error }: any) => {
+            if (error || !data?.[0]) return;
+            const row = data[0];
+            setAccessDiagnose({
+              role: row.role || null,
+              accessible: row.accessible_count || 0,
+              total: row.total_active_count || 0,
+            });
+          });
+      } else {
+        setAccessDiagnose(null);
+      }
     } else {
       setAllActiveProjects([]);
       setEmployeeProjectIds([]);
       setEmployeeRole(null);
+      setAccessDiagnose(null);
     }
   }, [selectedEmployee]);
 
@@ -1696,6 +1713,19 @@ export default function Admin() {
                       placeholder="Interne Notizen zum Mitarbeiter..."
                     />
                   </div>
+
+                  {/* Diagnose: welche Sicht hat dieser User aktuell */}
+                  {accessDiagnose && (
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs flex flex-wrap gap-3">
+                      <div><span className="text-muted-foreground">Rolle:</span> <strong>{accessDiagnose.role || "—"}</strong></div>
+                      <div><span className="text-muted-foreground">Sichtbare Projekte:</span> <strong>{accessDiagnose.accessible}</strong> von {accessDiagnose.total}</div>
+                      {accessDiagnose.role === "administrator" && <span className="text-primary">→ Admin sieht alles</span>}
+                      {accessDiagnose.role === "vorarbeiter" && <span className="text-primary">→ Vorarbeiter sieht alles</span>}
+                      {accessDiagnose.role === "mitarbeiter" && accessDiagnose.accessible === 0 && (
+                        <span className="text-destructive">→ Keine Zuweisungen. Wähle unten Projekte aus.</span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Projekt-Zugänge — nur für Mitarbeiter/Vorarbeiter */}
                   {employeeRole === "administrator" ? (

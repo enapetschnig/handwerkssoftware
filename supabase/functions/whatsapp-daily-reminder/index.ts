@@ -59,6 +59,20 @@ async function getAllActiveProjects(): Promise<{ id: string; name: string }[]> {
   return (data as any[]) || [];
 }
 
+// Pro User: nur die sichtbaren Projekte (Admin/Vorarbeiter sehen alle,
+// Mitarbeiter nur ihre zugewiesenen). Zentrale Quelle: RPC.
+async function getAccessibleProjectsForUser(userId: string): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase.rpc("list_accessible_project_ids_for_user", {
+    p_user_id: userId,
+    p_only_active: true,
+  });
+  if (error) {
+    console.error("RPC list_accessible_project_ids_for_user:", error);
+    return [];
+  }
+  return ((data as any[]) || []).map((p: any) => ({ id: p.id, name: p.name }));
+}
+
 function formatProjectList(
   projects: { id: string; name: string }[],
   todayIds: Set<string>
@@ -215,7 +229,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       let name = "Max";
       let scheduleInfo = "";
       let todayHours = 0;
-      const allProjects = await getAllActiveProjects();
+      // Preview: nur die für den gewählten User sichtbaren Projekte.
+      const allProjects = previewUserId
+        ? await getAccessibleProjectsForUser(previewUserId)
+        : await getAllActiveProjects();
       const todayProjectIds = new Set<string>();
       if (previewUserId) {
         const { data: emp } = await supabase
@@ -368,15 +385,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Alle aktiven Projekte einmal laden — pro Mitarbeiter wird die Liste
-    // mit den heute eingeteilten Projekten oben sortiert.
-    const allProjects = await getAllActiveProjects();
+    // Pro-Mitarbeiter-Projektliste wird innerhalb der Schleife frisch
+    // über das RPC geholt, damit jeder nur seine eigenen Projekte sieht.
 
     let sentCount = 0;
     const results: any[] = [];
 
     for (const emp of employees) {
       if (!emp.telefon || !emp.user_id) continue;
+      // Nur die für diesen Mitarbeiter sichtbaren Projekte
+      const allProjects = await getAccessibleProjectsForUser(emp.user_id);
       if (isEvening && usersWithEnoughHours.has(emp.user_id)) {
         results.push({ name: `${emp.vorname} ${emp.nachname}`, sent: false, reason: "hours_ok" });
         continue;

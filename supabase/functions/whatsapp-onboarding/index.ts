@@ -144,20 +144,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Fetch active projects for the project list (alle außer Abgeschlossen)
-    const { data: projects } = await supabase
-      .from("projects")
-      .select("name")
-      .not("status", "eq", "Abgeschlossen")
-      .order("name");
+    // Nur die für diesen User sichtbaren Projekte anzeigen.
+    // Zentrale Quelle: RPC list_accessible_project_ids_for_user.
+    // Admin/Vorarbeiter: alle; Mitarbeiter: nur seine zugewiesenen.
+    let accessibleProjects: { name: string }[] = [];
+    if (emp.user_id) {
+      const { data: accData, error: accErr } = await supabase.rpc(
+        "list_accessible_project_ids_for_user",
+        { p_user_id: emp.user_id, p_only_active: true },
+      );
+      if (accErr) console.error("RPC list_accessible_project_ids_for_user:", accErr);
+      accessibleProjects = ((accData as any[]) || []).map((p: any) => ({ name: p.name }));
+    }
 
     let projectList = "*Deine Projekte:*\n";
-    if (projects?.length) {
-      projects.forEach((p: any, i: number) => {
+    if (accessibleProjects.length > 0) {
+      accessibleProjects.forEach((p, i) => {
         projectList += `${i + 1}. ${p.name}\n`;
       });
     } else {
-      projectList += "_Noch keine Projekte angelegt_\n";
+      projectList += "_Noch keine Projekte zugewiesen — Admin weist dir Projekte zu._\n";
     }
 
     const waPhone = formatPhone(emp.telefon);
