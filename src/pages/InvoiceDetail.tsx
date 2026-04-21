@@ -108,6 +108,10 @@ interface InvoiceData {
   parent_invoice_id?: string | null;
   anzahlung_prozent?: number | null;
   anzahlung_betrag?: number | null;
+  // Ansprechpartner pro Dokument (optional, überschreibt Layout-Default)
+  ansprechpartner_name?: string;
+  ansprechpartner_telefon?: string;
+  ansprechpartner_email?: string;
 }
 
 interface TemplateItem {
@@ -248,6 +252,9 @@ export default function InvoiceDetail() {
     storno_nummer: "",
     storno_datum: "",
     storno_grund: "",
+    ansprechpartner_name: "",
+    ansprechpartner_telefon: "",
+    ansprechpartner_email: "",
   });
 
   // Locked = already saved (not draft) — can only view, download, storno/delete
@@ -468,6 +475,9 @@ export default function InvoiceDetail() {
       kunde_titel: (data as any).kunde_titel || "",
       reverse_charge: (data as any).reverse_charge || false,
       kundennummer: (data as any).kundennummer || "",
+      ansprechpartner_name: (data as any).ansprechpartner_name || "",
+      ansprechpartner_telefon: (data as any).ansprechpartner_telefon || "",
+      ansprechpartner_email: (data as any).ansprechpartner_email || "",
     });
 
     const { data: itemsData } = await supabase
@@ -763,6 +773,9 @@ export default function InvoiceDetail() {
         parent_invoice_id: (form as any).parent_invoice_id || null,
         anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
         anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
+        ansprechpartner_name: (form as any).ansprechpartner_name?.trim() || null,
+        ansprechpartner_telefon: (form as any).ansprechpartner_telefon?.trim() || null,
+        ansprechpartner_email: (form as any).ansprechpartner_email?.trim() || null,
       };
 
       if (isNew || !savedId) {
@@ -1936,6 +1949,62 @@ export default function InvoiceDetail() {
               ) : (
                 <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
               )}
+              {/* Ansprechpartner für dieses Dokument */}
+              <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">Ansprechpartner (erscheint rechts oben im PDF)</p>
+                  {form.project_id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={isLocked}
+                      onClick={async () => {
+                        const { data: proj } = await (supabase.from("projects" as never) as any)
+                          .select("projekt_kontakt_name, projekt_kontakt_telefon")
+                          .eq("id", form.project_id)
+                          .maybeSingle();
+                        if (proj && (proj.projekt_kontakt_name || proj.projekt_kontakt_telefon)) {
+                          updateField("ansprechpartner_name" as any, proj.projekt_kontakt_name || "");
+                          updateField("ansprechpartner_telefon" as any, proj.projekt_kontakt_telefon || "");
+                          toast({ title: "Ansprechpartner übernommen", description: "Aus den Projektdaten geladen." });
+                        } else {
+                          toast({ variant: "destructive", title: "Kein Kontakt hinterlegt", description: "Im Projekt ist kein Ansprechpartner vor Ort eingetragen." });
+                        }
+                      }}
+                    >
+                      Aus Projekt übernehmen
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Input
+                    value={(form as any).ansprechpartner_name || ""}
+                    onChange={(e) => updateField("ansprechpartner_name" as any, e.target.value)}
+                    placeholder="Name"
+                    disabled={isLocked}
+                  />
+                  <Input
+                    value={(form as any).ansprechpartner_telefon || ""}
+                    onChange={(e) => updateField("ansprechpartner_telefon" as any, e.target.value)}
+                    placeholder="Telefon"
+                    type="tel"
+                    disabled={isLocked}
+                  />
+                  <Input
+                    value={(form as any).ansprechpartner_email || ""}
+                    onChange={(e) => updateField("ansprechpartner_email" as any, e.target.value)}
+                    placeholder="E-Mail"
+                    type="email"
+                    disabled={isLocked}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Leer lassen → es wird der globale Ansprechpartner aus dem Rechnungs-Layout verwendet.
+                </p>
+              </div>
+
               {/* Zahlungseinstellungen (vom Kunden) */}
               {form.typ === "rechnung" && (form.skonto_prozent > 0 || form.skonto_tage > 0 || (form as any).zahlungsbedingungen) && (
                 <div className="mt-3 p-3 rounded-lg bg-muted/30 border">

@@ -192,8 +192,19 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
-  // Ansprechpartner unter der Meta-Box (Name + Telefon + E-Mail)
-  const contact = L.contact || { name: "", phone: "", email: "" };
+  // Ansprechpartner unter der Meta-Box (Name + Telefon + E-Mail).
+  // Priorität: invoice.ansprechpartner_* → layout.contact (Fallback).
+  const invAnsp = {
+    name: ((invoice as any).ansprechpartner_name || "").toString(),
+    phone: ((invoice as any).ansprechpartner_telefon || "").toString(),
+    email: ((invoice as any).ansprechpartner_email || "").toString(),
+  };
+  const layoutContact = L.contact || { name: "", phone: "", email: "" };
+  const contact = {
+    name: invAnsp.name || layoutContact.name,
+    phone: invAnsp.phone || layoutContact.phone,
+    email: invAnsp.email || layoutContact.email,
+  };
   if (contact.name || contact.phone || contact.email) {
     metaY += 2;
     pdf.setFont("helvetica", "normal");
