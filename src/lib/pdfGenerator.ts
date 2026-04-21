@@ -73,12 +73,7 @@ export async function generateInvoicePdf(
   //   Anschriftenfeld (Empfänger):          y = 50 … 90 mm (40 mm hoch, 85 mm breit)
   //   Informationsblock (Meta rechts):      y = 50 mm parallel zur Anschrift
   const DIN_SENDER_Y = 45;
-  // Empfänger-Start tiefer in die Anschriftzone schieben, damit der freie
-  // Platz zwischen Empfänger und Dokumententitel kleiner wird. Y=60 liegt
-  // 3 mm über dem offiziellen DIN-5008-Anschriftzone-Start (Y=62,7) und
-  // ergibt einen optischen Kompromiss zwischen C4-Kompatibilität und
-  // kompakter Darstellung auf dem Bildschirm.
-  const DIN_RECIPIENT_Y = 60;
+  const DIN_RECIPIENT_Y = 50;
 
   // ======= HEADER (only first page) =======
   let y = 15;
@@ -245,16 +240,10 @@ export async function generateInvoicePdf(
     if (bksEmail) { pdf.text(bksEmail, metaX, metaY); metaY += 4; }
   }
 
-  // C4-Fenster-Compliance:
-  //   DIN 5008 Form B: Fensterkuvert C4 hat ein Fenster 55×90 mm bei
-  //   X=20mm, Y=57mm. Durch das Fenster sieht man Y=57–112 mm. In
-  //   diesem Bereich darf NICHTS außer dem Empfänger-Adressblock stehen,
-  //   vor allem nicht der Dokumententitel "Angebot – …".
-  //   Y=113 ist 1 mm unter dem Fenster-Ende — so klein wie möglich,
-  //   damit der freie Platz unter dem Empfänger nicht unnötig gross wird.
-  //   Ohne nachfolgendes Padding: der Titel sitzt direkt unter dem Fenster.
-  const C4_WINDOW_BOTTOM = 113;
-  y = Math.max(y, metaY, C4_WINDOW_BOTTOM);
+  // Etwas mehr Luft zwischen Empfänger und Dokumententitel als früher
+  // (+10 statt +4), damit "Angebot – Betreff" nicht direkt am letzten
+  // Adressblock klebt, aber auch keine grosse Lücke entsteht.
+  y = Math.max(y, metaY) + 10;
 
   // Document title: "Angebot - <betreff>" (ohne Nummer; die steht rechts oben)
   pdf.setFont("helvetica", "bold");
