@@ -105,6 +105,7 @@ const emptyForm = {
   rechnungs_plz: "",
   rechnungs_ort: "",
   rechnungs_land: "",
+  herkunft: "",
 };
 
 const statusLabels: Record<string, string> = {
@@ -128,6 +129,8 @@ export default function Customers() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [typFilter, setTypFilter] = useState<"alle" | "privatkunde" | "geschaeftskunde">("alle");
+  const [customerColors, setCustomerColors] = useState<Record<string, { bg: string; text: string }>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -145,6 +148,14 @@ export default function Customers() {
       toast({ variant: "destructive", title: "Fehler", description: "Kunden konnten nicht geladen werden" });
     } else {
       setCustomers(data || []);
+      // Farben direkt aus customers.farbe_bg / farbe_text ableiten
+      const map: Record<string, { bg: string; text: string }> = {};
+      ((data as any[]) || []).forEach((c: any) => {
+        if (c.farbe_bg && c.farbe_text) {
+          map[c.id] = { bg: c.farbe_bg, text: c.farbe_text };
+        }
+      });
+      setCustomerColors(map);
     }
     setLoading(false);
   };
@@ -165,11 +176,13 @@ export default function Customers() {
     fetchCustomerInvoices(c.id);
   };
 
-  const filtered = customers.filter(c =>
-    matchesSearch(c.name, search) ||
-    matchesSearch(c.ort, search) ||
-    matchesSearch(c.email, search)
-  );
+  const filtered = customers.filter(c => {
+    if (typFilter !== "alle" && (c as any).kundentyp !== typFilter) return false;
+    if (!search.trim()) return true;
+    return matchesSearch(c.name, search)
+      || matchesSearch(c.ort, search)
+      || matchesSearch(c.email, search);
+  });
 
   const openNew = async () => {
     setEditId(null);
@@ -224,6 +237,7 @@ export default function Customers() {
       rechnungs_plz: (c as any).rechnungs_plz || "",
       rechnungs_ort: (c as any).rechnungs_ort || "",
       rechnungs_land: (c as any).rechnungs_land || "",
+      herkunft: (c as any).herkunft || "",
     });
     setDialogOpen(true);
   };
@@ -308,6 +322,7 @@ export default function Customers() {
           rechnungs_plz: form.rechnungs_plz || null,
           rechnungs_ort: form.rechnungs_ort || null,
           rechnungs_land: form.rechnungs_land || null,
+          herkunft: form.herkunft || null,
       };
 
       if (editId) {
@@ -353,10 +368,15 @@ export default function Customers() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">{selectedCustomer.name}</h1>
-              {selectedCustomer.ort && (
-                <p className="text-muted-foreground">{selectedCustomer.plz} {selectedCustomer.ort}</p>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold">{selectedCustomer.name}</h1>
+                {(selectedCustomer as any).kundentyp === "privatkunde" && (
+                  <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">Privat</span>
+                )}
+                {(selectedCustomer as any).kundentyp === "geschaeftskunde" && (
+                  <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">Gewerbe</span>
+                )}
+              </div>
             </div>
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" onClick={() => openEdit(selectedCustomer)}>
@@ -407,7 +427,11 @@ export default function Customers() {
                 {selectedCustomer.telefon && <div><span className="text-muted-foreground">Telefon:</span> {selectedCustomer.telefon}</div>}
                 {(selectedCustomer as any).website && <div><span className="text-muted-foreground">Website:</span> {(selectedCustomer as any).website}</div>}
                 {selectedCustomer.adresse && <div><span className="text-muted-foreground">Adresse:</span> {selectedCustomer.adresse}</div>}
+                {(selectedCustomer.plz || selectedCustomer.ort) && (
+                  <div><span className="text-muted-foreground">PLZ / Ort:</span> {[selectedCustomer.plz, selectedCustomer.ort].filter(Boolean).join(" ")}</div>
+                )}
                 {selectedCustomer.uid_nummer && <div><span className="text-muted-foreground">UID:</span> {selectedCustomer.uid_nummer}</div>}
+                {(selectedCustomer as any).herkunft && <div><span className="text-muted-foreground">Herkunft:</span> {(selectedCustomer as any).herkunft}</div>}
               </div>
             </CardContent>
           </Card>
@@ -493,14 +517,36 @@ export default function Customers() {
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center flex-wrap gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Kunde suchen..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="flex gap-2 flex-1 flex-wrap items-center">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Kunde suchen..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant={typFilter === "alle" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTypFilter("alle")}
+                  >Alle</Button>
+                  <Button
+                    type="button"
+                    variant={typFilter === "privatkunde" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTypFilter("privatkunde")}
+                  >Privat</Button>
+                  <Button
+                    type="button"
+                    variant={typFilter === "geschaeftskunde" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTypFilter("geschaeftskunde")}
+                  >Gewerbe</Button>
+                </div>
               </div>
               <Button onClick={openNew} className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -532,11 +578,29 @@ export default function Customers() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((c) => (
+                    {filtered.map((c) => {
+                      const color = customerColors[c.id];
+                      const typ = (c as any).kundentyp;
+                      return (
                       <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openCustomerDetail(c)}>
                         <TableCell className="font-medium">
-                          {c.name}
-                          {c.uid_nummer && <span className="text-xs text-muted-foreground ml-2">({c.uid_nummer})</span>}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {color && (
+                              <span
+                                className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: color.bg }}
+                                title="Kundenfarbe"
+                              />
+                            )}
+                            <span>{c.name}</span>
+                            {typ === "privatkunde" && (
+                              <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">Privat</span>
+                            )}
+                            {typ === "geschaeftskunde" && (
+                              <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">Gewerbe</span>
+                            )}
+                            {c.uid_nummer && <span className="text-xs text-muted-foreground">({c.uid_nummer})</span>}
+                          </div>
                         </TableCell>
                         <TableCell>{c.ansprechpartner || "–"}</TableCell>
                         <TableCell>{c.ort ? `${c.plz || ""} ${c.ort}`.trim() : "–"}</TableCell>
@@ -571,7 +635,8 @@ export default function Customers() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -602,7 +667,19 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
 }) {
   const [vatChecking, setVatChecking] = useState(false);
   const [vatResult, setVatResult] = useState<{ valid: boolean; name?: string; address?: string; error?: string } | null>(null);
+  const [herkunftOptions, setHerkunftOptions] = useState<Array<{ wert: string; label: string }>>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase.from("admin_config_options" as never) as any)
+        .select("wert, label")
+        .eq("kategorie", "kunde_herkunft")
+        .eq("is_active", true)
+        .order("sort_order");
+      setHerkunftOptions(((data as any[]) || []).map((o: any) => ({ wert: o.wert, label: o.label })));
+    })();
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -770,6 +847,22 @@ function CustomerForm({ form, setForm, onSave, saving, editId }: {
           <Label>Skonto Tage</Label>
           <Input type="number" value={form.skonto_tage || ""} onChange={(e) => setForm(p => ({ ...p, skonto_tage: Number(e.target.value) }))} min={0} max={form.nettofrist || 365} />
         </div>
+      </div>
+      <div>
+        <Label>Herkunft / Referenz</Label>
+        <Select
+          value={form.herkunft || "_none"}
+          onValueChange={(v) => setForm(p => ({ ...p, herkunft: v === "_none" ? "" : v }))}
+        >
+          <SelectTrigger><SelectValue placeholder="Woher kam der Kunde?" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">— keine Angabe —</SelectItem>
+            {herkunftOptions.map((o) => (
+              <SelectItem key={o.wert} value={o.label}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Liste erweiterbar unter Admin → Konfiguration → <em>kunde_herkunft</em>.</p>
       </div>
       <div>
         <Label>Notizen</Label>

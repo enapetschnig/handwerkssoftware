@@ -124,8 +124,20 @@ export function useScheduleData() {
       if (leave) setLeaveRequests(leave as LeaveRequest[]);
       if (holidays) setCompanyHolidays(holidays as CompanyHoliday[]);
       if (colors) {
+        // Die Tabelle speichert employee_id (=employees.id), der Renderer
+        // arbeitet aber mit user_id (=profiles.id). Hier einmal mappen:
+        // employees-Tabelle laden und Farbe dem user_id zuweisen.
         const map: Record<string, EmployeeColor> = {};
-        (colors as EmployeeColor[]).forEach((c) => { map[c.employee_id] = c; });
+        const { data: empMap } = await (supabase.from("employees" as never) as any)
+          .select("id, user_id");
+        const empIdToUserId = new Map<string, string>();
+        ((empMap as any[]) || []).forEach((e: any) => {
+          if (e.user_id) empIdToUserId.set(e.id, e.user_id);
+        });
+        (colors as EmployeeColor[]).forEach((c) => {
+          const uid = empIdToUserId.get(c.employee_id);
+          if (uid) map[uid] = { ...c, employee_id: uid };
+        });
         setEmployeeColors(map);
       }
 

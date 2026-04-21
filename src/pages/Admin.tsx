@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
 import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
@@ -88,6 +89,8 @@ interface Employee {
   notfallkontakt_name: string | null;
   notfallkontakt_telefon: string | null;
   notfallkontakt_beziehung: string | null;
+  foto_url: string | null;
+  kinder: Array<{ name: string; geburtsdatum: string; anmerkung?: string }> | null;
 }
 
 export default function Admin() {
@@ -1233,6 +1236,66 @@ export default function Admin() {
             <TabsContent value="stammdaten">
               <ScrollArea className="h-[500px] pr-4">
                 <form onSubmit={handleSaveEmployee} className="space-y-6">
+                  {/* Foto */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-24 h-24 rounded-full border bg-muted/30 overflow-hidden flex items-center justify-center">
+                      {formData.foto_url ? (
+                        <img src={formData.foto_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <UserIcon className="w-10 h-10 text-muted-foreground/40" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <Label>Mitarbeiter-Foto</Label>
+                      <input
+                        id="emp-foto-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !selectedEmployee) return;
+                          const ext = file.name.split(".").pop() || "jpg";
+                          const path = `${selectedEmployee.id}/avatar.${ext}`;
+                          const { error: upErr } = await supabase.storage
+                            .from("employee-documents")
+                            .upload(path, file, { upsert: true, contentType: file.type });
+                          if (upErr) {
+                            toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: upErr.message });
+                            return;
+                          }
+                          const { data: urlData } = await supabase.storage
+                            .from("employee-documents").createSignedUrl(path, 60 * 60 * 24 * 365);
+                          const url = urlData?.signedUrl || "";
+                          setFormData({ ...formData, foto_url: url });
+                          toast({ title: "Foto hochgeladen" });
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById("emp-foto-upload")?.click()}
+                        >
+                          {formData.foto_url ? "Foto ersetzen" : "Foto hochladen"}
+                        </Button>
+                        {formData.foto_url && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFormData({ ...formData, foto_url: null })}
+                          >
+                            Entfernen
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Persönliche Daten</h3>
                     <div className="grid grid-cols-2 gap-4">
@@ -1269,10 +1332,16 @@ export default function Admin() {
                     <h3 className="text-lg font-semibold mb-3">Kontaktdaten</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2">
-                        <Label>Adresse</Label>
-                        <Input
+                        <AddressAutocomplete
+                          label="Adresse"
                           value={formData.adresse || ""}
-                          onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                          onChange={(v) => setFormData({ ...formData, adresse: v })}
+                          onSelect={(addr) => setFormData({
+                            ...formData,
+                            adresse: addr.street,
+                            plz: addr.plz,
+                            ort: addr.ort,
+                          })}
                           placeholder="Straße und Hausnummer"
                         />
                       </div>
@@ -1446,6 +1515,77 @@ export default function Admin() {
                           placeholder="z.B. Ehepartner, Eltern"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Kinder-Section (Array aus JSONB) */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Kinder</h3>
+                    <div className="space-y-2">
+                      {((formData.kinder || []) as Array<{ name: string; geburtsdatum: string; anmerkung?: string }>).map((k, idx) => (
+                        <div key={idx} className="grid grid-cols-[1fr_140px_1fr_32px] gap-2 items-end">
+                          <div>
+                            <Label className="text-xs">Name</Label>
+                            <Input
+                              value={k.name}
+                              onChange={(e) => {
+                                const arr = [...(formData.kinder || [])];
+                                arr[idx] = { ...arr[idx], name: e.target.value };
+                                setFormData({ ...formData, kinder: arr as any });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Geburtsdatum</Label>
+                            <Input
+                              type="date"
+                              value={k.geburtsdatum}
+                              onChange={(e) => {
+                                const arr = [...(formData.kinder || [])];
+                                arr[idx] = { ...arr[idx], geburtsdatum: e.target.value };
+                                setFormData({ ...formData, kinder: arr as any });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Anmerkung (optional)</Label>
+                            <Input
+                              value={k.anmerkung || ""}
+                              onChange={(e) => {
+                                const arr = [...(formData.kinder || [])];
+                                arr[idx] = { ...arr[idx], anmerkung: e.target.value };
+                                setFormData({ ...formData, kinder: arr as any });
+                              }}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-destructive"
+                            onClick={() => {
+                              const arr = [...(formData.kinder || [])];
+                              arr.splice(idx, 1);
+                              setFormData({ ...formData, kinder: arr as any });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const arr = [...(formData.kinder || []), { name: "", geburtsdatum: "", anmerkung: "" }];
+                          setFormData({ ...formData, kinder: arr as any });
+                        }}
+                      >
+                        + Kind hinzufügen
+                      </Button>
                     </div>
                   </div>
 
