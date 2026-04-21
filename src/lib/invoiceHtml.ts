@@ -3,6 +3,7 @@
 
 import QRCode from "qrcode";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT } from "./invoiceLayoutTypes";
+import { getDocConfig } from "./documentTypes";
 
 // Generate EPC QR-Code (GiroCode) for SEPA bank transfer
 export async function generateEpcQrCode(
@@ -104,8 +105,13 @@ export function buildInvoiceHtml(
 ): string {
   const L = layout || DEFAULT_LAYOUT;
   const b = bank || DEFAULT_BANK;
-  const isAngebot = invoice.typ === "angebot";
-  const typLabel = isAngebot ? "Angebot" : "Rechnung";
+  const docCfg = getDocConfig(invoice.typ);
+  const typLabel = docCfg.label;
+  const isAngebot = docCfg.isAngebotLike;         // Angebot + AB: kein Rechnungsbeleg-Footer
+  const showLeistungsdatum = docCfg.showLeistungsdatum;
+  const showFaelligAm = docCfg.showPaymentSection;
+  const showBank = docCfg.isInvoiceLike && docCfg.typ !== "gutschrift";
+  const hidePrices = docCfg.hidePrices;
   const accent = L.accent_color;
 
   const datumFormatted = new Date(invoice.datum).toLocaleDateString("de-AT");
@@ -132,12 +138,20 @@ export function buildInvoiceHtml(
       : rabattBetrag;
   const hasRabatt = rabattWert > 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
-  const showPaymentInfo = !isAngebot && bezahltBetrag > 0;
+  const showPaymentInfo = showFaelligAm && bezahltBetrag > 0;
   const mahnstufe = Number(invoice.mahnstufe) || 0;
 
   const itemRows = (items || [])
     .map(
-      (item, idx) => `
+      (item, idx) => hidePrices
+        ? `
+    <tr style="background:${idx % 2 === 0 ? "#fff" : "#fafafa"};">
+      <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;color:#888;text-align:center;font-size:9pt;">${item.position}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;color:#1a1a1a;font-size:9.5pt;white-space:pre-wrap;">${item.beschreibung}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;text-align:right;color:#444;font-size:9pt;">${fmt(Number(item.menge))}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;text-align:center;color:#444;font-size:9pt;">${item.einheit || "Stk."}</td>
+    </tr>`
+        : `
     <tr style="background:${idx % 2 === 0 ? "#fff" : "#fafafa"};">
       <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;color:#888;text-align:center;font-size:9pt;">${item.position}</td>
       <td style="padding:9px 12px;border-bottom:1px solid #e8e8e8;color:#1a1a1a;font-size:9.5pt;white-space:pre-wrap;">${item.beschreibung}</td>
@@ -170,11 +184,11 @@ export function buildInvoiceHtml(
   metaParts.push(
     `<div><span class="meta-label">Datum</span><span class="meta-value">${datumFormatted}</span></div>`
   );
-  if (!isAngebot && leistungFormatted)
+  if (showLeistungsdatum && leistungFormatted)
     metaParts.push(
       `<div><span class="meta-label">Leistungsdatum</span><span class="meta-value">${leistungFormatted}</span></div>`
     );
-  if (!isAngebot && faelligFormatted)
+  if (showFaelligAm && faelligFormatted)
     metaParts.push(
       `<div><span class="meta-label">Fällig am</span><span class="meta-value">${faelligFormatted}</span></div>`
     );
@@ -182,7 +196,7 @@ export function buildInvoiceHtml(
     metaParts.push(
       `<div><span class="meta-label">Gültig bis</span><span class="meta-value">${gueltigBisFormatted}</span></div>`
     );
-  if (!isAngebot && invoice.zahlungsbedingungen)
+  if (showFaelligAm && invoice.zahlungsbedingungen)
     metaParts.push(
       `<div><span class="meta-label">Zahlung</span><span class="meta-value">${invoice.zahlungsbedingungen}</span></div>`
     );
@@ -344,8 +358,8 @@ ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:p
       <th style="width:55px;text-align:right;">Menge</th>
       <th style="width:45px;text-align:center;">Einh.</th>
       <th style="text-align:left;">Beschreibung</th>
-      <th style="width:80px;text-align:right;">Preis</th>
-      <th style="width:90px;text-align:right;">Gesamt</th>
+      ${hidePrices ? "" : `<th style="width:80px;text-align:right;">Preis</th>
+      <th style="width:90px;text-align:right;">Gesamt</th>`}
     </tr>
   </thead>
   <tbody>
@@ -354,25 +368,25 @@ ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:p
       <td style="text-align:right;">${fmt(Number(item.menge))}</td>
       <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
       <td>${item.beschreibung}</td>
-      <td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
-      <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>
+      ${hidePrices ? "" : `<td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
+      <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>`}
     </tr>`).join("")}
   </tbody>
 </table>
-<div class="totals-section">
+${hidePrices ? "" : `<div class="totals-section">
   <div class="totals-wrap">
     <table class="totals-table">
       ${totalsHtml}
     </table>
   </div>
-</div>
+</div>`}
 
 ${invoice.notizen ? `<div class="notes"><strong>Anmerkung:</strong> ${invoice.notizen}</div>` : ""}
 
 ${closingText}
 
 ${
-  !isAngebot
+  showBank
     ? `<div class="bank-info" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
   <div class="bank-info-row">
     <strong>Bankverbindung:</strong> ${b.kontoinhaber} · IBAN: ${b.iban} · BIC: ${b.bic}

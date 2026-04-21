@@ -4,6 +4,7 @@ import type { InvoiceHtmlData, InvoiceHtmlItem, BankData } from "./invoiceHtml";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceLayoutTypes";
 import { drawLetterhead, drawFooter, LETTERHEAD_MARGIN } from "./pdfLetterhead";
 import { DEFAULT_MAHNUNG_SETTINGS, renderMahnungText, type MahnungSettings } from "./mahnungSettings";
+import { getDocConfig } from "./documentTypes";
 
 const DEFAULT_BANK: BankData = {
   kontoinhaber: "",
@@ -54,8 +55,13 @@ export async function generateInvoicePdf(
 ): Promise<Blob> {
   const L = layout || DEFAULT_LAYOUT;
   const [acR, acG, acB] = hexToRgb(L.accent_color);
-  const isAngebot = invoice.typ === "angebot";
-  const typLabel = isAngebot ? "Angebot" : "Rechnung";
+  const docCfg = getDocConfig(invoice.typ);
+  const typLabel = docCfg.label;
+  const isAngebot = docCfg.isAngebotLike;               // Angebot + AB: kein Zahlungsblock, Angebots-Closing
+  const showLeistungsdatum = docCfg.showLeistungsdatum; // alle außer Angebot + AB
+  const showFaelligAm = docCfg.showPaymentSection;      // nur Rechnungs-artige
+  const showBank = docCfg.isInvoiceLike && docCfg.typ !== "gutschrift";
+  const hidePrices = docCfg.hidePrices;                  // Lieferschein: keine Preise
   const pdf = new jsPDF("p", "mm", "a4");
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -167,9 +173,9 @@ export async function generateInvoicePdf(
     ["Belegdatum", datumFormatted],
   ];
   if (invoice.kunde_uid) metaRows.push(["Ihre UID", invoice.kunde_uid]);
-  if (!isAngebot && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
+  if (showLeistungsdatum && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
   if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
-  if (!isAngebot && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
+  if (showFaelligAm && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", fmtDate(invoice.gueltig_bis!)]);
 
   metaRows.forEach(([label, value]) => {
@@ -214,7 +220,10 @@ export async function generateInvoicePdf(
 
   // ======= ITEMS TABLE with TOTALS as table footer =======
   // autoTable keeps footer together with last body rows — never alone on new page!
-  const tableHead = [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
+  // Lieferschein: ohne Preisspalten
+  const tableHead = hidePrices
+    ? [["Pos.", "Menge", "Einheit", "Beschreibung"]]
+    : [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
   // Langtext: put BOTH in cell so autoTable handles height perfectly.
   // In didDrawCell we paint over the langtext area and redraw in italic/gray.
   const langtextInfo: Record<number, { kurztext: string; langtext: string }> = {};
@@ -226,14 +235,17 @@ export async function generateInvoicePdf(
       langtextInfo[idx] = { kurztext, langtext };
       cellText = `${kurztext}\n${langtext}`;
     }
-    return [
+    const row = [
       String(item.position).padStart(2, "0"),
       fmt(Number(item.menge)),
       item.einheit || "Stk.",
       cellText, // Both in cell — autoTable handles sizing, didDrawCell handles styling
-      fmtCurrency(Number(item.einzelpreis)),
-      fmtCurrency(Number(item.gesamtpreis)),
     ];
+    if (!hidePrices) {
+      row.push(fmtCurrency(Number(item.einzelpreis)));
+      row.push(fmtCurrency(Number(item.gesamtpreis)));
+    }
+    return row;
   });
 
   // Build totals rows for the table footer
@@ -245,18 +257,19 @@ export async function generateInvoicePdf(
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
 
   const tableFoot: string[][] = [];
-  if (rabattWert > 0) {
-    tableFoot.push(["", "", "", "Zwischensumme", "", fmtCurrency(positionenNetto)]);
-    tableFoot.push(["", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, "", `- ${fmtCurrency(rabattWert)}`]);
-  }
   const isReverseCharge = (invoice as any).reverse_charge === true;
-
-  if (isReverseCharge) {
-    tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-  } else {
-    tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-    tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
-    tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+  if (!hidePrices) {
+    if (rabattWert > 0) {
+      tableFoot.push(["", "", "", "Zwischensumme", "", fmtCurrency(positionenNetto)]);
+      tableFoot.push(["", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, "", `- ${fmtCurrency(rabattWert)}`]);
+    }
+    if (isReverseCharge) {
+      tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+    } else {
+      tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+      tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
+      tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+    }
   }
 
   const skontoProzent = (invoice as any).skonto_prozent || 0;
@@ -265,14 +278,11 @@ export async function generateInvoicePdf(
   // Closing section height (Summen + Zahlungstext + Skonto + Bank + QR + Hinweis + Vielen Dank)
   let closingH = tableFoot.length * 7 + 15; // totals + base spacing
   if (invoice.notizen) closingH += 12;
-  if (isReverseCharge) closingH += 14;
-  if (!isAngebot) {
-    closingH += 13;
-    if (skontoProzent > 0 && skontoTage > 0) closingH += 24;
-    closingH += 40;
-  } else {
-    closingH += 8;
-  }
+  if (isReverseCharge && !hidePrices) closingH += 14;
+  if (showFaelligAm) closingH += 13;
+  if (showFaelligAm && skontoProzent > 0 && skontoTage > 0) closingH += 24;
+  if (showBank) closingH += 40;
+  if (!showFaelligAm && !showBank) closingH += 8;
 
   // Dynamic footer height
   const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
@@ -403,11 +413,13 @@ export async function generateInvoicePdf(
 
   // ======= TOTALS (manually drawn, not in autoTable) =======
   y += 2;
-  // Separator line above totals
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.8);
-  pdf.line(ml, y, pageWidth - mr, y);
-  y += 1;
+  // Separator line above totals (nur wenn tatsächlich Summen-Zeilen folgen)
+  if (tableFoot.length > 0) {
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.8);
+    pdf.line(ml, y, pageWidth - mr, y);
+    y += 1;
+  }
 
   tableFoot.forEach((row) => {
     const label = row[3];
@@ -443,8 +455,8 @@ export async function generateInvoicePdf(
     y += 8;
   }
 
-  // ======= REVERSE CHARGE HINWEIS =======
-  if (isReverseCharge) {
+  // ======= REVERSE CHARGE HINWEIS (nur bei Rechnungsbelegen) =======
+  if (isReverseCharge && !hidePrices) {
     y += 4;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(8.5);
@@ -463,19 +475,26 @@ export async function generateInvoicePdf(
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
   const zahlungsTage = invoice.zahlungsbedingungen?.match(/(\d+)/)?.[1] || "14";
-  if (isAngebot) {
+  const customClosing = (invoice as any).custom_closing_text as string | undefined;
+  if (customClosing) {
+    pdf.text(customClosing, ml, y, { maxWidth: contentWidth });
+    y += 8;
+  } else if (isAngebot) {
     pdf.text(L.closing_text_angebot, ml, y, { maxWidth: contentWidth });
     y += 8;
-  } else {
+  } else if (docCfg.isInvoiceLike) {
     pdf.text(L.closing_text_invoice.replace("{{tage}}", zahlungsTage), ml, y, { maxWidth: contentWidth });
     y += 5;
     pdf.setFontSize(7.5);
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Bei E-Banking bitte als Zahlungsreferenz Rechnungsnummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, ml, y, { maxWidth: contentWidth });
+    pdf.text(`Bei E-Banking bitte als Zahlungsreferenz ${docCfg.label}snummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, ml, y, { maxWidth: contentWidth });
+    y += 8;
+  } else {
+    // Lieferschein
     y += 8;
   }
   // ======= SKONTO INFO (only for Rechnung with Skonto) =======
-  if (!isAngebot && skontoProzent > 0 && skontoTage > 0) {
+  if (showFaelligAm && skontoProzent > 0 && skontoTage > 0) {
     const brutto = Number(invoice.brutto_summe);
     const skontoAbzug = brutto * (skontoProzent / 100);
     const skontoBetrag = brutto - skontoAbzug;
@@ -517,8 +536,8 @@ export async function generateInvoicePdf(
     }
   }
 
-  // ======= BANK INFO (only for Rechnung) =======
-  if (!isAngebot) {
+  // ======= BANK INFO (nur Rechnungs-artige Dokumente) =======
+  if (showBank) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(0, 0, 0);

@@ -14,6 +14,20 @@ interface NumberConfig {
   stellen: string;
 }
 
+// Alle Dokumenttypen, die das UI konfigurieren kann.
+// Die Reihenfolge bestimmt die Anzeige-Reihenfolge.
+const TYPES: { key: string; label: string; defaults: NumberConfig; example: string; hint?: string }[] = [
+  { key: "angebot",              label: "Angebote",              defaults: { prefix: "AN", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "AN26001" },
+  { key: "auftragsbestaetigung", label: "Auftragsbestätigungen", defaults: { prefix: "AB", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "AB26001" },
+  { key: "rechnung",             label: "Rechnungen",            defaults: { prefix: "",   format: "{YY}{NNN}",         start_nummer: "1", stellen: "3" }, example: "26001" },
+  { key: "anzahlungsrechnung",   label: "Anzahlungsrechnungen",  defaults: { prefix: "AR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "AR26001" },
+  { key: "teilrechnung",         label: "Teilrechnungen",        defaults: { prefix: "TR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "TR26001" },
+  { key: "schlussrechnung",      label: "Schlussrechnungen",     defaults: { prefix: "SR", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "SR26001" },
+  { key: "lieferschein",         label: "Lieferscheine",         defaults: { prefix: "LS", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "LS26001" },
+  { key: "gutschrift",           label: "Gutschriften",          defaults: { prefix: "GS", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3" }, example: "GS26001" },
+  { key: "kundennummer",         label: "Kundennummern",         defaults: { prefix: "K",  format: "{PREFIX}-{NNN}",    start_nummer: "1", stellen: "5" }, example: "K-00001", hint: "Ohne Jahresbezug. Wird beim Kunden-Anlegen automatisch vergeben." },
+];
+
 function generatePreview(cfg: NumberConfig): string {
   const yy = String(new Date().getFullYear()).slice(-2);
   const yyyy = String(new Date().getFullYear());
@@ -35,11 +49,10 @@ export function InvoiceNumberSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [rechnung, setRechnung] = useState<NumberConfig>({
-    prefix: "", format: "{YY}{NNN}", start_nummer: "1", stellen: "3",
-  });
-  const [angebot, setAngebot] = useState<NumberConfig>({
-    prefix: "AN", format: "{PREFIX}{YY}{NNN}", start_nummer: "1", stellen: "3",
+  const [configs, setConfigs] = useState<Record<string, NumberConfig>>(() => {
+    const init: Record<string, NumberConfig> = {};
+    for (const t of TYPES) init[t.key] = { ...t.defaults };
+    return init;
   });
 
   useEffect(() => {
@@ -48,84 +61,82 @@ export function InvoiceNumberSettings() {
 
   const loadSettings = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("app_settings")
-      .select("key, value")
-      .in("key", [
-        "rechnung_prefix", "rechnung_format", "rechnung_start_nummer", "rechnung_stellen",
-        "angebot_prefix", "angebot_format", "angebot_start_nummer", "angebot_stellen",
-      ]);
-
-    if (data) {
-      const map: Record<string, string> = {};
-      data.forEach((r: any) => { map[r.key] = r.value; });
-
-      setRechnung({
-        prefix: map["rechnung_prefix"] || "",
-        format: map["rechnung_format"] || "{YY}{NNN}",
-        start_nummer: map["rechnung_start_nummer"] || "1",
-        stellen: map["rechnung_stellen"] || "3",
-      });
-      setAngebot({
-        prefix: map["angebot_prefix"] || "AN",
-        format: map["angebot_format"] || "{PREFIX}{YY}{NNN}",
-        start_nummer: map["angebot_start_nummer"] || "1",
-        stellen: map["angebot_stellen"] || "3",
-      });
+    const keys: string[] = [];
+    for (const t of TYPES) {
+      keys.push(`${t.key}_prefix`, `${t.key}_format`, `${t.key}_start_nummer`, `${t.key}_stellen`);
     }
+    const { data: appSettings } = await supabase.from("app_settings").select("key, value").in("key", keys);
+
+    // number_ranges als Fallback / Single Source
+    const { data: ranges } = await supabase
+      .from("number_ranges" as never)
+      .select("typ, prefix, format_pattern, start_nummer, stellen" as never);
+
+    const map: Record<string, string> = {};
+    (appSettings || []).forEach((r: any) => { map[r.key] = r.value; });
+
+    const rangeByTyp = new Map<string, any>();
+    ((ranges as any[]) || []).forEach((r: any) => rangeByTyp.set(r.typ, r));
+
+    const next: Record<string, NumberConfig> = {};
+    for (const t of TYPES) {
+      const r = rangeByTyp.get(t.key);
+      next[t.key] = {
+        prefix: map[`${t.key}_prefix`] ?? r?.prefix ?? t.defaults.prefix,
+        format: map[`${t.key}_format`] ?? r?.format_pattern ?? t.defaults.format,
+        start_nummer: map[`${t.key}_start_nummer`] ?? (r?.start_nummer != null ? String(r.start_nummer) : t.defaults.start_nummer),
+        stellen: map[`${t.key}_stellen`] ?? (r?.stellen != null ? String(r.stellen) : t.defaults.stellen),
+      };
+    }
+    setConfigs(next);
     setLoading(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
-    const settings = [
-      { key: "rechnung_prefix", value: rechnung.prefix },
-      { key: "rechnung_format", value: rechnung.format },
-      { key: "rechnung_start_nummer", value: rechnung.start_nummer },
-      { key: "rechnung_stellen", value: rechnung.stellen },
-      { key: "angebot_prefix", value: angebot.prefix },
-      { key: "angebot_format", value: angebot.format },
-      { key: "angebot_start_nummer", value: angebot.start_nummer },
-      { key: "angebot_stellen", value: angebot.stellen },
-    ];
+    try {
+      // 1) app_settings spiegeln (UI-Quelle)
+      const settingsRows: { key: string; value: string }[] = [];
+      for (const t of TYPES) {
+        const c = configs[t.key];
+        settingsRows.push(
+          { key: `${t.key}_prefix`, value: c.prefix },
+          { key: `${t.key}_format`, value: c.format },
+          { key: `${t.key}_start_nummer`, value: c.start_nummer },
+          { key: `${t.key}_stellen`, value: c.stellen },
+        );
+      }
+      for (const s of settingsRows) {
+        await supabase.from("app_settings").upsert({ key: s.key, value: s.value }, { onConflict: "key" });
+      }
 
-    for (const s of settings) {
-      await supabase.from("app_settings").upsert({ key: s.key, value: s.value }, { onConflict: "key" });
+      // 2) number_ranges sync (wird tatsächlich von next_document_number() genutzt).
+      //    aktuelle_nummer nicht anfassen, nur Konfig-Felder.
+      for (const t of TYPES) {
+        const c = configs[t.key];
+        const payload: any = {
+          typ: t.key,
+          label: t.label,
+          prefix: c.prefix || "",
+          format_pattern: c.format || "{PREFIX}{YY}{NNN}",
+          start_nummer: parseInt(c.start_nummer) || 1,
+          stellen: parseInt(c.stellen) || 3,
+        };
+        await (supabase.from("number_ranges" as never) as any)
+          .upsert(payload, { onConflict: "typ" });
+      }
+
+      toast({ title: "Nummernkreise gespeichert" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler", description: err.message });
+    } finally {
+      setSaving(false);
     }
-
-    toast({ title: "Nummernkreise gespeichert" });
-    setSaving(false);
   };
 
-  const renderConfig = (label: string, cfg: NumberConfig, setCfg: (c: NumberConfig) => void, example: string) => (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-sm">{label}</span>
-        <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
-          Vorschau: {generatePreview(cfg)}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <Label className="text-xs">Prefix</Label>
-          <Input value={cfg.prefix} onChange={e => setCfg({ ...cfg, prefix: e.target.value })} placeholder="z.B. AN, RE" />
-        </div>
-        <div>
-          <Label className="text-xs">Startnummer</Label>
-          <Input type="number" min={1} value={cfg.start_nummer} onChange={e => setCfg({ ...cfg, start_nummer: e.target.value })} />
-        </div>
-        <div>
-          <Label className="text-xs">Stellen</Label>
-          <Input type="number" min={2} max={6} value={cfg.stellen} onChange={e => setCfg({ ...cfg, stellen: e.target.value })} />
-        </div>
-        <div>
-          <Label className="text-xs">Format</Label>
-          <Input value={cfg.format} onChange={e => setCfg({ ...cfg, format: e.target.value })} placeholder="{PREFIX}{YY}{NNN}" />
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">{example}</p>
-    </div>
-  );
+  const updateCfg = (key: string, patch: Partial<NumberConfig>) => {
+    setConfigs(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  };
 
   if (loading) {
     return (
@@ -145,22 +156,45 @@ export function InvoiceNumberSettings() {
           Nummernkreise
         </CardTitle>
         <CardDescription>
-          Rechnungs- und Angebotsnummern konfigurieren. Platzhalter: {"{PREFIX}"}, {"{YY}"}/{"{YYYY}"}, {"{NNN}"} (mit Nullen) oder {"{N}"} (ohne).
+          Präfix, Startnummer, Stellen und Format pro Dokumenttyp. Platzhalter: {"{PREFIX}"}, {"{YY}"}/{"{YYYY}"}, {"{NNN}"} (mit Nullen) oder {"{N}"} (ohne).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {renderConfig(
-          "Rechnungen",
-          rechnung,
-          setRechnung,
-          "z.B. 26001 → Jahr 26, Nummer 001"
-        )}
-        {renderConfig(
-          "Angebote",
-          angebot,
-          setAngebot,
-          "z.B. AN26001 → Prefix AN, Jahr 26, Nummer 001"
-        )}
+        {TYPES.map((t) => {
+          const cfg = configs[t.key];
+          return (
+            <div key={t.key} className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-medium text-sm">{t.label}</span>
+                  {t.hint && <p className="text-xs text-muted-foreground mt-0.5">{t.hint}</p>}
+                </div>
+                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
+                  Vorschau: {generatePreview(cfg)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs">Prefix</Label>
+                  <Input value={cfg.prefix} onChange={e => updateCfg(t.key, { prefix: e.target.value })} placeholder={t.defaults.prefix || "z.B. AN, RE"} />
+                </div>
+                <div>
+                  <Label className="text-xs">Startnummer</Label>
+                  <Input type="number" min={1} value={cfg.start_nummer} onChange={e => updateCfg(t.key, { start_nummer: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Stellen</Label>
+                  <Input type="number" min={2} max={6} value={cfg.stellen} onChange={e => updateCfg(t.key, { stellen: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Format</Label>
+                  <Input value={cfg.format} onChange={e => updateCfg(t.key, { format: e.target.value })} placeholder="{PREFIX}{YY}{NNN}" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Beispiel: {t.example}</p>
+            </div>
+          );
+        })}
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving}>
             {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Speichern...</> : <><Save className="h-4 w-4 mr-2" /> Speichern</>}

@@ -473,22 +473,35 @@ export default function Invoices() {
     if (filterTyp === "storno") {
       return matchSearch && matchArchive && i.status === "storniert";
     }
-    // Sonst nach Typ filtern, Stornierte ausschließen
-    const matchTyp = i.typ === filterTyp;
     if (i.status === "storniert") return false;
+    // "rechnung"-Tab sammelt alle Rechnungs-artigen Dokumente
+    const invoiceLike = new Set(["rechnung", "anzahlungsrechnung", "teilrechnung", "schlussrechnung", "gutschrift"]);
+    const angebotLike = new Set(["angebot", "auftragsbestaetigung"]);
+    let matchTyp: boolean;
+    if (filterTyp === "rechnung") {
+      matchTyp = invoiceLike.has(i.typ);
+    } else if (filterTyp === "angebot") {
+      matchTyp = angebotLike.has(i.typ);
+    } else if (filterTyp === "lieferschein") {
+      matchTyp = i.typ === "lieferschein";
+    } else {
+      matchTyp = i.typ === filterTyp;
+    }
     const matchStatus = filterStatus === "alle" ? true : i.status === filterStatus;
     return matchTyp && matchStatus && matchSearch && matchArchive;
   });
 
   const storniertCount = invoices.filter(i => i.status === "storniert").length;
 
-  const totalRechnungen = invoices.filter(i => i.typ === "rechnung" && i.status !== "storniert").length;
-  const totalAngebote = invoices.filter(i => i.typ === "angebot" && i.status !== "storniert").length;
+  const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "teilrechnung", "schlussrechnung", "gutschrift"]);
+  const _angebotLikeTypes = new Set(["angebot", "auftragsbestaetigung"]);
+  const totalRechnungen = invoices.filter(i => _invoiceLikeTypes.has(i.typ) && i.status !== "storniert").length;
+  const totalAngebote = invoices.filter(i => _angebotLikeTypes.has(i.typ) && i.status !== "storniert").length;
   const offeneSumme = invoices
-    .filter(i => i.typ === "rechnung" && (i.status === "offen" || i.status === "teilbezahlt"))
+    .filter(i => _invoiceLikeTypes.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + Number(i.brutto_summe) - i.bezahlt_betrag, 0);
   const bezahlteSumme = invoices
-    .filter(i => i.typ === "rechnung" && (i.status === "bezahlt" || i.status === "teilbezahlt"))
+    .filter(i => _invoiceLikeTypes.has(i.typ) && (i.status === "bezahlt" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + i.bezahlt_betrag, 0);
 
   // Status options for the filter depend on selected typ
@@ -576,8 +589,15 @@ export default function Invoices() {
                 <button
                   onClick={() => setFilterTyp("angebot")}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "angebot" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                  title="Angebote + Auftragsbestätigungen"
                 >
                   Angebote
+                </button>
+                <button
+                  onClick={() => setFilterTyp("lieferschein")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "lieferschein" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                >
+                  Lieferscheine
                 </button>
                 <button
                   onClick={() => setFilterTyp("storno")}
@@ -760,7 +780,22 @@ export default function Invoices() {
                           className={`cursor-pointer hover:bg-muted/50 ${overdue ? "bg-red-50" : ""}`}
                           onClick={() => navigate(`/invoices/${inv.id}`)}
                         >
-                          <TableCell className="font-mono font-medium">{inv.nummer}</TableCell>
+                          <TableCell className="font-mono font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{inv.nummer}</span>
+                              {inv.typ !== "rechnung" && inv.typ !== "angebot" && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                  {inv.typ === "auftragsbestaetigung" ? "AB"
+                                    : inv.typ === "anzahlungsrechnung" ? "AR"
+                                    : inv.typ === "teilrechnung" ? "TR"
+                                    : inv.typ === "schlussrechnung" ? "SR"
+                                    : inv.typ === "lieferschein" ? "LS"
+                                    : inv.typ === "gutschrift" ? "GS"
+                                    : inv.typ}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>{inv.kunde_name}</TableCell>
                           <TableCell>{formatDateShort(inv.datum)}</TableCell>
                           <TableCell className="text-right font-medium">€ {brutto.toFixed(2)}</TableCell>

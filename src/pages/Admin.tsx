@@ -25,6 +25,7 @@ import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
+import { DocumentTextsEditor } from "@/components/admin/DocumentTextsEditor";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { ProjectStatusSettings } from "@/components/admin/ProjectStatusSettings";
 import { MahnungSettings } from "@/components/admin/MahnungSettings";
@@ -1178,6 +1179,7 @@ export default function Admin() {
           {/* ===== TAB 3: RECHNUNGS-LAYOUT ===== */}
           <TabsContent value="rechnung" className="space-y-6">
             <InvoiceNumberSettings />
+            <DocumentTextsEditor />
             <InvoiceLayoutEditor />
           </TabsContent>
 

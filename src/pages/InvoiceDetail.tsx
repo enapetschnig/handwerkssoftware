@@ -40,9 +40,18 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { getDocConfig } from "@/lib/documentTypes";
 
 interface InvoiceItem {
   id?: string;
@@ -95,6 +104,10 @@ interface InvoiceData {
   storno_nummer: string;
   storno_datum: string;
   storno_grund: string;
+  // Dokument-Genealogie + Anzahlung
+  parent_invoice_id?: string | null;
+  anzahlung_prozent?: number | null;
+  anzahlung_betrag?: number | null;
 }
 
 interface TemplateItem {
@@ -179,6 +192,12 @@ export default function InvoiceDetail() {
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [stornoDialogOpen, setStornoDialogOpen] = useState(false);
   const [stornoGrund, setStornoGrund] = useState("");
+  // Umwandlungs-Dialoge
+  const [anzahlungDialogOpen, setAnzahlungDialogOpen] = useState(false);
+  const [anzahlungProzentInput, setAnzahlungProzentInput] = useState<string>("30");
+  const [schlussrechnungDialogOpen, setSchlussrechnungDialogOpen] = useState(false);
+  const [verfuegbareAnzahlungen, setVerfuegbareAnzahlungen] = useState<{ id: string; nummer: string | null; datum: string | null; netto_summe: number; brutto_summe: number }[]>([]);
+  const [selectedAbzuege, setSelectedAbzuege] = useState<string[]>([]);
   const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -269,20 +288,26 @@ export default function InvoiceDetail() {
       setImportRegieOpen(true);
     }
 
-    // Load data from Angebot conversion — direkt aus der DB, nicht mehr via sessionStorage
-    const fromAngebotParam = searchParams.get("from_angebot");
-    if (isNew && fromAngebotParam && fromAngebotParam !== "true") {
-      // Moderner Pfad: from_angebot=<angebot_id> → Angebot aus DB laden
+    // Load data from source document — unterstützt alte (`from_angebot`)
+    // und neue (`from_doc`) URL-Parameter. Zusätzlich:
+    //   anzahlung_prozent=<p>   → füllt anzahlung_prozent beim neuen Dokument
+    //   abzug_ids=<id,id,…>    → zieht Anzahlungen als negative Positionen ab
+    const fromDocId = searchParams.get("from_doc") || searchParams.get("from_angebot");
+    const targetTyp = searchParams.get("typ") || "rechnung";
+    const anzahlungProzentParam = searchParams.get("anzahlung_prozent");
+    const abzugIdsParam = searchParams.get("abzug_ids");
+    if (isNew && fromDocId && fromDocId !== "true") {
       (async () => {
         try {
           const [invRes, itemsRes] = await Promise.all([
-            supabase.from("invoices").select("*").eq("id", fromAngebotParam).maybeSingle(),
-            supabase.from("invoice_items").select("*").eq("invoice_id", fromAngebotParam).order("position"),
+            supabase.from("invoices").select("*").eq("id", fromDocId).maybeSingle(),
+            supabase.from("invoice_items").select("*").eq("invoice_id", fromDocId).order("position"),
           ]);
           const data: any = invRes.data;
           if (!data) return;
           setForm(prev => ({
             ...prev,
+            typ: targetTyp, // wichtig: Ziel-Typ setzen (nicht den des Quelldokuments)
             kunde_name: data.kunde_name || "",
             kunde_adresse: data.kunde_adresse || "",
             kunde_plz: data.kunde_plz || "",
@@ -306,25 +331,70 @@ export default function InvoiceDetail() {
             kunde_titel: data.kunde_titel || "",
             reverse_charge: !!data.reverse_charge,
             kundennummer: data.kundennummer || "",
+            anzahlung_prozent: anzahlungProzentParam ? Number(anzahlungProzentParam) : null,
+            parent_invoice_id: fromDocId,
           } as any));
           const srcItems = (itemsRes.data || []) as any[];
-          if (srcItems.length > 0) {
-            setItems(srcItems.map((it, idx) => ({
-              position: idx + 1,
-              beschreibung: it.beschreibung || "",
-              kurztext: it.kurztext || it.beschreibung || "",
-              langtext: it.langtext || "",
-              menge: Number(it.menge) || 1,
-              einheit: it.einheit || "Stk.",
-              einzelpreis: Number(it.einzelpreis) || 0,
-              rabatt_prozent: Number(it.rabatt_prozent) || 0,
-              gesamtpreis: Number(it.gesamtpreis) || 0,
-            })));
+          let nextItems = srcItems.map((it, idx) => ({
+            position: idx + 1,
+            beschreibung: it.beschreibung || "",
+            kurztext: it.kurztext || it.beschreibung || "",
+            langtext: it.langtext || "",
+            menge: Number(it.menge) || 1,
+            einheit: it.einheit || "Stk.",
+            einzelpreis: Number(it.einzelpreis) || 0,
+            rabatt_prozent: Number(it.rabatt_prozent) || 0,
+            gesamtpreis: Number(it.gesamtpreis) || 0,
+          }));
+
+          // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag
+          if (targetTyp === "anzahlungsrechnung" && anzahlungProzentParam) {
+            const gesamtNetto = nextItems.reduce((s, it) => s + it.gesamtpreis, 0);
+            const prozent = Number(anzahlungProzentParam);
+            const anzBetrag = gesamtNetto * (prozent / 100);
+            nextItems = [{
+              position: 1,
+              beschreibung: `Anzahlung ${prozent}% gemäß ${data.nummer || "Auftragsbestätigung"}`,
+              kurztext: `Anzahlung ${prozent}%`,
+              langtext: "",
+              menge: 1,
+              einheit: "pausch.",
+              einzelpreis: Math.round(anzBetrag * 100) / 100,
+              rabatt_prozent: 0,
+              gesamtpreis: Math.round(anzBetrag * 100) / 100,
+            }];
           }
-          setFromAngebotId(fromAngebotParam);
+
+          // Schlussrechnung: Anzahlungen als negative Zeilen anhängen
+          if (targetTyp === "schlussrechnung" && abzugIdsParam) {
+            const ids = abzugIdsParam.split(",").filter(Boolean);
+            if (ids.length > 0) {
+              const { data: abzugInvs } = await supabase
+                .from("invoices")
+                .select("id, nummer, netto_summe, brutto_summe, datum")
+                .in("id", ids);
+              ((abzugInvs as any[]) || []).forEach((abz) => {
+                const betrag = Number(abz.netto_summe) || 0;
+                nextItems.push({
+                  position: nextItems.length + 1,
+                  beschreibung: `Abzug Anzahlung ${abz.nummer} vom ${abz.datum}`,
+                  kurztext: `Abzug ${abz.nummer}`,
+                  langtext: "",
+                  menge: 1,
+                  einheit: "pausch.",
+                  einzelpreis: -betrag,
+                  rabatt_prozent: 0,
+                  gesamtpreis: -betrag,
+                });
+              });
+            }
+          }
+
+          if (nextItems.length > 0) setItems(nextItems);
+          setFromAngebotId(fromDocId);
         } catch (err) {
-          console.error("Angebot-Konversion fehlgeschlagen:", err);
-          toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Angebot konnte nicht geladen werden" });
+          console.error("Konversion fehlgeschlagen:", err);
+          toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Quelldokument konnte nicht geladen werden" });
         }
       })();
     }
@@ -690,6 +760,9 @@ export default function InvoiceDetail() {
         skonto_prozent: form.skonto_prozent || 0,
         skonto_tage: form.skonto_tage || 0,
         kundennummer: (form as any).kundennummer || null,
+        parent_invoice_id: (form as any).parent_invoice_id || null,
+        anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
+        anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
       };
 
       if (isNew || !savedId) {
@@ -1098,15 +1171,19 @@ export default function InvoiceDetail() {
   };
 
   const handleConvertToInvoice = async () => {
-    if (!invoiceId || form.typ !== "angebot") return;
-    doConvert(items.map(it => ({ ...it })));
+    if (!invoiceId) return;
+    // Fallback: erzeuge immer eine normale Rechnung aus Angebot
+    navigate(`/invoices/new?typ=rechnung&from_doc=${invoiceId}`);
   };
 
-  const doConvert = (_finalItems: typeof items) => {
+  // Umwandlung zu beliebigem Ziel-Dokumenttyp. options steuern Extras
+  // (Anzahlungs-Prozent, Abzüge von Anzahlungen).
+  const handleConvertTo = (targetTyp: string, options?: { anzahlung_prozent?: number; abzug_ids?: string[] }) => {
     if (!invoiceId) return;
-    // URL-Param statt sessionStorage: robust gegenüber Reload/Tab-Close.
-    // InvoiceDetail lädt das Angebot direkt aus der DB via ?from_angebot=<id>.
-    navigate(`/invoices/new?typ=rechnung&from_angebot=${invoiceId}`);
+    const params = new URLSearchParams({ typ: targetTyp, from_doc: invoiceId });
+    if (options?.anzahlung_prozent != null) params.set("anzahlung_prozent", String(options.anzahlung_prozent));
+    if (options?.abzug_ids?.length) params.set("abzug_ids", options.abzug_ids.join(","));
+    navigate(`/invoices/new?${params.toString()}`);
   };
 
   const handleDelete = async () => {
@@ -1342,12 +1419,77 @@ export default function InvoiceDetail() {
                         </SelectContent>
                       </Select>
                     )}
-                    {form.typ === "angebot" && form.status !== "verrechnet" && form.status !== "abgelehnt" && (
-                      <Button onClick={handleConvertToInvoice} variant="default" size="sm" className="gap-1.5">
-                        <ArrowRightLeft className="w-4 h-4" />
-                        In Rechnung umwandeln
-                      </Button>
-                    )}
+                    {/* Umwandeln-Menü: zeigt basierend auf aktuellem typ die erlaubten Ziele */}
+                    {!isNew && form.status !== "verrechnet" && form.status !== "abgelehnt" && form.status !== "storniert" && (() => {
+                      const t = form.typ;
+                      const allow = {
+                        auftragsbestaetigung: t === "angebot",
+                        rechnung: t === "angebot" || t === "auftragsbestaetigung",
+                        anzahlungsrechnung: t === "auftragsbestaetigung",
+                        teilrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung",
+                        schlussrechnung: t === "auftragsbestaetigung" || t === "anzahlungsrechnung" || t === "teilrechnung",
+                        lieferschein: t === "auftragsbestaetigung" || t === "angebot",
+                      };
+                      if (!Object.values(allow).some(Boolean)) return null;
+                      return (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="default" size="sm" className="gap-1.5">
+                              <ArrowRightLeft className="w-4 h-4" />
+                              Umwandeln in...
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            {allow.auftragsbestaetigung && (
+                              <DropdownMenuItem onClick={() => handleConvertTo("auftragsbestaetigung")}>
+                                Auftragsbestätigung
+                              </DropdownMenuItem>
+                            )}
+                            {allow.rechnung && (
+                              <DropdownMenuItem onClick={() => handleConvertTo("rechnung")}>
+                                Rechnung
+                              </DropdownMenuItem>
+                            )}
+                            {allow.anzahlungsrechnung && (
+                              <DropdownMenuItem onClick={() => { setAnzahlungProzentInput("30"); setAnzahlungDialogOpen(true); }}>
+                                Anzahlungsrechnung…
+                              </DropdownMenuItem>
+                            )}
+                            {allow.teilrechnung && (
+                              <DropdownMenuItem onClick={() => handleConvertTo("teilrechnung")}>
+                                Teilrechnung
+                              </DropdownMenuItem>
+                            )}
+                            {allow.schlussrechnung && (
+                              <DropdownMenuItem onClick={async () => {
+                                // Verfügbare Anzahlungen zum selben Quelldokument laden
+                                if (!invoiceId) return;
+                                const rootId = (form as any).parent_invoice_id || invoiceId;
+                                const { data } = await supabase
+                                  .from("invoices")
+                                  .select("id, nummer, datum, netto_summe, brutto_summe")
+                                  .eq("parent_invoice_id", rootId)
+                                  .in("typ", ["anzahlungsrechnung", "teilrechnung"]);
+                                setVerfuegbareAnzahlungen(((data as any[]) || []).map(r => ({
+                                  id: r.id, nummer: r.nummer, datum: r.datum,
+                                  netto_summe: Number(r.netto_summe) || 0, brutto_summe: Number(r.brutto_summe) || 0,
+                                })));
+                                setSelectedAbzuege([]);
+                                setSchlussrechnungDialogOpen(true);
+                              }}>
+                                Schlussrechnung…
+                              </DropdownMenuItem>
+                            )}
+                            {(allow.auftragsbestaetigung || allow.lieferschein) && <DropdownMenuSeparator />}
+                            {allow.lieferschein && (
+                              <DropdownMenuItem onClick={() => handleConvertTo("lieferschein")}>
+                                Lieferschein
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      );
+                    })()}
                     <Button onClick={handleDuplicate} variant="outline" size="sm" className="gap-1.5">
                       <Copy className="w-4 h-4" />
                       Duplizieren
@@ -2666,6 +2808,106 @@ export default function InvoiceDetail() {
             toast({ title: "Aus Regiebericht importiert", description: `${newItems.length} Positionen hinzugefügt` });
           }}
         />
+
+        {/* Anzahlungsrechnung-Dialog: nur Prozentsatz */}
+        <Dialog open={anzahlungDialogOpen} onOpenChange={setAnzahlungDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Anzahlungsrechnung erstellen</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-muted-foreground">
+                Anzahlungsbetrag als prozentualer Anteil vom Netto-Gesamtbetrag der Auftragsbestätigung.
+              </p>
+              <div>
+                <Label>Prozentsatz</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={anzahlungProzentInput}
+                    onChange={(e) => setAnzahlungProzentInput(e.target.value)}
+                    className="max-w-[120px]"
+                  />
+                  <span className="text-sm text-muted-foreground">% vom Netto</span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Bei der Schlussrechnung wird diese Anzahlung dann als Abzug berücksichtigt.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAnzahlungDialogOpen(false)}>Abbrechen</Button>
+              <Button
+                onClick={() => {
+                  const p = Number(anzahlungProzentInput);
+                  if (isNaN(p) || p <= 0 || p > 100) {
+                    toast({ variant: "destructive", title: "Ungültiger Prozentsatz" });
+                    return;
+                  }
+                  setAnzahlungDialogOpen(false);
+                  handleConvertTo("anzahlungsrechnung", { anzahlung_prozent: p });
+                }}
+              >
+                Anzahlungsrechnung erstellen
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Schlussrechnungs-Dialog: Liste der verfügbaren Anzahlungen zum Abzug */}
+        <Dialog open={schlussrechnungDialogOpen} onOpenChange={setSchlussrechnungDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Schlussrechnung erstellen</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              {verfuegbareAnzahlungen.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Keine Anzahlungs- oder Teilrechnungen zu diesem Auftrag gefunden. Die Schlussrechnung wird ohne Abzüge erstellt.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Wähle die Anzahlungen/Teilrechnungen aus, die von der Schlussrechnung abgezogen werden sollen. Sie erscheinen als negative Positionen.
+                  </p>
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                    {verfuegbareAnzahlungen.map((anz) => (
+                      <label key={anz.id} className="flex items-center justify-between gap-3 rounded border p-2 cursor-pointer hover:bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedAbzuege.includes(anz.id)}
+                            onChange={(e) => {
+                              setSelectedAbzuege((prev) => e.target.checked ? [...prev, anz.id] : prev.filter(x => x !== anz.id));
+                            }}
+                          />
+                          <div>
+                            <div className="text-sm font-medium">{anz.nummer || "—"}</div>
+                            <div className="text-xs text-muted-foreground">{anz.datum || "—"}</div>
+                          </div>
+                        </div>
+                        <div className="text-sm font-mono">€ {(anz.netto_summe || 0).toFixed(2)}</div>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSchlussrechnungDialogOpen(false)}>Abbrechen</Button>
+              <Button
+                onClick={() => {
+                  setSchlussrechnungDialogOpen(false);
+                  handleConvertTo("schlussrechnung", { abzug_ids: selectedAbzuege });
+                }}
+              >
+                Schlussrechnung erstellen
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Import from Offer Dialog */}
         <ImportFromOfferDialog
