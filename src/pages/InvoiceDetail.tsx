@@ -208,6 +208,12 @@ export default function InvoiceDetail() {
   const [anzahlungMode, setAnzahlungMode] = useState<"prozent" | "betrag">("prozent");
   // Summe bereits ausgestellter Anzahlungen zum gleichen Auftrag (für Kumulations-Check)
   const [bestehendeAnzahlungenNetto, setBestehendeAnzahlungenNetto] = useState<number>(0);
+  // Dokumenten-Kette: Root (Angebot/AB) + alle abgeleiteten Dokumente. Zeigt
+  // auf der Detailseite an, wo im Workflow wir sind, und macht Navigation
+  // zwischen verknüpften Dokumenten möglich.
+  interface ChainDoc { id: string; typ: string; nummer: string | null; datum: string | null; brutto_summe: number; status: string; }
+  const [chainRoot, setChainRoot] = useState<ChainDoc | null>(null);
+  const [chainChildren, setChainChildren] = useState<ChainDoc[]>([]);
   const [invoiceLayout, setInvoiceLayout] = useState<InvoiceLayoutSettings>(DEFAULT_LAYOUT);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -560,7 +566,13 @@ export default function InvoiceDetail() {
       ansprechpartner_name: (data as any).ansprechpartner_name || "",
       ansprechpartner_telefon: (data as any).ansprechpartner_telefon || "",
       ansprechpartner_email: (data as any).ansprechpartner_email || "",
-    });
+      // Wichtig für die Dokumenten-Genealogie: ohne das fällt der
+      // Schlussrechnung-Loader auf die AR selbst zurück und die Original-
+      // Positionen aus dem Angebot/AB werden nicht übernommen.
+      parent_invoice_id: (data as any).parent_invoice_id || null,
+      anzahlung_prozent: (data as any).anzahlung_prozent != null ? Number((data as any).anzahlung_prozent) : null,
+      anzahlung_betrag: (data as any).anzahlung_betrag != null ? Number((data as any).anzahlung_betrag) : null,
+    } as any);
 
     const { data: itemsData } = await supabase
       .from("invoice_items")
@@ -584,6 +596,38 @@ export default function InvoiceDetail() {
         mwst_exempt: !!(it as any).mwst_exempt,
       })));
     }
+
+    // Dokumenten-Kette laden: zur Root-Ahnung (Angebot/AB) hochwandern,
+    // dann alle direkten Kinder dieser Root laden. So sieht der User auf
+    // jeder AR/SR, zu welchem Auftrag sie gehört und welche Geschwister
+    // es gibt — und kann direkt dorthin navigieren.
+    let rootId = invoiceId;
+    let parentHop: string | null = (data as any).parent_invoice_id || null;
+    // Hochwandern — begrenzt auf 5 Hops um Endlosschleifen durch inkonsistente
+    // Daten (sollte nie passieren, aber Safety-Net) zu verhindern.
+    for (let i = 0; i < 5 && parentHop; i++) {
+      rootId = parentHop;
+      const { data: hop } = await supabase
+        .from("invoices")
+        .select("parent_invoice_id")
+        .eq("id", parentHop)
+        .maybeSingle();
+      parentHop = (hop as any)?.parent_invoice_id || null;
+    }
+    const [rootRes, childrenRes] = await Promise.all([
+      supabase
+        .from("invoices")
+        .select("id, typ, nummer, datum, brutto_summe, status")
+        .eq("id", rootId)
+        .maybeSingle(),
+      supabase
+        .from("invoices")
+        .select("id, typ, nummer, datum, brutto_summe, status")
+        .eq("parent_invoice_id", rootId)
+        .order("datum", { ascending: true }),
+    ]);
+    setChainRoot(rootRes.data ? (rootRes.data as ChainDoc) : null);
+    setChainChildren(((childrenRes.data as any[]) || []) as ChainDoc[]);
 
     setLoading(false);
   };
@@ -1509,6 +1553,51 @@ export default function InvoiceDetail() {
         />
 
         <div className="space-y-6">
+          {/* Dokumenten-Kette: Root (Angebot/AB) + alle abgeleiteten Dokumente */}
+          {!isNew && chainRoot && (chainRoot.id !== invoiceId || chainChildren.length > 0) && (
+            <Card className="border-blue-200 bg-blue-50/40">
+              <CardContent className="pt-4 pb-3">
+                <div className="text-xs font-medium text-blue-900 uppercase tracking-wide mb-2">Auftrag</div>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {/* Root */}
+                  <button
+                    type="button"
+                    onClick={() => { if (chainRoot.id !== invoiceId) navigate(`/invoices/${chainRoot.id}`); }}
+                    disabled={chainRoot.id === invoiceId}
+                    className={`flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-xs transition-colors ${
+                      chainRoot.id === invoiceId
+                        ? "border-blue-400 bg-blue-100 text-blue-900 ring-1 ring-blue-400"
+                        : "border-blue-200 bg-white hover:bg-blue-100 text-blue-900"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase text-blue-600">{getDocConfig(chainRoot.typ).shortLabel}</span>
+                    <span>{chainRoot.nummer || "—"}</span>
+                  </button>
+                  {chainChildren.length > 0 && <span className="text-blue-600">→</span>}
+                  {chainChildren.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { if (c.id !== invoiceId) navigate(`/invoices/${c.id}`); }}
+                      disabled={c.id === invoiceId}
+                      className={`flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-xs transition-colors ${
+                        c.id === invoiceId
+                          ? "border-blue-400 bg-blue-100 text-blue-900 ring-1 ring-blue-400"
+                          : c.status === "storniert"
+                            ? "border-red-200 bg-white text-red-700 line-through opacity-70 hover:opacity-100"
+                            : "border-blue-200 bg-white hover:bg-blue-100 text-blue-900"
+                      }`}
+                      title={`${getDocConfig(c.typ).label} ${c.nummer || ""} — € ${Number(c.brutto_summe).toFixed(2)} brutto, Status ${c.status}`}
+                    >
+                      <span className="text-[10px] uppercase text-blue-600">{getDocConfig(c.typ).shortLabel}</span>
+                      <span>{c.nummer || "—"}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Status & Actions */}
           {!isNew && (
             <Card>
