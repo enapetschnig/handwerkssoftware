@@ -9,13 +9,19 @@ import { ExternalLink, Save, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-const KATEGORIEN = [
+const FALLBACK_KATEGORIEN = [
   { value: "material", label: "Material" },
-  { value: "fremdleistung", label: "Fremdleistung" },
+  { value: "verbrauchsmaterial", label: "Verbrauchsmaterial" },
   { value: "werkzeug", label: "Werkzeug / Maschinen" },
+  { value: "werkstatt", label: "Werkstatt" },
+  { value: "fremdleistung", label: "Fremdleistung" },
   { value: "miete", label: "Miete / Leasing" },
   { value: "treibstoff", label: "Treibstoff / KFZ" },
+  { value: "geschaeftsessen", label: "Geschäftsessen / Bewirtung" },
   { value: "buero", label: "Büro / Verwaltung" },
+  { value: "fortbildung", label: "Fortbildung / Schulung" },
+  { value: "versicherung", label: "Versicherung / Gebühren" },
+  { value: "reise", label: "Reise / Hotel" },
   { value: "sonstiges", label: "Sonstiges" },
 ];
 
@@ -32,6 +38,20 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
   const [form, setForm] = useState<any>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [kategorien, setKategorien] = useState(FALLBACK_KATEGORIEN);
+
+  useEffect(() => {
+    (supabase.from("admin_config_options" as never) as any)
+      .select("wert, label, sort_order")
+      .eq("kategorie", "eingangsrechnung_kategorie")
+      .eq("is_active", true)
+      .order("sort_order")
+      .then(({ data }: any) => {
+        if (data && data.length > 0) {
+          setKategorien(data.map((r: any) => ({ value: r.wert, label: r.label })));
+        }
+      });
+  }, []);
 
   useEffect(() => {
     if (!invoiceId) { setForm(null); setFileUrl(null); return; }
@@ -174,7 +194,7 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
                 <Select value={form.kategorie || "sonstiges"} onValueChange={v => update("kategorie", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {KATEGORIEN.map(k => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                    {kategorien.map(k => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

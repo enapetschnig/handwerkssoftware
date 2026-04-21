@@ -17,13 +17,19 @@ interface Props {
   initialFile?: File | null;
 }
 
-const KATEGORIEN = [
+const FALLBACK_KATEGORIEN = [
   { value: "material", label: "Material" },
-  { value: "fremdleistung", label: "Fremdleistung" },
+  { value: "verbrauchsmaterial", label: "Verbrauchsmaterial" },
   { value: "werkzeug", label: "Werkzeug / Maschinen" },
+  { value: "werkstatt", label: "Werkstatt" },
+  { value: "fremdleistung", label: "Fremdleistung" },
   { value: "miete", label: "Miete / Leasing" },
   { value: "treibstoff", label: "Treibstoff / KFZ" },
+  { value: "geschaeftsessen", label: "Geschäftsessen / Bewirtung" },
   { value: "buero", label: "Büro / Verwaltung" },
+  { value: "fortbildung", label: "Fortbildung / Schulung" },
+  { value: "versicherung", label: "Versicherung / Gebühren" },
+  { value: "reise", label: "Reise / Hotel" },
   { value: "sonstiges", label: "Sonstiges" },
 ];
 
@@ -36,6 +42,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
   const [saving, setSaving] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [kategorien, setKategorien] = useState<{ value: string; label: string }[]>(FALLBACK_KATEGORIEN);
 
   useEffect(() => {
     if (files.length === 0) {
@@ -83,6 +90,17 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
       supabase.from("projects").select("id, name").not("status", "eq", "Abgeschlossen").order("name").then(({ data }) => {
         if (data) setProjects(data);
       });
+      // Kategorien aus admin_config_options laden (fallback: hardcoded)
+      (supabase.from("admin_config_options" as never) as any)
+        .select("wert, label, sort_order")
+        .eq("kategorie", "eingangsrechnung_kategorie")
+        .eq("is_active", true)
+        .order("sort_order")
+        .then(({ data }: any) => {
+          if (data && data.length > 0) {
+            setKategorien(data.map((r: any) => ({ value: r.wert, label: r.label })));
+          }
+        });
       // Wenn per Kamera-Button geöffnet → Datei direkt übernehmen + scannen
       if (initialFile) {
         setFiles([initialFile]);
@@ -409,7 +427,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
               <Select value={form.kategorie} onValueChange={v => update("kategorie", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {KATEGORIEN.map(k => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                  {kategorien.map(k => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

@@ -34,13 +34,19 @@ type PurchaseInvoice = {
   projects?: { name: string } | null;
 };
 
-const KATEGORIE_LABELS: Record<string, string> = {
+const FALLBACK_LABELS: Record<string, string> = {
   material: "Material",
+  verbrauchsmaterial: "Verbrauchsmaterial",
   fremdleistung: "Fremdleistung",
   werkzeug: "Werkzeug",
+  werkstatt: "Werkstatt",
   miete: "Miete/Leasing",
   treibstoff: "Treibstoff",
+  geschaeftsessen: "Geschäftsessen",
   buero: "Büro",
+  fortbildung: "Fortbildung",
+  versicherung: "Versicherung",
+  reise: "Reise",
   sonstiges: "Sonstiges",
 };
 
@@ -64,8 +70,25 @@ export default function PurchaseInvoices() {
   const [kategorieFilter, setKategorieFilter] = useState("alle");
   const [projectOptions, setProjectOptions] = useState<{ id: string; name: string }[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>(projectFilter || "alle");
+  const [kategorieLabels, setKategorieLabels] = useState<Record<string, string>>(FALLBACK_LABELS);
 
   useEffect(() => { loadData(); }, [selectedProject]);
+
+  useEffect(() => {
+    // Erweiterbare Kategorien aus admin_config_options laden
+    (supabase.from("admin_config_options" as never) as any)
+      .select("wert, label, sort_order")
+      .eq("kategorie", "eingangsrechnung_kategorie")
+      .eq("is_active", true)
+      .order("sort_order")
+      .then(({ data }: any) => {
+        if (data && data.length > 0) {
+          const map: Record<string, string> = {};
+          data.forEach((r: any) => { map[r.wert] = r.label; });
+          setKategorieLabels(map);
+        }
+      });
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -259,7 +282,7 @@ export default function PurchaseInvoices() {
               <SelectTrigger><SelectValue placeholder="Kategorie" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="alle">Alle Kategorien</SelectItem>
-                {Object.entries(KATEGORIE_LABELS).map(([v, l]) => (
+                {Object.entries(kategorieLabels).map(([v, l]) => (
                   <SelectItem key={v} value={v}>{l}</SelectItem>
                 ))}
               </SelectContent>
@@ -323,7 +346,7 @@ export default function PurchaseInvoices() {
                         )}
                         {inv.kategorie && (
                           <Badge variant="outline" className="text-[10px] py-0 h-4">
-                            {KATEGORIE_LABELS[inv.kategorie] || inv.kategorie}
+                            {kategorieLabels[inv.kategorie] || inv.kategorie}
                           </Badge>
                         )}
                         {inv.projects && (

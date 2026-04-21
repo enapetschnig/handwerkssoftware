@@ -8,8 +8,30 @@ const corsHeaders = {
 };
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const SYSTEM_PROMPT = `Du bist ein Experte für österreichische Eingangsrechnungen und Belege.
+// Lädt die erweiterbaren Kategorien-Werte aus admin_config_options,
+// damit der KI-Prompt immer den aktuellen Stand kennt.
+async function loadKategorieValues(): Promise<string[]> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/admin_config_options?select=wert,sort_order&kategorie=eq.eingangsrechnung_kategorie&is_active=eq.true&order=sort_order`,
+      { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
+    );
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows.map((x: any) => x.wert).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildSystemPrompt(kategorieValues: string[]): string {
+  const fallback = ["material","verbrauchsmaterial","werkzeug","werkstatt","fremdleistung","miete","treibstoff","geschaeftsessen","buero","fortbildung","versicherung","reise","sonstiges"];
+  const list = kategorieValues.length > 0 ? kategorieValues : fallback;
+  const kategorieEnum = list.map(v => `"${v}"`).join(" | ");
+  return `Du bist ein Experte für österreichische Eingangsrechnungen und Belege.
 Extrahiere aus dem Rechnungsbild folgende Felder und gib sie als reines JSON zurück (keine Markdown-Code-Blöcke):
 
 {
@@ -20,7 +42,7 @@ Extrahiere aus dem Rechnungsbild folgende Felder und gib sie als reines JSON zur
   "betrag_brutto": number (Bruttobetrag in Euro, Dezimalpunkt statt Komma),
   "betrag_netto": number | null,
   "ust_satz": 0 | 10 | 13 | 20 (Österreich: 0/10/13/20%),
-  "kategorie": "material" | "fremdleistung" | "werkzeug" | "miete" | "treibstoff" | "buero" | "sonstiges",
+  "kategorie": ${kategorieEnum},
   "notizen": string | null (Kurze Zusammenfassung der Positionen)
 }
 
@@ -28,8 +50,19 @@ Regeln:
 - Wenn du ein Feld nicht erkennst, setze es auf null
 - Deutsche Zahlenformatierung: "1.234,56" → 1234.56
 - USt-Satz nur aus {0, 10, 13, 20}. Bei unklaren Fällen: 20
-- Kategorie intelligent raten anhand der Positionen
+- Kategorie intelligent raten anhand der Positionen. Beispiele:
+  * Baumärkte/Großhandel (Hornbach, Bauhaus, Quester) → "material" oder "verbrauchsmaterial"
+  * Werkzeughändler (Würth, Hilti, Festool) → "werkzeug"
+  * Tankstellen (OMV, Shell, BP, Eni) → "treibstoff"
+  * Restaurants, Gasthäuser, Caterer → "geschaeftsessen"
+  * Kfz-Werkstatt, Autoteile → "werkstatt"
+  * Hotels, Bahn, Taxi → "reise"
+  * Versicherungen, Gebühren → "versicherung"
+  * Fortbildung, Kurse, Seminare → "fortbildung"
+  * Büromaterial, Software-Abos → "buero"
+- Nur Werte aus der oben genannten Enum-Liste zurückgeben
 - Keine Erklärungen, nur das JSON`;
+}
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -66,6 +99,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? imageBase64
       : `data:image/jpeg;base64,${imageBase64}`;
 
+    const kategorieValues = await loadKategorieValues();
+    const systemPrompt = buildSystemPrompt(kategorieValues);
+
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -77,7 +113,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         messages: [
           {
             role: "system",
-            content: SYSTEM_PROMPT,
+            content: systemPrompt,
           },
           {
             role: "user",
