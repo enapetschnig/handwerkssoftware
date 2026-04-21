@@ -143,9 +143,11 @@ export default function HoursReport() {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 
+    // time_entries mit zugehörigen KFZ-Einträgen (time_entry_vehicles) laden —
+    // damit wir in der Auswertung gefahrene km + Fahrzeug anzeigen können.
     const { data, error } = await supabase
       .from("time_entries")
-      .select("*")
+      .select("*, time_entry_vehicles(modus, km_gefahren, km_start, km_ende, vehicle_id, vehicles(bezeichnung, kennzeichen))")
       .eq("user_id", selectedUserId)
       .gte("datum", format(startDate, "yyyy-MM-dd"))
       .lte("datum", format(endDate, "yyyy-MM-dd"))
@@ -710,19 +712,20 @@ export default function HoursReport() {
                           <TableHead>Ort</TableHead>
                           <TableHead>Projekt</TableHead>
                           <TableHead>Tätigkeit</TableHead>
+                          <TableHead>KFZ / km</TableHead>
                           {isAdmin && <TableHead className="w-10"></TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loading ? (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center">
+                            <TableCell colSpan={11} className="text-center">
                               Lade...
                             </TableCell>
                           </TableRow>
                         ) : monthDays.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center">
+                            <TableCell colSpan={11} className="text-center">
                               Keine Daten verfügbar
                             </TableCell>
                           </TableRow>
@@ -747,7 +750,7 @@ export default function HoursReport() {
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={isAdmin ? 10 : 9}></TableCell>
+                                  <TableCell colSpan={isAdmin ? 11 : 10}></TableCell>
                                 </TableRow>
                               );
                             }
@@ -820,6 +823,28 @@ export default function HoursReport() {
                                   </TableCell>
                                   <TableCell className="max-w-[150px] truncate">
                                     {entry.taetigkeit}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {((entry as any).time_entry_vehicles || []).length === 0 ? (
+                                      <span className="text-muted-foreground">—</span>
+                                    ) : (
+                                      <div className="space-y-0.5">
+                                        {((entry as any).time_entry_vehicles || []).map((tev: any, i: number) => {
+                                          const name = tev.vehicles?.bezeichnung || "?";
+                                          const km = tev.modus === "gefahren"
+                                            ? (tev.km_gefahren != null ? `${tev.km_gefahren} km` : "")
+                                            : (tev.km_start != null && tev.km_ende != null
+                                                ? `${tev.km_ende - tev.km_start} km (${tev.km_start}→${tev.km_ende})`
+                                                : "");
+                                          return (
+                                            <div key={i}>
+                                              <span className="font-medium">{name}</span>
+                                              {km && <span className="text-muted-foreground"> · {km}</span>}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </TableCell>
                                   {isAdmin && (
                                     <TableCell>

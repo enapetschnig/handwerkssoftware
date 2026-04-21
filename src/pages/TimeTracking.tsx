@@ -42,6 +42,15 @@ type ExistingEntry = {
   pause_start: string | null;
 };
 
+interface KfzEntry {
+  key: string;              // lokale UI-Kennung
+  vehicleId: string;
+  modus: "gefahren" | "start_ende";
+  kmGefahren: string;
+  kmStart: string;
+  kmEnde: string;
+}
+
 interface TimeBlock {
   id: string;
   locationType: "baustelle" | "werkstatt" | "regie";
@@ -57,9 +66,8 @@ interface TimeBlock {
   disturbanceId: string;
   selectedDisturbanceIds: string[];
   wetterschichtStunden: string; // Regenstunden, nur Info — leer wenn nicht relevant
-  kfzId: string;
-  kmStart: string;
-  kmEnde: string;
+  kfzOpen: boolean;         // KFZ-Block aufgeklappt?
+  kfzEntries: KfzEntry[];   // mehrere Fahrzeuge pro Zeiteintrag
 }
 
 type Disturbance = {
@@ -84,7 +92,15 @@ const createDefaultBlock = (startTime = "", endTime = "", pauseStart = "", pause
   disturbanceId: "",
   selectedDisturbanceIds: [],
   wetterschichtStunden: "",
-  kfzId: "",
+  kfzOpen: false,
+  kfzEntries: [],
+});
+
+const createEmptyKfzEntry = (): KfzEntry => ({
+  key: crypto.randomUUID(),
+  vehicleId: "",
+  modus: "gefahren",
+  kmGefahren: "",
   kmStart: "",
   kmEnde: "",
 });
@@ -714,11 +730,8 @@ const TimeTracking = () => {
         return isNaN(v) || v <= 0 ? null : v;
       })();
 
-      // KFZ + Kilometerstände (optional)
-      const kmStartNum = block.kmStart ? parseInt(block.kmStart, 10) : null;
-      const kmEndeNum = block.kmEnde ? parseInt(block.kmEnde, 10) : null;
-
-      // Prepare main entry for current user
+      // Prepare main entry for current user (Legacy-Spalten kfz_id/km_start/km_ende
+      // bleiben NULL; detaillierte KFZ-Daten kommen in time_entry_vehicles)
       const mainEntry = {
         user_id: user.id,
         datum: selectedDate,
@@ -735,9 +748,9 @@ const TimeTracking = () => {
         notizen: regieNotizen,
         week_type: null,
         wetterschicht_stunden: wetterschichtVal,
-        kfz_id: block.kfzId || null,
-        km_start: kmStartNum,
-        km_ende: kmEndeNum,
+        kfz_id: null,
+        km_start: null,
+        km_ende: null,
       };
 
       // Prepare team entries
@@ -774,6 +787,31 @@ const TimeTracking = () => {
         hasError = true;
         console.error("Error creating time entries:", functionError || result?.error);
         continue;
+      }
+
+      // KFZ-Einträge in time_entry_vehicles schreiben (nur für den
+      // Haupt-User-Entry; Team-Member-Entries bekommen keine KFZ-Daten).
+      const mainId = (result as any)?.mainEntryId as string | undefined;
+      if (mainId && block.kfzOpen && block.kfzEntries.length > 0) {
+        const kfzRows = block.kfzEntries
+          .filter(k => k.vehicleId)
+          .map(k => {
+            const gef = k.kmGefahren ? parseInt(k.kmGefahren, 10) : null;
+            const s = k.kmStart ? parseInt(k.kmStart, 10) : null;
+            const e = k.kmEnde ? parseInt(k.kmEnde, 10) : null;
+            return {
+              time_entry_id: mainId,
+              vehicle_id: k.vehicleId,
+              modus: k.modus,
+              km_gefahren: k.modus === "gefahren" ? gef : (s != null && e != null ? e - s : null),
+              km_start: k.modus === "start_ende" ? s : null,
+              km_ende: k.modus === "start_ende" ? e : null,
+            };
+          });
+        if (kfzRows.length > 0) {
+          const { error: kfzErr } = await (supabase.from("time_entry_vehicles" as never) as any).insert(kfzRows);
+          if (kfzErr) console.error("KFZ-Einträge konnten nicht gespeichert werden:", kfzErr);
+        }
       }
 
       totalEntriesCreated += result.totalCreated || 1;
@@ -1061,53 +1099,162 @@ const TimeTracking = () => {
                           </div>
                         )}
 
-                        {/* KFZ + Kilometerstände (optional) */}
+                        {/* KFZ + Kilometerstände — eingeklappt, erst mit + aktivierbar */}
                         {vehicles.length > 0 && (
-                          <div className="space-y-2 rounded-md border p-3 bg-muted/20">
-                            <Label className="text-sm">KFZ & Kilometerstand <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                              <div>
-                                <Label className="text-xs">Fahrzeug</Label>
-                                <Select
-                                  value={block.kfzId || "none"}
-                                  onValueChange={(v) => updateBlock(block.id, { kfzId: v === "none" ? "" : v })}
+                          <div className="rounded-md border bg-muted/20">
+                            {!block.kfzOpen ? (
+                              <button
+                                type="button"
+                                onClick={() => updateBlock(block.id, {
+                                  kfzOpen: true,
+                                  kfzEntries: block.kfzEntries.length > 0 ? block.kfzEntries : [createEmptyKfzEntry()],
+                                } as any)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+                              >
+                                <Plus className="h-4 w-4" /> KFZ &amp; Kilometerstand erfassen
+                              </button>
+                            ) : (
+                              <div className="p-3 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-sm">KFZ &amp; Kilometerstand</Label>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBlock(block.id, { kfzOpen: false, kfzEntries: [] } as any)}
+                                    className="text-xs text-muted-foreground hover:text-destructive"
+                                  >
+                                    Entfernen
+                                  </button>
+                                </div>
+                                {block.kfzEntries.map((kfz, kfzIdx) => (
+                                  <div key={kfz.key} className="rounded border bg-background p-2 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1">
+                                        <Label className="text-xs">Fahrzeug</Label>
+                                        <Select
+                                          value={kfz.vehicleId || "none"}
+                                          onValueChange={(v) => {
+                                            const next = [...block.kfzEntries];
+                                            next[kfzIdx] = { ...kfz, vehicleId: v === "none" ? "" : v };
+                                            updateBlock(block.id, { kfzEntries: next } as any);
+                                          }}
+                                        >
+                                          <SelectTrigger><SelectValue placeholder="Fahrzeug wählen..." /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Kein Fahrzeug</SelectItem>
+                                            {vehicles.map((v) => (
+                                              <SelectItem key={v.id} value={v.id}>
+                                                {v.bezeichnung}{v.kennzeichen ? ` (${v.kennzeichen})` : ""}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      {block.kfzEntries.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = block.kfzEntries.filter((_, i) => i !== kfzIdx);
+                                            updateBlock(block.id, { kfzEntries: next } as any);
+                                          }}
+                                          className="mt-5 text-xs text-destructive hover:underline"
+                                        >
+                                          ×
+                                        </button>
+                                      )}
+                                    </div>
+                                    {/* Modus-Toggle */}
+                                    <div className="flex gap-1 text-xs">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = [...block.kfzEntries];
+                                          next[kfzIdx] = { ...kfz, modus: "gefahren" };
+                                          updateBlock(block.id, { kfzEntries: next } as any);
+                                        }}
+                                        className={`flex-1 px-2 py-1 rounded border ${kfz.modus === "gefahren" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"}`}
+                                      >
+                                        Gefahrene km
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = [...block.kfzEntries];
+                                          next[kfzIdx] = { ...kfz, modus: "start_ende" };
+                                          updateBlock(block.id, { kfzEntries: next } as any);
+                                        }}
+                                        className={`flex-1 px-2 py-1 rounded border ${kfz.modus === "start_ende" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"}`}
+                                      >
+                                        km Start / Ende
+                                      </button>
+                                    </div>
+                                    {/* Eingabefelder je nach Modus */}
+                                    {kfz.modus === "gefahren" ? (
+                                      <div>
+                                        <Label className="text-xs">Gefahrene km</Label>
+                                        <Input
+                                          type="number"
+                                          inputMode="numeric"
+                                          value={kfz.kmGefahren}
+                                          onChange={(e) => {
+                                            const next = [...block.kfzEntries];
+                                            next[kfzIdx] = { ...kfz, kmGefahren: e.target.value };
+                                            updateBlock(block.id, { kfzEntries: next } as any);
+                                          }}
+                                          placeholder="z.B. 57"
+                                          disabled={!kfz.vehicleId}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <Label className="text-xs">km Start</Label>
+                                            <Input
+                                              type="number"
+                                              inputMode="numeric"
+                                              value={kfz.kmStart}
+                                              onChange={(e) => {
+                                                const next = [...block.kfzEntries];
+                                                next[kfzIdx] = { ...kfz, kmStart: e.target.value };
+                                                updateBlock(block.id, { kfzEntries: next } as any);
+                                              }}
+                                              placeholder="42130"
+                                              disabled={!kfz.vehicleId}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-xs">km Ende</Label>
+                                            <Input
+                                              type="number"
+                                              inputMode="numeric"
+                                              value={kfz.kmEnde}
+                                              onChange={(e) => {
+                                                const next = [...block.kfzEntries];
+                                                next[kfzIdx] = { ...kfz, kmEnde: e.target.value };
+                                                updateBlock(block.id, { kfzEntries: next } as any);
+                                              }}
+                                              placeholder="42187"
+                                              disabled={!kfz.vehicleId}
+                                            />
+                                          </div>
+                                        </div>
+                                        {kfz.kmStart && kfz.kmEnde && Number(kfz.kmEnde) >= Number(kfz.kmStart) && (
+                                          <p className="text-xs text-muted-foreground">Gefahren: {Number(kfz.kmEnde) - Number(kfz.kmStart)} km</p>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock(block.id, {
+                                    kfzEntries: [...block.kfzEntries, createEmptyKfzEntry()],
+                                  } as any)}
+                                  className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground py-1.5 border border-dashed rounded"
                                 >
-                                  <SelectTrigger><SelectValue placeholder="Kein Fahrzeug" /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Kein Fahrzeug</SelectItem>
-                                    {vehicles.map((v) => (
-                                      <SelectItem key={v.id} value={v.id}>
-                                        {v.bezeichnung}{v.kennzeichen ? ` (${v.kennzeichen})` : ""}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                  <Plus className="h-3.5 w-3.5" /> Weiteres Fahrzeug
+                                </button>
                               </div>
-                              <div>
-                                <Label className="text-xs">km Start</Label>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
-                                  value={block.kmStart}
-                                  onChange={(e) => updateBlock(block.id, { kmStart: e.target.value })}
-                                  placeholder="z.B. 42130"
-                                  disabled={!block.kfzId}
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">km Ende</Label>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
-                                  value={block.kmEnde}
-                                  onChange={(e) => updateBlock(block.id, { kmEnde: e.target.value })}
-                                  placeholder="z.B. 42187"
-                                  disabled={!block.kfzId}
-                                />
-                              </div>
-                            </div>
-                            {block.kmStart && block.kmEnde && Number(block.kmEnde) >= Number(block.kmStart) && (
-                              <p className="text-xs text-muted-foreground">Gefahren: {Number(block.kmEnde) - Number(block.kmStart)} km</p>
                             )}
                           </div>
                         )}
