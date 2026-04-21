@@ -40,24 +40,36 @@ function buildOnboardingText(params: {
   password: string;
   appUrl: string;
   hasWhatsApp: boolean;
+  istFreelancer: boolean;
 }) {
-  const { vorname, username, password, appUrl, hasWhatsApp } = params;
+  const { vorname, username, password, appUrl, hasWhatsApp, istFreelancer } = params;
   const lines: string[] = [];
   lines.push(`Hallo ${vorname}!`);
   lines.push("");
   lines.push("Willkommen bei BKS BauKomplettService.");
-  lines.push("Hier deine Zugangsdaten zur App:");
+  lines.push("Hier deine Zugangsdaten:");
   lines.push("");
-  lines.push(`🔗 App: ${appUrl}`);
+
+  if (istFreelancer) {
+    lines.push(`🔗 Zeiterfassung: ${appUrl}/freelancer`);
+  } else {
+    lines.push(`🔗 App: ${appUrl}`);
+  }
   lines.push(`👤 Benutzername: ${username}`);
   lines.push(`🔑 Passwort: ${password}`);
   lines.push("");
   lines.push("Beim ersten Login wirst du gebeten, das Passwort zu ändern.");
   lines.push("");
-  if (hasWhatsApp) {
+
+  if (istFreelancer) {
+    lines.push("⏱️ So erfasst du deine Projektstunden:");
+    lines.push("• Datum, Projekt auswählen, Stunden eintragen, fertig.");
+    lines.push("• Keine Pausen-Logik, kein Tagessoll — ganz einfach.");
+    lines.push("• Deine letzten 30 Einträge siehst du direkt in der Übersicht.");
+  } else if (hasWhatsApp) {
     lines.push("📱 WhatsApp-Assistent");
     lines.push("Du bist automatisch freigeschaltet. So funktioniert's:");
-    lines.push("• Schreibe deine Arbeitszeit, z. B. „heute 7-16 auf Musterstraße 1\"");
+    lines.push("• Schreibe deine Arbeitszeit, z. B. „heute 7-17 auf Musterstraße 1\"");
     lines.push("• Sende Fotos von der Baustelle → Auswahl per Nummer/Projektname");
     lines.push("• Frage „wo bin ich heute eingeteilt\" → Plantafel-Info");
     lines.push("• Sprachnachrichten gehen auch — einfach reinreden.");
@@ -215,6 +227,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           password: form.password,
           appUrl: window.location.origin,
           hasWhatsApp: enableWhatsApp,
+          istFreelancer: istFreelancer,
         }),
       );
       onCreated();
@@ -303,9 +316,20 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
               <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 bg-muted/30">
                 <div className="text-xs">
                   <span className="font-medium">Freier Mitarbeiter</span>
-                  <p className="text-muted-foreground">Nur Projektzeiterfassung, kein Tagessoll, kein Zeitkonto.</p>
+                  <p className="text-muted-foreground">Nutzt nur die einfache Zeiterfassungs-Seite (/freelancer). Kein Tagessoll, kein Zeitkonto, kein WhatsApp-Bot.</p>
                 </div>
-                <Switch checked={istFreelancer} onCheckedChange={setIstFreelancer} />
+                <Switch
+                  checked={istFreelancer}
+                  onCheckedChange={(v) => {
+                    setIstFreelancer(v);
+                    if (v) {
+                      // Freelancer nutzen primär die Web-Seite — WhatsApp-Bot
+                      // + Willkommensnachricht automatisch aus
+                      setWhatsappAktiv(false);
+                      setSendWelcome(false);
+                    }
+                  }}
+                />
               </label>
             </div>
 
