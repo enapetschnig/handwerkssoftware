@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,12 @@ interface ProtectedRouteProps {
   feature?: FeatureKey;
 }
 
+type Status = "loading" | "authenticated" | "unauthenticated" | "pending" | "forbidden" | "redirect-freelancer";
+
 export function ProtectedRoute({ children, feature }: ProtectedRouteProps) {
-  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated" | "pending" | "forbidden">("loading");
+  const [status, setStatus] = useState<Status>("loading");
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     checkAccess();
@@ -23,7 +26,8 @@ export function ProtectedRoute({ children, feature }: ProtectedRouteProps) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const checkAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -40,6 +44,16 @@ export function ProtectedRoute({ children, feature }: ProtectedRouteProps) {
 
     if (!profile || profile.is_active === false || profile.is_active === null) {
       setStatus("pending");
+      return;
+    }
+
+    // Freelancer-Check: freie Mitarbeiter dürfen nur /freelancer erreichen
+    const { data: emp } = await (supabase.from("employees" as never) as any)
+      .select("ist_freelancer")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (emp?.ist_freelancer && location.pathname !== "/freelancer") {
+      setStatus("redirect-freelancer");
       return;
     }
 
@@ -68,6 +82,10 @@ export function ProtectedRoute({ children, feature }: ProtectedRouteProps) {
 
   if (status === "unauthenticated") {
     return <Navigate to="/auth" replace />;
+  }
+
+  if (status === "redirect-freelancer") {
+    return <Navigate to="/freelancer" replace />;
   }
 
   if (status === "pending") {
