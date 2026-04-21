@@ -594,12 +594,6 @@ export default function Invoices() {
                   Angebote
                 </button>
                 <button
-                  onClick={() => setFilterTyp("lieferschein")}
-                  className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "lieferschein" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                >
-                  Lieferscheine
-                </button>
-                <button
                   onClick={() => setFilterTyp("storno")}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "storno" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                   title="Stornierte Rechnungen / Storno-Belege"
