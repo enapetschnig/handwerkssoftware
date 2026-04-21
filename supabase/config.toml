@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.sync-assignment-to-calendar]
 verify_jwt = false
+
+[functions.parse-invoice-document]
+verify_jwt = false
