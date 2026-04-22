@@ -173,16 +173,17 @@ export function drawTitleBlock(
   const [acR, acG, acB] = hexToRgb(layout.accent_color);
   let y = yStart + 4;
 
+  // Akzent-Linie zuerst, Titel darunter — einheitlich zum Rechnungs-PDF.
+  pdf.setDrawColor(acR, acG, acB);
+  pdf.setLineWidth(0.8);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 6;
+
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(16);
   pdf.setTextColor(26, 26, 26);
   pdf.text(title, ml, y);
-  y += 2;
-
-  pdf.setDrawColor(acR, acG, acB);
-  pdf.setLineWidth(0.8);
-  pdf.line(ml, y + 1, pageWidth - mr, y + 1);
-  y += 6;
+  y += 8;
 
   if (subtitle) {
     pdf.setFont("helvetica", "normal");

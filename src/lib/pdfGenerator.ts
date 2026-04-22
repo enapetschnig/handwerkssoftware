@@ -270,6 +270,14 @@ export async function generateInvoicePdf(
   // Adressblock klebt, aber auch keine grosse Lücke entsteht.
   y = Math.max(y, metaY) + 10;
 
+  // Akzent-Trennlinie ZUERST, dann Titel darunter — so rahmt die Linie
+  // den Adressblock oben ab und der Titel eröffnet die eigentliche
+  // Dokumenten-Content-Zone.
+  pdf.setDrawColor(acR, acG, acB);
+  pdf.setLineWidth(0.8);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 6;
+
   // Document title: "Angebot - <betreff>" (ohne Nummer; die steht rechts oben)
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);
@@ -283,11 +291,7 @@ export async function generateInvoicePdf(
     pdf.text(line, ml, y + i * 5.5);
   });
   y += titleLines.length * 5.5;
-  y += 1;
-  pdf.setDrawColor(acR, acG, acB);
-  pdf.setLineWidth(0.8);
-  pdf.line(ml, y, pageWidth - mr, y);
-  y += 6;
+  y += 4;
 
   // ======= ITEMS TABLE =======
   // Lieferschein: ohne Preisspalten
@@ -778,16 +782,17 @@ export function generateStornoPdf(
   const { afterY } = drawLetterhead(pdf, L, logoDataUri);
   let y = afterY;
 
-  // "STORNO" Titel in BKS-Blau
+  // Akzent-Trennlinie zuerst, dann "STORNO" darunter — Konsistenz zum
+  // Rechnungs-PDF (Linie rahmt oben ab, Titel eröffnet den Content).
+  pdf.setDrawColor(acR, acG, acB);
+  pdf.setLineWidth(1);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 8;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
   pdf.setTextColor(acR, acG, acB);
   pdf.text("STORNO", ml, y);
-  y += 4;
-  pdf.setDrawColor(acR, acG, acB);
-  pdf.setLineWidth(1);
-  pdf.line(ml, y, pageWidth - mr, y);
-  y += 10;
+  y += 8;
 
   // Storno details
   pdf.setFont("helvetica", "normal");
@@ -885,14 +890,15 @@ export function generateMahnungPdf(
   }
   y += 10;
 
+  // Akzent-Linie zuerst, Titel darunter — einheitlich zu Rechnung/Storno.
+  pdf.setDrawColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
+  pdf.setLineWidth(0.8);
+  pdf.line(ml, y, pageWidth - mr, y);
+  y += 7;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(14);
   pdf.setTextColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
   pdf.text(stufeConfig.titel, ml, y);
-  y += 4;
-  pdf.setDrawColor(mahnstufe >= 3 ? 204 : 0, 0, 0);
-  pdf.setLineWidth(0.8);
-  pdf.line(ml, y, pageWidth - mr, y);
   y += 10;
 
   pdf.setFont("helvetica", "normal");
