@@ -380,10 +380,6 @@ ${mahnBanner}
   <div class="recipient">
     <div class="sender-line">${L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" · ")}</div>
     <div class="recipient-name">${invoice.kunde_name || "–"}</div>
-    ${(() => {
-      const zHd = ((invoice as any).ansprechpartner_name || "").toString().trim();
-      return zHd ? `<div class="recipient-addr" style="margin-top:2px;">z.Hd. ${escapeHtml(zHd)}</div>` : "";
-    })()}
     <div class="recipient-addr">
       ${invoice.kunde_adresse ? `${invoice.kunde_adresse}<br>` : ""}
       ${invoice.kunde_plz || invoice.kunde_ort ? `${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}<br>` : ""}

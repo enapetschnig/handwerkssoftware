@@ -196,17 +196,10 @@ export async function generateInvoicePdf(
   const displayName = kundeTitel ? `${kundeTitel} ${invoice.kunde_name}` : (invoice.kunde_name || "–");
   pdf.text(displayName, ml, y + 2);
   y += 6;
-  // Kundenseitiger Ansprechpartner direkt unter der Firmen-/Kundenzeile,
-  // DIN-5008-konform als "z.Hd." — so sieht der Empfänger sofort, an
-  // wen auf seiner Seite das Dokument gerichtet ist.
-  const custContactName = ((invoice as any).ansprechpartner_name || "").toString().trim();
-  if (custContactName) {
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text(`z.Hd. ${custContactName}`, ml, y + 2);
-    y += 5;
-  }
+  // Kein "z.Hd." mehr im Empfänger-Block: invoice.ansprechpartner_*
+  // enthält jetzt den BKS-Sachbearbeiter (unser eigener Mitarbeiter),
+  // nicht den Kunden-Kontakt. Der gehört NICHT an den Empfänger, sondern
+  // rechts oben in den Meta-Block ("Ihr Ansprechpartner:").
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
