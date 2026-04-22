@@ -80,6 +80,14 @@ export async function generateInvoicePdf(
   let logoBottomY = y;
   let logoRightX = ml;
 
+  // Logo darf im Header-Bereich (oberhalb der Absenderzeile Y=45)
+  // weiter nach links ragen als der normale Content-Margin — das
+  // schafft Platz für den Firmen-Info-Block rechts daneben.
+  const LOGO_LEFT_X = 10;
+  // Logo-Block-Höhe reserviert für den Firmen-Info-Block rechts.
+  // Start Y=15, 6 Zeilen à 3.5mm plus Puffer → ~22mm.
+  const HEADER_BLOCK_HEIGHT = 22;
+
   // Logo — preserve aspect ratio from actual image dimensions
   if (logoDataUri) {
     try {
@@ -94,31 +102,55 @@ export async function generateInvoicePdf(
       } catch {}
       const logoX = L.logo.position === "right" ? pageWidth - mr - logoW
         : L.logo.position === "center" ? (pageWidth - logoW) / 2
-        : ml;
+        : LOGO_LEFT_X;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
       logoBottomY = y + logoH;
       logoRightX = logoX + logoW;
     } catch {}
   }
 
-  // Firmen-Info rechts — nur wenn neben dem Logo genügend Platz ist (≥ 30mm)
-  const infoStartX = Math.max(logoRightX + 5, pageWidth - mr - 40);
-  const availableInfoWidth = pageWidth - mr - infoStartX;
-  if (availableInfoWidth >= 30) {
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(80, 80, 80);
-    const companyInfoLines: string[] = [
-      L.company.address_line1,
-      L.company.address_line2,
-      L.company.phone ? "Tel: " + L.company.phone : "",
-      L.company.email,
-    ].filter(Boolean);
-    companyInfoLines.forEach((line, i) => {
-      pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
-    });
-    if (firmenUid) {
-      pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + companyInfoLines.length * 3.5, { align: "right" });
+  // Firmen-Info-Block — IMMER rendern, nie ausblenden.
+  //   - Genug Platz rechts vom Logo (>= 50mm): vertikal rechtsbündig
+  //     neben dem Logo (saubere Info-Spalte).
+  //   - Sonst: horizontal UNTER dem Logo als zusammengefasste Zeile
+  //     (7pt, linksbündig).
+  const companyInfoLinesFull: string[] = [
+    L.company.address_line1,
+    L.company.address_line2,
+    L.company.phone ? "Tel: " + L.company.phone : "",
+    L.company.email,
+    L.company.website,
+  ].filter(Boolean);
+  const hasAnyInfo = companyInfoLinesFull.length > 0 || !!firmenUid;
+
+  if (hasAnyInfo) {
+    const infoStartX = logoRightX + 5;
+    const availableInfoWidth = pageWidth - mr - infoStartX;
+
+    if (availableInfoWidth >= 50) {
+      // Rechts neben dem Logo, rechtsbündig, eine Zeile pro Feld
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(80, 80, 80);
+      companyInfoLinesFull.forEach((line, i) => {
+        pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
+      });
+      if (firmenUid) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + companyInfoLinesFull.length * 3.5, { align: "right" });
+        pdf.setFont("helvetica", "normal");
+      }
+    } else {
+      // Unter dem Logo als horizontale Zeile
+      const parts = [...companyInfoLinesFull];
+      if (firmenUid) parts.push(`UID: ${firmenUid}`);
+      const horizLine = parts.join(" · ");
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(80, 80, 80);
+      const belowY = Math.max(logoBottomY + 4, y + HEADER_BLOCK_HEIGHT);
+      pdf.text(horizLine, LOGO_LEFT_X, belowY, { maxWidth: pageWidth - LOGO_LEFT_X - mr });
+      logoBottomY = belowY + 2;
     }
   }
 
@@ -218,14 +250,14 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
-  // "Ihr Ansprechpartner bei uns" unter der Meta-Box. Das ist der
-  // Sachbearbeiter / Verkäufer auf BKS-Seite, der diesen Kunden betreut.
-  // Quelle: layout.contact (in den Firmen-/Layout-Einstellungen gepflegt,
-  // einmal für die gesamte Firma). Fallback: invoice.ansprechpartner_*
-  // (Legacy-Daten aus einer früheren Version).
-  const bksName  = (L.contact?.name  || "").trim() || ((invoice as any).ansprechpartner_name  || "").trim();
-  const bksPhone = (L.contact?.phone || "").trim() || ((invoice as any).ansprechpartner_telefon || "").trim();
-  const bksEmail = (L.contact?.email || "").trim() || ((invoice as any).ansprechpartner_email  || "").trim();
+  // "Ihr Ansprechpartner bei uns" unter der Meta-Box. Primärquelle ist
+  // der pro Dokument in invoice.ansprechpartner_* gewählte Mitarbeiter
+  // (Snapshot aus employees beim Save). Nur wenn dort nichts gesetzt
+  // ist, wird auf layout.contact (Firmen-Default aus den Layout-
+  // Einstellungen) zurückgegriffen.
+  const bksName  = ((invoice as any).ansprechpartner_name  || "").trim() || (L.contact?.name  || "").trim();
+  const bksPhone = ((invoice as any).ansprechpartner_telefon || "").trim() || (L.contact?.phone || "").trim();
+  const bksEmail = ((invoice as any).ansprechpartner_email  || "").trim() || (L.contact?.email || "").trim();
   if (bksName || bksPhone || bksEmail) {
     metaY += 2;
     pdf.setFont("helvetica", "normal");

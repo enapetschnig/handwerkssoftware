@@ -57,8 +57,13 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   logo: {
     enabled: true,
     position: "left",
-    width_mm: 140,
-    height_mm: 17.2,
+    // 110 mm ist ein bewusster Kompromiss: das Logo bleibt für den
+    // DIN-A4-Briefkopf gross und prominent, lässt aber rechts daneben
+    // ca. 75 mm für den Firmen-Info-Block (Adresse, Tel, E-Mail, UID).
+    // Kombiniert mit Logo-Start-X = 10 mm (statt 25 mm Content-Margin)
+    // reicht der Platz bequem.
+    width_mm: 110,
+    height_mm: 13.5,
   },
   footer: {
     line1: "",
@@ -89,11 +94,18 @@ export function parseLayoutSettings(value: string | null | undefined): InvoiceLa
     let accent = parsed.accent_color ?? DEFAULT_LAYOUT.accent_color;
     if (LEGACY_ACCENT_COLORS.has(accent)) accent = DEFAULT_LAYOUT.accent_color;
 
-    // Legacy logo width migration: alte Werte waren zu klein für das
-    // horizontale BKS-Logo (8:1 aspect) → auto-upgrade auf 140mm
+    // Logo-Breite. Neuer Default 110 mm (siehe DEFAULT_LAYOUT). Für
+    // Bestands-User, die den alten 140-mm-Default noch gespeichert
+    // haben, wird automatisch auf 110 mm zurückgedreht — damit neben
+    // dem Logo wieder Platz für Adresse/UID ist. User mit explizit
+    // abweichender Breite (z.B. 80 mm) bleiben unverändert.
     const parsedLogo = { ...(parsed.logo || {}) };
     const savedWidth = Number(parsedLogo.width_mm);
-    if (!savedWidth || savedWidth < 130) {
+    if (!savedWidth) {
+      parsedLogo.width_mm = DEFAULT_LAYOUT.logo.width_mm;
+      parsedLogo.height_mm = DEFAULT_LAYOUT.logo.height_mm;
+    } else if (savedWidth >= 130 && savedWidth <= 145) {
+      // war der alte 140-mm-Default → auf neuen Default zurück
       parsedLogo.width_mm = DEFAULT_LAYOUT.logo.width_mm;
       parsedLogo.height_mm = DEFAULT_LAYOUT.logo.height_mm;
     }

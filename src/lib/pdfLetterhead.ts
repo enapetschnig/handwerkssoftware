@@ -32,6 +32,10 @@ export function drawLetterhead(
   let logoBottomY = y;
   let logoRightX = ml;
 
+  // Logo darf im Header weiter nach links ragen als der Content-Margin,
+  // damit rechts daneben Platz für Firmen-Info bleibt.
+  const LOGO_LEFT_X = 10;
+
   // Logo
   if (logoDataUri && layout.logo.enabled) {
     try {
@@ -48,39 +52,55 @@ export function drawLetterhead(
       const logoX =
         layout.logo.position === "right" ? pageWidth - mr - logoW :
         layout.logo.position === "center" ? (pageWidth - logoW) / 2 :
-        ml;
+        LOGO_LEFT_X;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
       logoBottomY = y + logoH;
       logoRightX = logoX + logoW;
     } catch { /* skip logo on error */ }
   }
 
-  // Company info — nur wenn rechts noch sinnvoll Platz ist (≥ 30mm)
-  const infoStartX = Math.max(logoRightX + 5, pageWidth - mr - 40);
-  const availableInfoWidth = pageWidth - mr - infoStartX;
+  // Company info — immer rendern: rechts neben Logo wenn Platz ≥ 50 mm,
+  // sonst horizontale Zeile unter dem Logo.
+  const infoLines = [
+    layout.company.address_line1,
+    layout.company.address_line2,
+    layout.company.phone ? "Tel: " + layout.company.phone : "",
+    layout.company.email,
+    layout.company.website,
+  ].filter(Boolean) as string[];
+  const hasAnyInfo = infoLines.length > 0 || !!firmenUid;
 
-  if (availableInfoWidth >= 30) {
-    const infoLines = [
-      layout.company.address_line1,
-      layout.company.address_line2,
-      layout.company.phone ? "Tel: " + layout.company.phone : "",
-      layout.company.email,
-      layout.company.website,
-    ].filter(Boolean) as string[];
+  if (hasAnyInfo) {
+    const infoStartX = logoRightX + 5;
+    const availableInfoWidth = pageWidth - mr - infoStartX;
 
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(80, 80, 80);
-    infoLines.forEach((line, i) => {
-      pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
-    });
-    if (firmenUid) {
-      pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + infoLines.length * 3.5, { align: "right" });
+    if (availableInfoWidth >= 50) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(80, 80, 80);
+      infoLines.forEach((line, i) => {
+        pdf.text(line, pageWidth - mr, y + 3 + i * 3.5, { align: "right" });
+      });
+      if (firmenUid) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`UID: ${firmenUid}`, pageWidth - mr, y + 3 + infoLines.length * 3.5, { align: "right" });
+        pdf.setFont("helvetica", "normal");
+      }
+    } else {
+      // Horizontale Fallback-Zeile unter dem Logo
+      const parts = [...infoLines];
+      if (firmenUid) parts.push(`UID: ${firmenUid}`);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(80, 80, 80);
+      const belowY = Math.max(logoBottomY + 4, top + 20);
+      pdf.text(parts.join(" · "), LOGO_LEFT_X, belowY, { maxWidth: pageWidth - LOGO_LEFT_X - mr });
+      logoBottomY = belowY + 2;
     }
   }
 
   // Abstand unter dem Logo
-  y = Math.max(logoBottomY + 4, top + 20);
+  y = Math.max(logoBottomY + 4, top + 22);
 
   // Trennlinie
   pdf.setDrawColor(200, 200, 200);

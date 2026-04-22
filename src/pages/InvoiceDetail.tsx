@@ -111,7 +111,10 @@ interface InvoiceData {
   parent_invoice_id?: string | null;
   anzahlung_prozent?: number | null;
   anzahlung_betrag?: number | null;
-  // Ansprechpartner pro Dokument (optional, überschreibt Layout-Default)
+  // Ansprechpartner pro Dokument (BKS-Sachbearbeiter).
+  // employee_id = Referenz auf employees, daraus wird Name/Tel/Email
+  // als Snapshot in die Freitext-Felder geschrieben (stabile Historie).
+  ansprechpartner_employee_id?: string | null;
   ansprechpartner_name?: string;
   ansprechpartner_telefon?: string;
   ansprechpartner_email?: string;
@@ -180,6 +183,8 @@ export default function InvoiceDetail() {
   ]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  // Aktive Mitarbeiter als Pool für den Ansprechpartner-Picker
+  const [employees, setEmployees] = useState<{ id: string; vorname: string; nachname: string; telefon: string | null; email: string | null; position: string | null }[]>([]);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("alle");
@@ -265,6 +270,7 @@ export default function InvoiceDetail() {
     storno_nummer: "",
     storno_datum: "",
     storno_grund: "",
+    ansprechpartner_employee_id: null,
     ansprechpartner_name: "",
     ansprechpartner_telefon: "",
     ansprechpartner_email: "",
@@ -282,6 +288,7 @@ export default function InvoiceDetail() {
   useEffect(() => {
     fetchProjects();
     fetchTemplates();
+    fetchEmployees();
     // Load invoice layout settings + default betreff
     supabase.from("app_settings").select("key, value").in("key", ["invoice_layout", "default_betreff_rechnung", "default_betreff_angebot"]).then(({ data }) => {
       if (data) {
@@ -477,10 +484,10 @@ export default function InvoiceDetail() {
             kunde_anrede: (cust as any).anrede || "",
             kunde_titel: (cust as any).titel || "",
             kundennummer: cust.kundennummer || "",
-            // Ansprechpartner = Kontaktperson des Kunden
-            ansprechpartner_name: (cust as any).ansprechpartner || "",
-            ansprechpartner_telefon: cust.telefon || "",
-            ansprechpartner_email: cust.email || "",
+            // Ansprechpartner wird NICHT mehr aus customers übernommen —
+            // er ist seit der Umstellung der BKS-Sachbearbeiter und
+            // wird im Dokument-Formular explizit aus der Mitarbeiter-
+            // Liste gewählt.
             skonto_prozent: Number(cust.skonto_prozent) || 0,
             skonto_tage: Number(cust.skonto_tage) || 0,
           } as any));
@@ -496,6 +503,25 @@ export default function InvoiceDetail() {
     return () => { cancelled = true; };
   }, [id]);
 
+
+  const fetchEmployees = async () => {
+    // Alle aktiven Mitarbeiter (austritt_datum NULL) laden für den
+    // Ansprechpartner-Dropdown. Sortiert nach Vornamen, sodass der
+    // gewohnte Picker-Flow erhalten bleibt.
+    const { data } = await supabase
+      .from("employees")
+      .select("id, vorname, nachname, telefon, email, position, austritt_datum")
+      .is("austritt_datum", null)
+      .order("vorname");
+    setEmployees(((data as any[]) || []).map(e => ({
+      id: e.id,
+      vorname: e.vorname || "",
+      nachname: e.nachname || "",
+      telefon: e.telefon || null,
+      email: e.email || null,
+      position: e.position || null,
+    })));
+  };
 
   const fetchProjects = async () => {
     const { data } = await supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name");
@@ -564,6 +590,7 @@ export default function InvoiceDetail() {
       kunde_titel: (data as any).kunde_titel || "",
       reverse_charge: (data as any).reverse_charge || false,
       kundennummer: (data as any).kundennummer || "",
+      ansprechpartner_employee_id: (data as any).ansprechpartner_employee_id || null,
       ansprechpartner_name: (data as any).ansprechpartner_name || "",
       ansprechpartner_telefon: (data as any).ansprechpartner_telefon || "",
       ansprechpartner_email: (data as any).ansprechpartner_email || "",
@@ -972,6 +999,7 @@ export default function InvoiceDetail() {
         parent_invoice_id: normalizedParentId,
         anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
         anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
+        ansprechpartner_employee_id: (form as any).ansprechpartner_employee_id || null,
         ansprechpartner_name: (form as any).ansprechpartner_name?.trim() || null,
         ansprechpartner_telefon: (form as any).ansprechpartner_telefon?.trim() || null,
         ansprechpartner_email: (form as any).ansprechpartner_email?.trim() || null,
@@ -2134,10 +2162,9 @@ export default function InvoiceDetail() {
                           kunde_anrede: cust.anrede || "",
                           kunde_titel: cust.titel || "",
                           kundennummer: cust.kundennummer || "",
-                          // Ansprechpartner = Kontaktperson des Kunden
-                          ansprechpartner_name: (cust as any).ansprechpartner || "",
-                          ansprechpartner_telefon: cust.telefon || "",
-                          ansprechpartner_email: cust.email || "",
+                          // Ansprechpartner wird beim Kunden-Wechsel NICHT
+                          // übernommen — er ist der BKS-Sachbearbeiter und
+                          // wird separat im Formular gewählt.
                           skonto_prozent: Number(cust.skonto_prozent) || 0,
                           skonto_tage: Number(cust.skonto_tage) || 0,
                         } as any));
@@ -2222,10 +2249,9 @@ export default function InvoiceDetail() {
                       kunde_anrede: customer.anrede || "",
                       kunde_titel: customer.titel || "",
                       kundennummer: customer.kundennummer || "",
-                      // Ansprechpartner = Kontaktperson des Kunden
-                      ansprechpartner_name: (customer as any).ansprechpartner || "",
-                      ansprechpartner_telefon: customer.telefon || "",
-                      ansprechpartner_email: customer.email || "",
+                      // Ansprechpartner wird NICHT aus den Kundendaten übernommen —
+                      // er ist der BKS-Sachbearbeiter und wird pro Dokument aus
+                      // der Mitarbeiter-Liste gewählt.
                     };
                     // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
                     const hints: string[] = [];
@@ -2338,61 +2364,62 @@ export default function InvoiceDetail() {
               ) : (
                 <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
               )}
-              {/* Ansprechpartner für dieses Dokument */}
+              {/* Ansprechpartner (BKS-Sachbearbeiter) pro Dokument */}
               <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
-                <div className="flex items-center justify-between mb-2 gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">Ansprechpartner (erscheint rechts oben im PDF)</p>
-                  {form.customer_id && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={isLocked}
-                      onClick={async () => {
-                        const { data: cust } = await supabase
-                          .from("customers")
-                          .select("ansprechpartner, telefon, email")
-                          .eq("id", form.customer_id)
-                          .maybeSingle();
-                        if (cust && ((cust as any).ansprechpartner || cust.telefon || cust.email)) {
-                          updateField("ansprechpartner_name" as any, (cust as any).ansprechpartner || "");
-                          updateField("ansprechpartner_telefon" as any, cust.telefon || "");
-                          updateField("ansprechpartner_email" as any, cust.email || "");
-                          toast({ title: "Ansprechpartner übernommen", description: "Aus den Kundendaten geladen." });
-                        } else {
-                          toast({ variant: "destructive", title: "Kein Kontakt hinterlegt", description: "Beim Kunden ist kein Ansprechpartner eingetragen." });
-                        }
-                      }}
-                    >
-                      Aus Kunde übernehmen
-                    </Button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <Input
-                    value={(form as any).ansprechpartner_name || ""}
-                    onChange={(e) => updateField("ansprechpartner_name" as any, e.target.value)}
-                    placeholder="Name"
-                    disabled={isLocked}
-                  />
-                  <Input
-                    value={(form as any).ansprechpartner_telefon || ""}
-                    onChange={(e) => updateField("ansprechpartner_telefon" as any, e.target.value)}
-                    placeholder="Telefon"
-                    type="tel"
-                    disabled={isLocked}
-                  />
-                  <Input
-                    value={(form as any).ansprechpartner_email || ""}
-                    onChange={(e) => updateField("ansprechpartner_email" as any, e.target.value)}
-                    placeholder="E-Mail"
-                    type="email"
-                    disabled={isLocked}
-                  />
-                </div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Ihr Ansprechpartner (erscheint rechts oben im PDF)
+                </p>
+                <Select
+                  value={(form as any).ansprechpartner_employee_id || "__none__"}
+                  disabled={isLocked}
+                  onValueChange={(val) => {
+                    if (val === "__none__") {
+                      setForm(prev => ({
+                        ...prev,
+                        ansprechpartner_employee_id: null,
+                        ansprechpartner_name: "",
+                        ansprechpartner_telefon: "",
+                        ansprechpartner_email: "",
+                      } as any));
+                      if (!loading) setIsDirty(true);
+                      return;
+                    }
+                    const emp = employees.find(e => e.id === val);
+                    if (!emp) return;
+                    setForm(prev => ({
+                      ...prev,
+                      ansprechpartner_employee_id: emp.id,
+                      ansprechpartner_name: `${emp.vorname} ${emp.nachname}`.trim(),
+                      ansprechpartner_telefon: emp.telefon || "",
+                      ansprechpartner_email: emp.email || "",
+                    } as any));
+                    if (!loading) setIsDirty(true);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Mitarbeiter auswählen…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      <span className="text-muted-foreground">— Keiner (Firmen-Default verwenden)</span>
+                    </SelectItem>
+                    {employees.map(emp => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.vorname} {emp.nachname}
+                        {emp.position ? <span className="text-muted-foreground ml-1">— {emp.position}</span> : null}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(form as any).ansprechpartner_employee_id && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    {(form as any).ansprechpartner_name}
+                    {(form as any).ansprechpartner_telefon ? ` · ${(form as any).ansprechpartner_telefon}` : ""}
+                    {(form as any).ansprechpartner_email ? ` · ${(form as any).ansprechpartner_email}` : ""}
+                  </p>
+                )}
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Wird beim Kunden-/Projekt-Wechsel automatisch aus den Kundendaten (Ansprechpartner + Telefon + E-Mail) übernommen. Leer = im PDF wird kein Ansprechpartner-Block angezeigt.
+                  Wird aus der Mitarbeiterliste gewählt. Ohne Auswahl erscheint der Firmen-Default aus den Layout-Einstellungen.
                 </p>
               </div>
 
@@ -3188,6 +3215,7 @@ export default function InvoiceDetail() {
             // reichen sie als loose Props durch (pdfGenerator liest sie via
             // (invoice as any).ansprechpartner_*).
             kundennummer: (form as any).kundennummer || "",
+            ansprechpartner_employee_id: (form as any).ansprechpartner_employee_id || null,
             ansprechpartner_name: (form as any).ansprechpartner_name || "",
             ansprechpartner_telefon: (form as any).ansprechpartner_telefon || "",
             ansprechpartner_email: (form as any).ansprechpartner_email || "",
