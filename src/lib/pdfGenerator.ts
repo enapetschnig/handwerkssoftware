@@ -243,14 +243,14 @@ export async function generateInvoicePdf(
     metaY += 5;
   });
 
-  // "Ihr Ansprechpartner bei uns" unter der Meta-Box. Primärquelle ist
-  // der pro Dokument in invoice.ansprechpartner_* gewählte Mitarbeiter
-  // (Snapshot aus employees beim Save). Nur wenn dort nichts gesetzt
-  // ist, wird auf layout.contact (Firmen-Default aus den Layout-
-  // Einstellungen) zurückgegriffen.
-  const bksName  = ((invoice as any).ansprechpartner_name  || "").trim() || (L.contact?.name  || "").trim();
-  const bksPhone = ((invoice as any).ansprechpartner_telefon || "").trim() || (L.contact?.phone || "").trim();
-  const bksEmail = ((invoice as any).ansprechpartner_email  || "").trim() || (L.contact?.email || "").trim();
+  // "Ihr Ansprechpartner bei uns" unter der Meta-Box. Wird NUR gerendert
+  // wenn auf dem Dokument explizit ein Ansprechpartner gesetzt ist —
+  // entweder per Mitarbeiter-Dropdown oder manuell eingetippt. Kein
+  // stiller Firmen-Default-Fallback mehr: wenn leer, wird kein Block
+  // angezeigt.
+  const bksName  = ((invoice as any).ansprechpartner_name  || "").trim();
+  const bksPhone = ((invoice as any).ansprechpartner_telefon || "").trim();
+  const bksEmail = ((invoice as any).ansprechpartner_email  || "").trim();
   if (bksName || bksPhone || bksEmail) {
     metaY += 2;
     pdf.setFont("helvetica", "normal");

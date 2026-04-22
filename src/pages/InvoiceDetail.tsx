@@ -2393,8 +2393,8 @@ export default function InvoiceDetail() {
                 <p className="text-sm text-muted-foreground">Kein Kunde ausgewählt. Wählen Sie oben einen Kunden aus.</p>
               )}
               {/* Ansprechpartner (BKS-Sachbearbeiter) pro Dokument */}
-              <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
-                <p className="text-xs font-medium text-muted-foreground mb-2">
+              <div className="mt-3 p-3 rounded-lg bg-muted/30 border space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
                   Ihr Ansprechpartner (erscheint rechts oben im PDF)
                 </p>
                 <Select
@@ -2402,12 +2402,25 @@ export default function InvoiceDetail() {
                   disabled={isLocked}
                   onValueChange={(val) => {
                     if (val === "__none__") {
+                      // "Keiner" leert auch die Freitext-Felder, damit im
+                      // PDF gar kein Ansprechpartner erscheint.
                       setForm(prev => ({
                         ...prev,
                         ansprechpartner_employee_id: null,
                         ansprechpartner_name: "",
                         ansprechpartner_telefon: "",
                         ansprechpartner_email: "",
+                      } as any));
+                      if (!loading) setIsDirty(true);
+                      return;
+                    }
+                    if (val === "__manual__") {
+                      // Manuelle Eingabe: Dropdown-Referenz löschen, aber
+                      // Freitext-Felder lassen wie sie sind, sodass der
+                      // User sie editieren kann.
+                      setForm(prev => ({
+                        ...prev,
+                        ansprechpartner_employee_id: null,
                       } as any));
                       if (!loading) setIsDirty(true);
                       return;
@@ -2429,7 +2442,10 @@ export default function InvoiceDetail() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">
-                      <span className="text-muted-foreground">— Keiner (Firmen-Default verwenden)</span>
+                      <span className="text-muted-foreground">— Keiner (im PDF ausblenden)</span>
+                    </SelectItem>
+                    <SelectItem value="__manual__">
+                      <span className="text-muted-foreground">— Manuell eingeben…</span>
                     </SelectItem>
                     {employees.map(emp => (
                       <SelectItem key={emp.id} value={emp.id}>
@@ -2439,16 +2455,45 @@ export default function InvoiceDetail() {
                     ))}
                   </SelectContent>
                 </Select>
-                {(form as any).ansprechpartner_employee_id && (
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    {(form as any).ansprechpartner_name}
-                    {(form as any).ansprechpartner_telefon ? ` · ${(form as any).ansprechpartner_telefon}` : ""}
-                    {(form as any).ansprechpartner_email ? ` · ${(form as any).ansprechpartner_email}` : ""}
-                  </p>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Wird aus der Mitarbeiterliste gewählt. Ohne Auswahl erscheint der Firmen-Default aus den Layout-Einstellungen.
-                </p>
+
+                {/* Freitext-Felder: editierbar, sobald KEIN Mitarbeiter gewählt
+                    ist (Dropdown auf "Manuell eingeben" oder "Keiner", oder
+                    bei bestehenden Altdokumenten ohne employee_id). Bei
+                    gewähltem Mitarbeiter sind sie readonly und zeigen die
+                    aus dem Mitarbeiter übernommenen Werte. */}
+                {(() => {
+                  const hasEmp = !!(form as any).ansprechpartner_employee_id;
+                  const hint = hasEmp
+                    ? "Werte werden vom gewählten Mitarbeiter übernommen. Für Änderungen 'Manuell eingeben' wählen."
+                    : "Leer lassen, wenn auf dem PDF kein Ansprechpartner erscheinen soll.";
+                  return (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <Input
+                          value={(form as any).ansprechpartner_name || ""}
+                          onChange={(e) => updateField("ansprechpartner_name" as any, e.target.value)}
+                          placeholder="Name"
+                          disabled={isLocked || hasEmp}
+                        />
+                        <Input
+                          value={(form as any).ansprechpartner_telefon || ""}
+                          onChange={(e) => updateField("ansprechpartner_telefon" as any, e.target.value)}
+                          placeholder="Telefon"
+                          type="tel"
+                          disabled={isLocked || hasEmp}
+                        />
+                        <Input
+                          value={(form as any).ansprechpartner_email || ""}
+                          onChange={(e) => updateField("ansprechpartner_email" as any, e.target.value)}
+                          placeholder="E-Mail"
+                          type="email"
+                          disabled={isLocked || hasEmp}
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{hint}</p>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Zahlungseinstellungen (vom Kunden) */}
