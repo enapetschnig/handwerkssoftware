@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { FileViewer } from "@/components/FileViewer";
+import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
 
 type DocumentType = "plans" | "reports" | "photos" | "chef";
 
@@ -219,6 +220,19 @@ const ProjectDetail = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p>Lädt...</p>
+      </div>
+    );
+  }
+
+  // Für Fotos die gleiche Gallery wie bei Erstterminen verwenden —
+  // Grid, Drag&Drop, Lightbox, Kommentar pro Foto.
+  if (type === "photos") {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title={`${projectName} - Fotos`} backPath="/projects" />
+        <main className="container mx-auto px-4 py-6 max-w-5xl">
+          {projectId && <ProjectPhotoGallery projectId={projectId} />}
+        </main>
       </div>
     );
   }

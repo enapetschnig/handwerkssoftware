@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { PhotoLightbox } from "@/components/PhotoLightbox";
+import { PhotoGallery } from "@/components/PhotoGallery";
 import { copyErstterminPhotosToProject } from "@/lib/copyErstterminPhotos";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
@@ -303,64 +303,67 @@ export default function ErstterminDetail() {
   const getPhotoUrl = (filePath: string) =>
     supabase.storage.from("ersttermin-photos").getPublicUrl(filePath).data.publicUrl;
 
-  // Zentrale Upload-Logik akzeptiert File[] (für Input + Drag&Drop)
-  const uploadPhotoFiles = async (files: File[]) => {
-    if (!files || files.length === 0) return;
-
+  // Upload eines einzelnen Foto-Files (aus <PhotoGallery> — mit optional
+  // mitgegebenem Kommentar aus dem Upload-Dialog). Vor dem ersten Save
+  // (kein savedId) landen die Fotos lokal als pendingPhotos und werden
+  // nach dem Save hochgeladen. Sonst direkt in die DB.
+  const uploadSinglePhoto = async (file: File, comment: string | null) => {
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) return;
     if (!savedId) {
-      // No savedId yet → store locally as preview
-      const newPending: { file: File; preview: string }[] = [];
-      for (const file of files) {
-        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) continue;
-        newPending.push({ file, preview: URL.createObjectURL(file) });
-      }
-      setPendingPhotos(prev => [...prev, ...newPending]);
-      if (newPending.length > 0) {
-        toast({ title: "Fotos hinzugefügt", description: `${newPending.length} Foto(s) werden beim Speichern hochgeladen` });
-      }
+      setPendingPhotos(prev => [...prev, { file, preview: URL.createObjectURL(file), comment: comment || "" } as any]);
       return;
     }
-
-    // savedId exists → upload directly
-    setUploading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setUploading(false); return; }
-    let count = 0;
-    for (const file of files) {
-      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) continue;
-      const fileName = `${savedId}/${Date.now()}_${file.name}`;
-      const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
-      if (upErr) continue;
-      const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
-        .insert({ ersttermin_interessent_id: savedId, user_id: user.id, file_path: fileName, file_name: file.name });
-      if (dbErr) { await supabase.storage.from("ersttermin-photos").remove([fileName]); continue; }
-      count++;
+    if (!user) return;
+    const fileName = `${savedId}/${Date.now()}_${file.name}`;
+    const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
+    if (upErr) return;
+    const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
+      .insert({
+        ersttermin_interessent_id: savedId,
+        user_id: user.id,
+        file_path: fileName,
+        file_name: file.name,
+        beschreibung: comment || null,
+      });
+    if (dbErr) {
+      await supabase.storage.from("ersttermin-photos").remove([fileName]);
+      return;
     }
-    if (count > 0) { toast({ title: "Erfolg", description: `${count} Foto${count > 1 ? "s" : ""} hochgeladen` }); fetchPhotos(savedId); }
-    setUploading(false);
+    fetchPhotos(savedId);
   };
 
-  // Input-Change-Handler (ruft zentrale Upload-Funktion auf)
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files ? Array.from(event.target.files) : [];
-    await uploadPhotoFiles(files);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const updatePhotoComment = async (photoId: string, comment: string) => {
+    if (photoId.startsWith("pending-")) {
+      const idx = parseInt(photoId.slice("pending-".length));
+      setPendingPhotos(prev => prev.map((p, i) => i === idx ? ({ ...p, comment } as any) : p));
+      return;
+    }
+    await (supabase.from("ersttermin_interessent_photos" as never) as any)
+      .update({ beschreibung: comment })
+      .eq("id", photoId);
+    setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, beschreibung: comment } : p));
   };
 
-  // Upload pending photos after first save
+  // Upload pending photos after first save — inkl. Kommentar
   const uploadPendingPhotos = async (eid: string) => {
     if (pendingPhotos.length === 0) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     let failedCount = 0;
-    for (const { file } of pendingPhotos) {
-      const fileName = `${eid}/${Date.now()}_${file.name}`;
-      const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
+    for (const pp of pendingPhotos as any[]) {
+      const fileName = `${eid}/${Date.now()}_${pp.file.name}`;
+      const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, pp.file);
       if (upErr) { failedCount++; continue; }
       const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
-        .insert({ ersttermin_interessent_id: eid, user_id: user.id, file_path: fileName, file_name: file.name });
+        .insert({
+          ersttermin_interessent_id: eid,
+          user_id: user.id,
+          file_path: fileName,
+          file_name: pp.file.name,
+          beschreibung: (pp.comment || "").trim() || null,
+        });
       if (dbErr) {
-        // Rollback: Datei wieder entfernen, damit nichts verwaist hängt
         await supabase.storage.from("ersttermin-photos").remove([fileName]);
         failedCount++;
       }
@@ -372,14 +375,25 @@ export default function ErstterminDetail() {
     fetchPhotos(eid);
   };
 
-  const handlePhotoDelete = async (p: ErstterminPhoto) => {
-    const { error: storageErr } = await supabase.storage.from("ersttermin-photos").remove([p.file_path]);
-    const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any).delete().eq("id", p.id);
+  const handlePhotoDelete = async (p: ErstterminPhoto | { id: string }) => {
+    // Pending-Delete: nur aus lokalem State entfernen
+    if (p.id.startsWith("pending-")) {
+      const idx = parseInt(p.id.slice("pending-".length));
+      setPendingPhotos(prev => {
+        const pp = prev[idx] as any;
+        if (pp?.preview) URL.revokeObjectURL(pp.preview);
+        return prev.filter((_, i) => i !== idx);
+      });
+      return;
+    }
+    const real = p as ErstterminPhoto;
+    const { error: storageErr } = await supabase.storage.from("ersttermin-photos").remove([real.file_path]);
+    const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any).delete().eq("id", real.id);
     if (storageErr || dbErr) {
       toast({ variant: "destructive", title: "Foto konnte nicht gelöscht werden", description: (storageErr || dbErr)?.message });
       return;
     }
-    setPhotos((prev) => prev.filter((x) => x.id !== p.id));
+    setPhotos((prev) => prev.filter((x) => x.id !== real.id));
   };
   // Save
   const handleSave = async () => {
@@ -1098,84 +1112,50 @@ export default function ErstterminDetail() {
           </Collapsible>
         </Card>
 
-        {/* 7. Fotos — mit Drag&Drop */}
-        <Card
-          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary"); }}
-          onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary"); }}
-          onDrop={async (e) => {
-            e.preventDefault();
-            e.currentTarget.classList.remove("ring-2", "ring-primary");
-            const files = Array.from(e.dataTransfer.files);
-            await uploadPhotoFiles(files);
-          }}
-          className="transition-all"
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />Fotos <span className="text-xs font-normal text-muted-foreground">(Dateien hier ablegen oder Button klicken)</span></CardTitle>
-              <div className="flex gap-2">
-                {projectId && photos.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (!id || !projectId) return;
-                      const res = await copyErstterminPhotosToProject(id, projectId);
-                      toast({
-                        title: "Fotos-Übernahme abgeschlossen",
-                        description: `${res.copied} kopiert · ${res.skipped} übersprungen${res.failed ? ` · ${res.failed} fehlgeschlagen` : ""}`,
-                      });
-                    }}
-                    className="gap-2"
-                  >
-                    <FolderPlus className="h-4 w-4" /> Ins Projekt übernehmen
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
-                  <Upload className="h-4 w-4" />{uploading ? "Lädt..." : "Foto hinzufügen"}
-                </Button>
-              </div>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
-          </CardHeader>
-            <CardContent>
-              {/* Pending (local) photos */}
-            {pendingPhotos.length > 0 && (
-              <div className="mb-3">
-                <p className="text-xs text-muted-foreground mb-2">Noch nicht gespeichert ({pendingPhotos.length}):</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {pendingPhotos.map((pp, idx) => (
-                    <div key={idx} className="relative group aspect-square">
-                      <img src={pp.preview} alt={pp.file.name} className="w-full h-full object-cover rounded-lg border-2 border-dashed border-primary/30" />
-                      <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
-                        URL.revokeObjectURL(pp.preview);
-                        setPendingPhotos(prev => prev.filter((_, i) => i !== idx));
-                      }}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Saved photos */}
-            {photosLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Lädt Fotos...</div>
-            ) : photos.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">Keine Fotos vorhanden</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {photos.map((photo, idx) => (
-                  <div key={photo.id} className="space-y-1">
-                    <div className="relative group aspect-square">
-                      <img src={getPhotoUrl(photo.file_path)} alt={photo.file_name} className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLightboxIndex(idx)} />
-                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70" onClick={() => setLightboxIndex(idx)}><ZoomIn className="h-4 w-4" /></Button>
-                      <Button variant="destructive" size="icon" className="absolute bottom-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handlePhotoDelete(photo)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            </CardContent>
-          </Card>
+        {/* 7. Fotos — shared PhotoGallery-Komponente (Grid, Drag&Drop,
+             Lightbox, Kommentar pro Foto, Upload-Dialog mit Kommentar).
+             Pending-Fotos (vor erstem Speichern) werden synthetisch als
+             "pending-N"-IDs eingeblendet — nach dem Save wandern sie in
+             die DB und kriegen echte IDs. */}
+        <PhotoGallery
+          title="Fotos"
+          loading={photosLoading}
+          photos={[
+            ...(pendingPhotos as any[]).map((pp, idx) => ({
+              id: `pending-${idx}`,
+              url: pp.preview,
+              fileName: pp.file.name,
+              beschreibung: pp.comment || null,
+            })),
+            ...photos.map(p => ({
+              id: p.id,
+              url: getPhotoUrl(p.file_path),
+              fileName: p.file_name || undefined,
+              beschreibung: p.beschreibung ?? null,
+              createdAt: p.created_at,
+            })),
+          ]}
+          onUpload={uploadSinglePhoto}
+          onUpdateComment={updatePhotoComment}
+          onDelete={(photo) => handlePhotoDelete({ id: photo.id, file_path: (photos.find(p => p.id === photo.id) as any)?.file_path } as any)}
+          headerExtra={projectId && photos.length > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!id || !projectId) return;
+                const res = await copyErstterminPhotosToProject(id, projectId);
+                toast({
+                  title: "Fotos-Übernahme abgeschlossen",
+                  description: `${res.copied} kopiert · ${res.skipped} übersprungen${res.failed ? ` · ${res.failed} fehlgeschlagen` : ""}`,
+                });
+              }}
+              className="gap-2"
+            >
+              <FolderPlus className="h-4 w-4" /> Ins Projekt übernehmen
+            </Button>
+          ) : undefined}
+        />
 
         {/* 8. Checkliste */}
         <Card>
@@ -1247,13 +1227,7 @@ export default function ErstterminDetail() {
           <Button onClick={handleSave} disabled={saving} className="gap-2"><Save className="h-4 w-4" />{saving ? "Speichert..." : "Speichern"}</Button>
         </div>
 
-        {/* Photo lightbox mit Prev/Next */}
-        <PhotoLightbox
-          photos={photos.map((p) => ({ url: getPhotoUrl(p.file_path), alt: p.file_name || undefined }))}
-          initialIndex={lightboxIndex ?? 0}
-          open={lightboxIndex !== null}
-          onClose={() => setLightboxIndex(null)}
-        />
+        {/* Lightbox wird jetzt von <PhotoGallery> verwaltet */}
 
         {/* "Projekt jetzt anlegen?" — Bestätigungsdialog nach Speichern */}
         <AlertDialog open={askProjectOpen} onOpenChange={setAskProjectOpen}>
