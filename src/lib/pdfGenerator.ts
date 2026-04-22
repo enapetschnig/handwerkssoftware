@@ -209,7 +209,7 @@ export async function generateInvoicePdf(
     y += 5;
   }
   if (invoice.kunde_uid) {
-    pdf.setFontSize(8);
+    pdf.setFontSize(10);
     pdf.setTextColor(0, 0, 0);
     pdf.text(`UID: ${invoice.kunde_uid}`, ml, y + 2);
     y += 5;

@@ -625,6 +625,22 @@ export default function InvoiceDetail() {
       })));
     }
 
+    // Defensiv: wenn auf der Rechnung keine UID gesetzt ist, aber ein
+    // Customer verknüpft ist und dort eine UID hinterlegt ist, ziehen wir
+    // sie nach. Greift typischerweise bei alten Rechnungen, bei denen die
+    // UID damals beim Kunden fehlte und später ergänzt wurde.
+    if (!((data as any).kunde_uid || "").trim() && (data as any).customer_id) {
+      const { data: cust } = await supabase
+        .from("customers")
+        .select("uid_nummer, kundentyp")
+        .eq("id", (data as any).customer_id)
+        .maybeSingle();
+      const liveUid = ((cust as any)?.uid_nummer || "").trim();
+      if (liveUid) {
+        setForm(prev => ({ ...prev, kunde_uid: liveUid } as any));
+      }
+    }
+
     // Dokumenten-Kette laden: zur Root-Ahnung (Angebot/AB) hochwandern,
     // dann alle direkten Kinder dieser Root laden. So sieht der User auf
     // jeder AR/SR, zu welchem Auftrag sie gehört und welche Geschwister
@@ -2280,6 +2296,18 @@ export default function InvoiceDetail() {
                     setForm(prev => ({ ...prev, ...updates }));
                     if (hints.length > 0) {
                       toast({ title: "Kundeneinstellungen übernommen", description: hints.join(" · ") });
+                    }
+                    // Hinweis bei Geschäftskunde ohne UID — die UID ist für
+                    // den Empfänger-Block am PDF wichtig (Reverse-Charge,
+                    // B2B-Nachweis). Besser jetzt darauf hinweisen, als
+                    // später eine UID-lose Rechnung zu drucken.
+                    if ((customer as any).kundentyp === "geschaeftskunde" && !(customer.uid_nummer || "").trim()) {
+                      toast({
+                        variant: "destructive",
+                        title: "UID fehlt",
+                        description: `${customer.name} ist ein Geschäftskunde, hat aber keine UID-Nummer hinterlegt. Bitte im Kunden-Datensatz ergänzen — sie erscheint sonst nicht im Rechnungs-Adressfeld.`,
+                        duration: 8000,
+                      });
                     }
                   }}
                 />
