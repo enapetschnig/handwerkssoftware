@@ -2518,44 +2518,52 @@ export default function InvoiceDetail() {
                   </SelectContent>
                 </Select>
 
-                {/* Freitext-Felder: editierbar, sobald KEIN Mitarbeiter gewählt
-                    ist (Dropdown auf "Manuell eingeben" oder "Keiner", oder
-                    bei bestehenden Altdokumenten ohne employee_id). Bei
-                    gewähltem Mitarbeiter sind sie readonly und zeigen die
-                    aus dem Mitarbeiter übernommenen Werte. */}
-                {(() => {
-                  const hasEmp = !!(form as any).ansprechpartner_employee_id;
-                  const hint = hasEmp
-                    ? "Werte werden vom gewählten Mitarbeiter übernommen. Für Änderungen 'Manuell eingeben' wählen."
-                    : "Leer lassen, wenn auf dem PDF kein Ansprechpartner erscheinen soll.";
-                  return (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <Input
-                          value={(form as any).ansprechpartner_name || ""}
-                          onChange={(e) => updateField("ansprechpartner_name" as any, e.target.value)}
-                          placeholder="Name"
-                          disabled={isLocked || hasEmp}
-                        />
-                        <Input
-                          value={(form as any).ansprechpartner_telefon || ""}
-                          onChange={(e) => updateField("ansprechpartner_telefon" as any, e.target.value)}
-                          placeholder="Telefon"
-                          type="tel"
-                          disabled={isLocked || hasEmp}
-                        />
-                        <Input
-                          value={(form as any).ansprechpartner_email || ""}
-                          onChange={(e) => updateField("ansprechpartner_email" as any, e.target.value)}
-                          placeholder="E-Mail"
-                          type="email"
-                          disabled={isLocked || hasEmp}
-                        />
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">{hint}</p>
-                    </>
-                  );
-                })()}
+                {/* Freitext-Felder: immer editierbar (nur gesperrt, wenn die
+                    ganze Rechnung locked ist). Bei Mitarbeiter-Auswahl werden
+                    die Werte übernommen, können aber danach überschrieben
+                    werden — die Employee-ID wird dabei automatisch gelöst,
+                    damit später klar ist, dass es ein angepasster Snapshot
+                    und keine Live-Referenz auf den Mitarbeiter mehr ist. */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Input
+                    value={(form as any).ansprechpartner_name || ""}
+                    onChange={(e) => {
+                      updateField("ansprechpartner_name" as any, e.target.value);
+                      if ((form as any).ansprechpartner_employee_id) {
+                        updateField("ansprechpartner_employee_id" as any, null);
+                      }
+                    }}
+                    placeholder="Name"
+                    disabled={isLocked}
+                  />
+                  <Input
+                    value={(form as any).ansprechpartner_telefon || ""}
+                    onChange={(e) => {
+                      updateField("ansprechpartner_telefon" as any, e.target.value);
+                      if ((form as any).ansprechpartner_employee_id) {
+                        updateField("ansprechpartner_employee_id" as any, null);
+                      }
+                    }}
+                    placeholder="Telefon"
+                    type="tel"
+                    disabled={isLocked}
+                  />
+                  <Input
+                    value={(form as any).ansprechpartner_email || ""}
+                    onChange={(e) => {
+                      updateField("ansprechpartner_email" as any, e.target.value);
+                      if ((form as any).ansprechpartner_employee_id) {
+                        updateField("ansprechpartner_employee_id" as any, null);
+                      }
+                    }}
+                    placeholder="E-Mail"
+                    type="email"
+                    disabled={isLocked}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Bei Mitarbeiter-Auswahl vorbefüllt, jederzeit editierbar. Leer lassen, wenn auf dem PDF kein Ansprechpartner erscheinen soll.
+                </p>
               </div>
 
               {/* Zahlungseinstellungen (vom Kunden) */}
