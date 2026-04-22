@@ -609,12 +609,17 @@ export async function generateInvoicePdf(
     y += 8;
   } else if (docCfg.isInvoiceLike) {
     let closingText: string;
+    const isIndividuell = zahlungsbedingungen.toLowerCase() === "individuell";
     if (isZahlungSofort) {
       closingText = "Zahlbar sofort ohne Abzug.";
+    } else if (isIndividuell && invoice.faellig_am) {
+      // Dropdown-Auswahl "Individuelles Datum" — das Fälligkeitsdatum
+      // ist die Wahrheit, kein Tage-Platzhalter.
+      closingText = `Zahlbar bis ${fmtDate(invoice.faellig_am)} ohne Abzug.`;
     } else if (zahlungsTageMatch) {
       closingText = L.closing_text_invoice.replace("{{tage}}", zahlungsTageMatch[1]);
-    } else if (zahlungsbedingungen) {
-      // freier Text (z.B. "bei Lieferung bar") → direkt übernehmen
+    } else if (zahlungsbedingungen && !isIndividuell) {
+      // freier Text (z.B. Altdaten "bei Lieferung bar") → direkt übernehmen
       closingText = zahlungsbedingungen;
     } else {
       closingText = L.closing_text_invoice.replace("{{tage}}", "14");

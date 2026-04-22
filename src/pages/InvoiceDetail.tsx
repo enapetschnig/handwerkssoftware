@@ -158,6 +158,18 @@ const statusLabels: Record<string, string> = {
   verrechnet: "Verrechnet",
 };
 
+/**
+ * Mappt einen Netto-Tage-Wert (aus customers.nettofrist) auf einen der
+ * Dropdown-Werte. Treffer auf Standard-Optionen (0/7/14/30/60) werden
+ * direkt übernommen; alles andere landet auf "individuell", sodass
+ * faellig_am manuell gesetzt werden muss.
+ */
+function nettofristToDropdown(nettofrist: number): string {
+  if (nettofrist <= 0) return "sofort";
+  if ([7, 14, 30, 60].includes(nettofrist)) return `${nettofrist} Tage`;
+  return "individuell";
+}
+
 export default function InvoiceDetail() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -492,8 +504,16 @@ export default function InvoiceDetail() {
             skonto_tage: Number(cust.skonto_tage) || 0,
           } as any));
           const nettofrist = Number((cust as any).nettofrist) || 0;
-          if (nettofrist > 0 && defaultTyp === "rechnung") {
-            setForm(prev => ({ ...prev, zahlungsbedingungen: `${nettofrist} Tage` }));
+          if (defaultTyp === "rechnung") {
+            const zb = nettofristToDropdown(nettofrist);
+            setForm(prev => ({ ...prev, zahlungsbedingungen: zb }));
+            // "individuell" fängt der useEffect nicht ab — faellig_am
+            // hier direkt setzen, damit die Rechnung sofort konsistent ist.
+            if (zb === "individuell" && nettofrist > 0) {
+              const due = new Date(new Date().toISOString().split("T")[0] + "T12:00:00");
+              due.setDate(due.getDate() + nettofrist);
+              setForm(prev => ({ ...prev, faellig_am: format(due, "yyyy-MM-dd") }));
+            }
           }
         } catch (err) {
           console.error("Projekt-Prefill fehlgeschlagen:", err);
@@ -570,7 +590,19 @@ export default function InvoiceDetail() {
       datum: data.datum,
       faellig_am: data.faellig_am || "",
       leistungsdatum: data.leistungsdatum || "",
-      zahlungsbedingungen: data.zahlungsbedingungen || "",
+      // Altdaten auf die neuen Dropdown-Werte mappen. Sofort/prompt und
+      // die Standard-Tage bleiben erhalten; alles andere (Freitext,
+      // ungültige Werte, krumme Tage wie "20 Tage") landet auf
+      // "individuell", damit der User die Altrechnung nicht aus
+      // Versehen verfälscht.
+      zahlungsbedingungen: (() => {
+        const raw = (data.zahlungsbedingungen || "").trim();
+        if (!raw) return "";
+        if (/sofort|umgehend|prompt/i.test(raw)) return "sofort";
+        const standard = ["7 Tage", "14 Tage", "30 Tage", "60 Tage"];
+        if (standard.includes(raw)) return raw;
+        return "individuell";
+      })(),
       notizen: data.notizen || "",
       betreff: (data as any).betreff || "",
       mwst_satz: Number(data.mwst_satz),
@@ -799,6 +831,32 @@ export default function InvoiceDetail() {
       return updated;
     });
   };
+
+  // Auto-Sync zahlungsbedingungen → faellig_am. Immer wenn der User die
+  // Zahlungsfrist (Dropdown) oder das Rechnungsdatum ändert, rechnen wir
+  // das Fälligkeitsdatum neu aus. Einzige Ausnahme: "individuell" — dort
+  // darf der User das faellig_am-Feld direkt editieren und wir greifen
+  // nicht ein.
+  useEffect(() => {
+    if (form.typ !== "rechnung") return;
+    const zb = (form.zahlungsbedingungen || "").trim();
+    if (!zb || zb === "individuell") return;
+    if (!form.datum) return;
+    let days: number | null = null;
+    if (/sofort|umgehend|prompt/i.test(zb)) days = 0;
+    else {
+      const m = zb.match(/(\d+)/);
+      if (m) days = parseInt(m[1]);
+    }
+    if (days === null) return;
+    const due = new Date(form.datum + "T12:00:00");
+    due.setDate(due.getDate() + days);
+    const nextFaellig = format(due, "yyyy-MM-dd");
+    if (nextFaellig !== form.faellig_am) {
+      setForm(prev => ({ ...prev, faellig_am: nextFaellig }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.zahlungsbedingungen, form.datum, form.typ]);
 
   // Calculations with discount — round to 2 decimal places to avoid floating-point issues.
   // mwst_exempt-Zeilen enthalten bereits Brutto (z.B. Anzahlungs-Abzüge)
@@ -2185,13 +2243,16 @@ export default function InvoiceDetail() {
                           skonto_tage: Number(cust.skonto_tage) || 0,
                         } as any));
                         const custNettofrist = Number(cust.nettofrist) || 0;
-                        if (custNettofrist > 0) {
-                          updateField("zahlungsbedingungen", `${custNettofrist} Tage`);
-                          if (form.datum) {
-                            const due = new Date(form.datum + "T12:00:00");
-                            due.setDate(due.getDate() + custNettofrist);
-                            updateField("faellig_am", due.toISOString().split("T")[0]);
-                          }
+                        const zb = nettofristToDropdown(custNettofrist);
+                        updateField("zahlungsbedingungen", zb);
+                        // Bei "individuell" muss faellig_am explizit gesetzt
+                        // werden (der Sync-useEffect rührt "individuell" nicht
+                        // an). Für Standard-Dropdown-Werte übernimmt der
+                        // useEffect die Berechnung automatisch.
+                        if (zb === "individuell" && custNettofrist > 0 && form.datum) {
+                          const due = new Date(form.datum + "T12:00:00");
+                          due.setDate(due.getDate() + custNettofrist);
+                          updateField("faellig_am", due.toISOString().split("T")[0]);
                         }
                         toast({ title: "Projektdaten übernommen", description: cust.name });
                       }
@@ -2282,13 +2343,14 @@ export default function InvoiceDetail() {
                           updates.skonto_tage = custSkontoTage;
                           hints.push(`Skonto: ${custSkonto}% / ${custSkontoTage} Tage`);
                         }
+                        const zb = nettofristToDropdown(custNettofrist);
+                        updates.zahlungsbedingungen = zb;
+                        if (zb === "individuell" && custNettofrist > 0 && form.datum) {
+                          const due = new Date(form.datum + "T12:00:00");
+                          due.setDate(due.getDate() + custNettofrist);
+                          updates.faellig_am = due.toISOString().split("T")[0];
+                        }
                         if (custNettofrist > 0) {
-                          updates.zahlungsbedingungen = `${custNettofrist} Tage`;
-                          if (form.datum) {
-                            const due = new Date(form.datum + "T12:00:00");
-                            due.setDate(due.getDate() + custNettofrist);
-                            updates.faellig_am = due.toISOString().split("T")[0];
-                          }
                           hints.push(`Zahlungsfrist: ${custNettofrist} Tage`);
                         }
                       }
@@ -2538,7 +2600,17 @@ export default function InvoiceDetail() {
                 {form.typ === "rechnung" && (
                   <div>
                     <Label>Fällig am</Label>
-                    <Input type="date" value={form.faellig_am} onChange={(e) => updateField("faellig_am", e.target.value)} />
+                    <Input
+                      type="date"
+                      value={form.faellig_am}
+                      onChange={(e) => updateField("faellig_am", e.target.value)}
+                      disabled={form.zahlungsbedingungen !== "individuell"}
+                    />
+                    {form.zahlungsbedingungen !== "individuell" && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Automatisch aus Rechnungsdatum + Zahlungsfrist berechnet.
+                      </p>
+                    )}
                   </div>
                 )}
                 {form.typ === "angebot" && (
@@ -2552,46 +2624,26 @@ export default function InvoiceDetail() {
                 {form.typ === "rechnung" && (
                   <div>
                     <Label>Zahlungsfrist</Label>
-                    <div className="flex gap-2">
-                      <Select
-                        value={form.zahlungsbedingungen || "14 Tage"}
-                        onValueChange={(v) => {
-                          if (v === "manuell") return;
-                          updateField("zahlungsbedingungen", v);
-                          const daysMatch = v.match(/(\d+)/);
-                          const days = v === "sofort" ? 0 : daysMatch ? parseInt(daysMatch[1]) : 14;
-                          if (form.datum) {
-                            const due = new Date(form.datum + "T12:00:00");
-                            due.setDate(due.getDate() + days);
-                            updateField("faellig_am", format(due, "yyyy-MM-dd"));
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sofort">Sofort fällig</SelectItem>
-                          <SelectItem value="7 Tage">7 Tage</SelectItem>
-                          <SelectItem value="14 Tage">14 Tage</SelectItem>
-                          <SelectItem value="30 Tage">30 Tage</SelectItem>
-                          <SelectItem value="60 Tage">60 Tage</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground whitespace-nowrap">Oder manuell:</Label>
-                      <Input type="number" min={0} placeholder="Tage" className="w-20" onChange={(e) => {
-                        const days = parseInt(e.target.value);
-                        if (!isNaN(days) && days >= 0) {
-                          updateField("zahlungsbedingungen", `${days} Tage`);
-                          if (form.datum) {
-                            const due = new Date(form.datum + "T12:00:00");
-                            due.setDate(due.getDate() + days);
-                            updateField("faellig_am", format(due, "yyyy-MM-dd"));
-                          }
-                        }
-                      }} />
-                      <span className="text-xs text-muted-foreground">Tage</span>
-                    </div>
+                    <Select
+                      value={form.zahlungsbedingungen || "14 Tage"}
+                      onValueChange={(v) => {
+                        // Dropdown ist Single Source of Truth. "individuell"
+                        // schaltet das faellig_am-Feld frei; alle anderen Werte
+                        // rechnen faellig_am automatisch über den useEffect-
+                        // Sync weiter unten aus.
+                        updateField("zahlungsbedingungen", v);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sofort">Sofort fällig</SelectItem>
+                        <SelectItem value="7 Tage">7 Tage</SelectItem>
+                        <SelectItem value="14 Tage">14 Tage</SelectItem>
+                        <SelectItem value="30 Tage">30 Tage</SelectItem>
+                        <SelectItem value="60 Tage">60 Tage</SelectItem>
+                        <SelectItem value="individuell">Individuelles Datum…</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
                 {form.typ === "rechnung" && (

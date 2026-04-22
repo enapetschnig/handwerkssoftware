@@ -219,10 +219,20 @@ export function buildInvoiceHtml(
     metaParts.push(
       `<div><span class="meta-label">Gültig bis</span><span class="meta-value">${gueltigBisFormatted}</span></div>`
     );
-  if (showFaelligAm && invoice.zahlungsbedingungen)
-    metaParts.push(
-      `<div><span class="meta-label">Zahlung</span><span class="meta-value">${invoice.zahlungsbedingungen}</span></div>`
-    );
+  if (showFaelligAm && invoice.zahlungsbedingungen) {
+    // Interne Werte auf benutzerfreundliches Label mappen. "individuell"
+    // blenden wir aus — das Fälligkeitsdatum steht eh schon oben.
+    const zbRawMeta = invoice.zahlungsbedingungen.trim();
+    const zbLabel =
+      /sofort|umgehend|prompt/i.test(zbRawMeta) ? "Sofort fällig" :
+      zbRawMeta.toLowerCase() === "individuell" ? "" :
+      zbRawMeta;
+    if (zbLabel) {
+      metaParts.push(
+        `<div><span class="meta-label">Zahlung</span><span class="meta-value">${escapeHtml(zbLabel)}</span></div>`
+      );
+    }
+  }
 
   // Derive a light tinted background from the accent color (10% opacity)
   const accentLightBg = (() => {
@@ -269,11 +279,22 @@ export function buildInvoiceHtml(
     return txt.replace(/\s{2,}/g, " ").trim();
   };
   const customClosing = (invoice as any).custom_closing_text as string | undefined;
+  const zbRaw = (invoice.zahlungsbedingungen || "").trim();
+  const isZahlungSofort = /sofort|umgehend|prompt/i.test(zbRaw);
+  const isIndividuell = zbRaw.toLowerCase() === "individuell";
+  const faelligFmt = invoice.faellig_am
+    ? new Date((invoice.faellig_am as string) + "T12:00:00").toLocaleDateString("de-AT")
+    : "";
+  const renderRechnungClosing = () => {
+    if (isZahlungSofort) return "Zahlbar sofort ohne Abzug.";
+    if (isIndividuell && faelligFmt) return `Zahlbar bis ${faelligFmt} ohne Abzug.`;
+    return `Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`;
+  };
   const closingText = customClosing
     ? `<div class="closing-text">${escapeHtml(customClosing)}</div>`
     : isAngebot
       ? `<div class="closing-text">${escapeHtml(renderAngebotClosing())}</div>`
-      : `<div class="closing-text">Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.</div>`;
+      : `<div class="closing-text">${escapeHtml(renderRechnungClosing())}</div>`;
 
   // Anzahlungs-Hinweis aus document_texts — nur bei Anzahlungsrechnung gerendert.
   const anzahlungHinweis = (invoice as any).custom_anzahlung_hinweis as string | undefined;
