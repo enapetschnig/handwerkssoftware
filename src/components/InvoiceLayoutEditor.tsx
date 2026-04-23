@@ -273,6 +273,26 @@ export function InvoiceLayoutEditor() {
                 </div>
               </div>
 
+              {form.logo.position === "left" && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="logo_offset_x">Logo nach rechts verschieben (mm)</Label>
+                  <Input
+                    id="logo_offset_x"
+                    type="number"
+                    value={form.logo.offset_x_mm ?? 0}
+                    onChange={(e) => updateLogo("offset_x_mm", Number(e.target.value) || 0)}
+                    min={0}
+                    max={80}
+                    step={1}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    0 = bündig zum Textblock. Positive Werte verschieben das Logo
+                    nach rechts — nützlich, wenn das Logo-PNG links einen
+                    transparenten Rand hat.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2 md:col-span-2">
                 <Label>Logo-Datei hochladen</Label>
                 <div className="flex items-center gap-4">

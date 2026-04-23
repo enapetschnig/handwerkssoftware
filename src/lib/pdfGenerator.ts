@@ -80,10 +80,6 @@ export async function generateInvoicePdf(
   let logoBottomY = y;
   let logoRightX = ml;
 
-  // Logo darf im Header-Bereich (oberhalb der Absenderzeile Y=45)
-  // weiter nach links ragen als der normale Content-Margin — das
-  // schafft Platz für den Firmen-Info-Block rechts daneben.
-  const LOGO_LEFT_X = 10;
   // Logo-Block-Höhe reserviert für den Firmen-Info-Block rechts.
   // Start Y=15, 6 Zeilen à 3.5mm plus Puffer → ~22mm.
   const HEADER_BLOCK_HEIGHT = 22;
@@ -100,9 +96,13 @@ export async function generateInvoicePdf(
           logoH = logoW / aspect;
         }
       } catch {}
+      // position="left": Logo bündig zum Content-Margin + optionaler
+      // Offset aus den Layout-Settings (z. B. um PNGs mit transparenten
+      // Rändern visuell auszugleichen).
+      const logoOffset = Math.max(0, Number(L.logo.offset_x_mm) || 0);
       const logoX = L.logo.position === "right" ? pageWidth - mr - logoW
         : L.logo.position === "center" ? (pageWidth - logoW) / 2
-        : LOGO_LEFT_X;
+        : ml + logoOffset;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
       logoBottomY = y + logoH;
       logoRightX = logoX + logoW;
@@ -149,7 +149,7 @@ export async function generateInvoicePdf(
       pdf.setFontSize(7);
       pdf.setTextColor(80, 80, 80);
       const belowY = Math.max(logoBottomY + 4, y + HEADER_BLOCK_HEIGHT);
-      pdf.text(horizLine, LOGO_LEFT_X, belowY, { maxWidth: pageWidth - LOGO_LEFT_X - mr });
+      pdf.text(horizLine, ml, belowY, { maxWidth: pageWidth - ml - mr });
       logoBottomY = belowY + 2;
     }
   }
@@ -740,19 +740,19 @@ export async function generateInvoicePdf(
     const footerLine1 = L.footer.line1 || [L.company.name, L.company.slogan, L.company.address_line1, L.company.address_line2, L.company.phone, L.company.email].filter(Boolean).join(" \u00B7 ");
     pdf.text(footerLine1, pageWidth / 2, footerY, { align: "center" });
     footerY += 4;
-    if (L.footer.show_bank_in_footer) {
-      const ibanLine = bank.kontoinhaber
-        ? `Kontoinhaber: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`
-        : `IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`;
-      pdf.text(ibanLine, pageWidth / 2, footerY, { align: "center" });
-      footerY += 4;
-    }
     if (L.footer.line2) {
       pdf.text(L.footer.line2, pageWidth / 2, footerY, { align: "center" });
       footerY += 4;
     }
     if (L.footer.line3) {
       pdf.text(L.footer.line3, pageWidth / 2, footerY, { align: "center" });
+      footerY += 4;
+    }
+    if (L.footer.show_bank_in_footer) {
+      const ibanLine = bank.kontoinhaber
+        ? `Kontoinhaber: ${bank.kontoinhaber} \u00B7 IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`
+        : `IBAN: ${bank.iban} \u00B7 BIC: ${bank.bic}`;
+      pdf.text(ibanLine, pageWidth / 2, footerY, { align: "center" });
       footerY += 4;
     }
     // Seitennummer in eigener letzter Zeile (rechts), damit sie den

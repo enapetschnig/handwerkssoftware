@@ -32,10 +32,6 @@ export function drawLetterhead(
   let logoBottomY = y;
   let logoRightX = ml;
 
-  // Logo darf im Header weiter nach links ragen als der Content-Margin,
-  // damit rechts daneben Platz für Firmen-Info bleibt.
-  const LOGO_LEFT_X = 10;
-
   // Logo
   if (logoDataUri && layout.logo.enabled) {
     try {
@@ -49,10 +45,13 @@ export function drawLetterhead(
         }
       } catch { /* fallback to layout values */ }
 
+      // Logo bündig zum Content-Margin + optionaler Offset aus
+      // Layout-Settings (für PNGs mit transparenten Rändern).
+      const logoOffset = Math.max(0, Number(layout.logo.offset_x_mm) || 0);
       const logoX =
         layout.logo.position === "right" ? pageWidth - mr - logoW :
         layout.logo.position === "center" ? (pageWidth - logoW) / 2 :
-        LOGO_LEFT_X;
+        ml + logoOffset;
       pdf.addImage(logoDataUri, "PNG", logoX, y, logoW, logoH);
       logoBottomY = y + logoH;
       logoRightX = logoX + logoW;
@@ -94,7 +93,7 @@ export function drawLetterhead(
       pdf.setFontSize(7);
       pdf.setTextColor(80, 80, 80);
       const belowY = Math.max(logoBottomY + 4, top + 20);
-      pdf.text(parts.join(" · "), LOGO_LEFT_X, belowY, { maxWidth: pageWidth - LOGO_LEFT_X - mr });
+      pdf.text(parts.join(" · "), ml, belowY, { maxWidth: pageWidth - ml - mr });
       logoBottomY = belowY + 2;
     }
   }

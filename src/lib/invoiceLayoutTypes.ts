@@ -15,6 +15,12 @@ export interface InvoiceLayoutLogo {
   position: "left" | "right" | "center";
   width_mm: number;
   height_mm: number;
+  /**
+   * Zusätzlicher horizontaler Versatz in mm. Nur wirksam bei
+   * position = "left" (Logo wird weiter nach rechts geschoben).
+   * Default 0 = bündig zum Content-Margin.
+   */
+  offset_x_mm?: number;
 }
 
 export interface InvoiceLayoutFooter {
@@ -59,11 +65,10 @@ export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
     position: "left",
     // 110 mm ist ein bewusster Kompromiss: das Logo bleibt für den
     // DIN-A4-Briefkopf gross und prominent, lässt aber rechts daneben
-    // ca. 75 mm für den Firmen-Info-Block (Adresse, Tel, E-Mail, UID).
-    // Kombiniert mit Logo-Start-X = 10 mm (statt 25 mm Content-Margin)
-    // reicht der Platz bequem.
+    // ca. 55 mm für den Firmen-Info-Block (Adresse, Tel, E-Mail, UID).
     width_mm: 110,
     height_mm: 13.5,
+    offset_x_mm: 0,
   },
   footer: {
     line1: "",
@@ -108,6 +113,10 @@ export function parseLayoutSettings(value: string | null | undefined): InvoiceLa
       // war der alte 140-mm-Default → auf neuen Default zurück
       parsedLogo.width_mm = DEFAULT_LAYOUT.logo.width_mm;
       parsedLogo.height_mm = DEFAULT_LAYOUT.logo.height_mm;
+    }
+    // Horizontal-Offset: Bestandsdaten haben das Feld nicht — Default 0.
+    if (parsedLogo.offset_x_mm === undefined || parsedLogo.offset_x_mm === null) {
+      parsedLogo.offset_x_mm = 0;
     }
 
     return {
