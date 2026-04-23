@@ -25,6 +25,8 @@ type TimeEntry = {
   notizen: string | null;
   projects: { name: string; plz: string } | null;
   project_id: string | null;
+  nachgetragen_von?: string | null;
+  nachgetragen_am?: string | null;
 };
 
 const MyHours = () => {
@@ -262,7 +264,19 @@ const MyHours = () => {
                                   {dateObj.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
                                 </TableCell>
                               ) : null}
-                              <TableCell className="text-sm">{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</TableCell>
+                              <TableCell className="text-sm">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</span>
+                                  {entry.nachgetragen_von && (
+                                    <span
+                                      className="inline-flex items-center px-1 py-0 text-[9px] rounded border border-amber-400 text-amber-700 bg-amber-50"
+                                      title={`Von Admin nachgetragen${entry.nachgetragen_am ? ` am ${new Date(entry.nachgetragen_am).toLocaleDateString("de-DE")}` : ""}`}
+                                    >
+                                      nachgetragen
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-sm">{entry.projects?.name || '-'}</TableCell>
                               <TableCell className="text-center text-sm">{entry.start_time?.substring(0, 5) || '-'}</TableCell>
                               <TableCell className="text-center text-sm">{entry.end_time?.substring(0, 5) || '-'}</TableCell>

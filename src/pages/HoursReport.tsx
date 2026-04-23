@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, Pencil, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, Pencil, Trash2, Save, Plus, UserCog } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { AdminTimeEntryDialog } from "@/components/AdminTimeEntryDialog";
 import { format, isSameDay, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "xlsx-js-style";
@@ -41,6 +43,8 @@ interface TimeEntry {
   week_type?: string | null;
   disturbance_id?: string | null;
   wetterschicht_stunden?: number | null;
+  nachgetragen_von?: string | null;
+  nachgetragen_am?: string | null;
 }
 
 interface Profile {
@@ -74,6 +78,14 @@ export default function HoursReport() {
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [editForm, setEditForm] = useState({ start_time: "", end_time: "", pause_minutes: 0, stunden: 0, taetigkeit: "", location_type: "", project_id: "" });
   const [editSaving, setEditSaving] = useState(false);
+
+  // Admin-Dialog (voller Editor + Nachtrag)
+  const [adminDialog, setAdminDialog] = useState<{ open: boolean; entryId: string | null; datum: string }>({
+    open: false, entryId: null, datum: "",
+  });
+  const openAdminEdit = (entry: TimeEntry) => setAdminDialog({ open: true, entryId: entry.id, datum: entry.datum });
+  const openAdminCreate = (dateIso: string) => setAdminDialog({ open: true, entryId: null, datum: dateIso });
+  const closeAdminDialog = () => setAdminDialog({ open: false, entryId: null, datum: "" });
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -750,7 +762,20 @@ export default function HoursReport() {
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={isAdmin ? 11 : 10}></TableCell>
+                                  <TableCell colSpan={isAdmin ? 10 : 10}></TableCell>
+                                  {isAdmin && (
+                                    <TableCell>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        title="Eintrag für diesen Tag nachtragen"
+                                        onClick={() => openAdminCreate(format(day.date, "yyyy-MM-dd"))}
+                                      >
+                                        <Plus className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TableCell>
+                                  )}
                                 </TableRow>
                               );
                             }
@@ -821,8 +846,20 @@ export default function HoursReport() {
                                   <TableCell className="max-w-[150px] truncate">
                                     {projektName}
                                   </TableCell>
-                                  <TableCell className="max-w-[150px] truncate">
-                                    {entry.taetigkeit}
+                                  <TableCell className="max-w-[200px]">
+                                    <div className="flex items-start gap-1.5 flex-wrap">
+                                      <span className="truncate">{entry.taetigkeit}</span>
+                                      {entry.nachgetragen_von && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[9px] px-1 py-0 h-4 gap-0.5 border-amber-400 text-amber-700 bg-amber-50"
+                                          title={`Nachgetragen am ${entry.nachgetragen_am ? format(parseISO(entry.nachgetragen_am), "dd.MM.yyyy") : "—"}`}
+                                        >
+                                          <UserCog className="h-2.5 w-2.5" />
+                                          Admin
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="text-xs">
                                     {((entry as any).time_entry_vehicles || []).length === 0 ? (
@@ -848,9 +885,28 @@ export default function HoursReport() {
                                   </TableCell>
                                   {isAdmin && (
                                     <TableCell>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
-                                        <Pencil className="h-3.5 w-3.5" />
-                                      </Button>
+                                      <div className="flex gap-0.5">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          title="Eintrag bearbeiten (voller Editor)"
+                                          onClick={() => openAdminEdit(entry)}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                        {isLastEntry && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            title="Weiteren Eintrag für diesen Tag nachtragen"
+                                            onClick={() => openAdminCreate(format(day.date, "yyyy-MM-dd"))}
+                                          >
+                                            <Plus className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   )}
                                 </TableRow>
@@ -963,6 +1019,23 @@ export default function HoursReport() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Voller Admin-Editor für Zeit-Einträge (bearbeiten + nachtragen) */}
+      {isAdmin && selectedUserId && (
+        <AdminTimeEntryDialog
+          open={adminDialog.open}
+          onClose={closeAdminDialog}
+          onSaved={fetchTimeEntries}
+          userId={selectedUserId}
+          datum={adminDialog.datum}
+          entryId={adminDialog.entryId}
+          employeeLabel={
+            profiles[selectedUserId]
+              ? `${profiles[selectedUserId].vorname} ${profiles[selectedUserId].nachname}`
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
