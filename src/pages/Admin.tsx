@@ -22,6 +22,7 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import LeaveManagement from "@/components/LeaveManagement";
 import TimeAccountManagement from "@/components/TimeAccountManagement";
 import { WhatsAppAdminSettings } from "@/components/WhatsAppAdminSettings";
+import { GoogleCalendarSettings } from "@/components/admin/GoogleCalendarSettings";
 import { EmployeeColorSettings } from "@/components/schedule/EmployeeColorSettings";
 import { InvoiceLayoutEditor } from "@/components/InvoiceLayoutEditor";
 import { InvoiceNumberSettings } from "@/components/admin/InvoiceNumberSettings";
@@ -703,6 +704,7 @@ export default function Admin() {
             <TabsTrigger value="konfiguration" className="flex-shrink-0">Konfiguration</TabsTrigger>
             <TabsTrigger value="berechtigungen" className="flex-shrink-0">Berechtigungen</TabsTrigger>
             <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
+            <TabsTrigger value="kalender" className="flex-shrink-0">Google Kalender</TabsTrigger>
           </TabsList>
 
           {/* ===== TAB 1: BENUTZER & MITARBEITER ===== */}
@@ -1281,6 +1283,11 @@ export default function Admin() {
           {/* ===== TAB 7: WHATSAPP ===== */}
           <TabsContent value="whatsapp" className="space-y-6">
             <WhatsAppAdminSettings />
+          </TabsContent>
+
+          {/* ===== TAB 8: GOOGLE KALENDER ===== */}
+          <TabsContent value="kalender" className="space-y-6">
+            <GoogleCalendarSettings />
           </TabsContent>
         </Tabs>
       </main>

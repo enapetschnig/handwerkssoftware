@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  getCalendarIdForProject,
+  isNotFoundError,
+  KATEGORIE_VALUES,
+} from "../_shared/calendar-category.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +15,9 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Calendar ID loaded from app_settings (fallback to empty string)
-async function getCalendarId(): Promise<string> {
+// Legacy single-calendar fallback (für alten worker_assignments-Pfad).
+// Die einsaetze-Pfade nutzen stattdessen das kategorie-basierte Routing.
+async function getLegacyCalendarId(): Promise<string> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", "google_calendar_id").maybeSingle();
   return data?.value || "";
 }
@@ -74,12 +80,200 @@ async function getGoogleAccessToken(): Promise<string> {
 
 // ─── Google Calendar CRUD ────────────────────────────────
 
-async function createOrUpdateEvent(
+async function googleCreateEvent(
+  accessToken: string,
+  calendarId: string,
+  payload: Record<string, any>,
+): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    const err: any = new Error(`Create event failed: ${data.error?.message || res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data.id;
+}
+
+async function googleUpdateEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  payload: Record<string, any>,
+): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    const err: any = new Error(`Update event failed: ${data.error?.message || res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data.id;
+}
+
+async function googleDeleteEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+  // 200/204 = ok, 410 = bereits gelöscht → auch ok
+  if (!res.ok && res.status !== 410) {
+    const data = await res.json().catch(() => ({}));
+    const err: any = new Error(`Delete event failed: ${data.error?.message || res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+}
+
+// ─── Einsatz-Payload Builder ─────────────────────────────
+
+function buildEinsatzEventPayload(
+  einsatz: any,
+  projectName: string,
+  workerName: string,
+): Record<string, any> {
+  const tz = "Europe/Vienna";
+  const isMultiDay = einsatz.start_date !== einsatz.end_date;
+  const descParts = [
+    einsatz.beschreibung || "",
+    einsatz.adresse ? `Adresse: ${einsatz.adresse}` : "",
+    `Mitarbeiter: ${workerName}`,
+  ].filter(Boolean);
+
+  const payload: Record<string, any> = {
+    summary: `${workerName} → ${projectName}`,
+    description: descParts.join("\n") + "\n[montipro-plantafel]",
+  };
+
+  if (einsatz.ganztaegig || isMultiDay) {
+    // All-day: Google braucht end exklusiv (Start 01.05 bis Ende 02.05 = ein Tag).
+    const endDate = new Date(einsatz.end_date + "T12:00:00");
+    endDate.setDate(endDate.getDate() + 1);
+    payload.start = { date: einsatz.start_date };
+    payload.end = { date: endDate.toISOString().split("T")[0] };
+  } else {
+    payload.start = {
+      dateTime: `${einsatz.start_date}T${einsatz.start_time || "07:00"}:00`,
+      timeZone: tz,
+    };
+    payload.end = {
+      dateTime: `${einsatz.end_date}T${einsatz.end_time || "16:00"}:00`,
+      timeZone: tz,
+    };
+  }
+
+  return payload;
+}
+
+/**
+ * Syncen EINES Einsatzes in den zur Projekt-Kategorie gehörigen
+ * Google-Kalender. Implementiert die „Create-before-Delete"-Reihenfolge
+ * aus dem Plan: erst neues Event anlegen, Write-Back, dann altes Event
+ * im Altkalender aufräumen. So entsteht nie ein „weder noch"-Zustand.
+ */
+async function syncOneEinsatz(accessToken: string, einsatzId: string): Promise<{
+  ok: true; mode: "update" | "replaced" | "noop"; google_event_id?: string; google_calendar_id?: string;
+} | { ok: false; error: string }> {
+  const { data: einsatz } = await supabase
+    .from("einsaetze")
+    .select("*")
+    .eq("id", einsatzId)
+    .maybeSingle();
+
+  if (!einsatz) return { ok: false, error: "Einsatz not found" };
+
+  // Projekt + Worker laden
+  let projectName = "Projekt";
+  if (einsatz.project_id) {
+    const { data: p } = await supabase.from("projects")
+      .select("name").eq("id", einsatz.project_id).maybeSingle();
+    if (p) projectName = p.name;
+  }
+  const { data: profile } = await supabase.from("profiles")
+    .select("vorname, nachname").eq("id", einsatz.user_id).maybeSingle();
+  const workerName = profile ? `${profile.vorname} ${profile.nachname}` : "Mitarbeiter";
+
+  // Zielkalender via Kategorie-Helper (Fallback: Default)
+  const targetCalId = await getCalendarIdForProject(supabase, einsatz.project_id);
+  if (!targetCalId) {
+    return { ok: false, error: "Kein Ziel-Kalender (weder Kategorie- noch Default-ID konfiguriert)" };
+  }
+
+  const oldCalId: string | null = einsatz.google_calendar_id || null;
+  const oldEventId: string | null = einsatz.google_event_id || null;
+  const payload = buildEinsatzEventPayload(einsatz, projectName, workerName);
+
+  // Fall A: gleicher Kalender, bestehendes Event → Update
+  if (oldCalId && oldEventId && oldCalId === targetCalId) {
+    try {
+      await googleUpdateEvent(accessToken, targetCalId, oldEventId, payload);
+      return { ok: true, mode: "update", google_event_id: oldEventId, google_calendar_id: targetCalId };
+    } catch (err) {
+      if (!isNotFoundError(err)) {
+        console.error("Update failed (non-404):", err);
+        return { ok: false, error: (err as Error).message };
+      }
+      console.warn(`Event ${oldEventId} in ${targetCalId} manuell gelöscht — Fallback auf Create.`);
+      // fällt durch zu Fall B
+    }
+  }
+
+  // Fall B: neu oder Kalender-Wechsel → create-first
+  const newEventId = await googleCreateEvent(accessToken, targetCalId, payload);
+
+  // Write-Back (Trigger überspringt reinen Meta-Write)
+  await supabase.from("einsaetze").update({
+    google_event_id: newEventId,
+    google_calendar_id: targetCalId,
+  }).eq("id", einsatzId);
+
+  // Alten Event aufräumen (falls vorhanden und anderer Kalender)
+  if (oldCalId && oldEventId && (oldCalId !== targetCalId || oldEventId !== newEventId)) {
+    try {
+      await googleDeleteEvent(accessToken, oldCalId, oldEventId);
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        // Schon weg — ok
+      } else {
+        console.error(`Konnte altes Event ${oldEventId} in ${oldCalId} nicht löschen:`, err);
+        // bewusst kein throw — Haupt-Operation (neues Event) ist erfolgreich
+      }
+    }
+  }
+
+  return { ok: true, mode: "replaced", google_event_id: newEventId, google_calendar_id: targetCalId };
+}
+
+// ─── Legacy worker_assignments CRUD (unverändert) ────────
+// Nutzt weiterhin getLegacyCalendarId() — kein Kategorie-Routing.
+
+async function legacyCreateOrUpdateEvent(
   accessToken: string,
   assignment: any,
   projectName: string,
   workerName: string,
-  existingEventId?: string
+  existingEventId?: string,
 ): Promise<string> {
   const startDateTime = `${assignment.datum}T${assignment.start_time || "07:00"}:00`;
   const endDateTime = `${assignment.datum}T${assignment.end_time || "16:00"}:00`;
@@ -92,36 +286,31 @@ async function createOrUpdateEvent(
     transparency: "opaque",
   };
 
-  const calId = await getCalendarId();
+  const calId = await getLegacyCalendarId();
+  if (!calId) throw new Error("Legacy google_calendar_id not configured");
   const url = existingEventId
     ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${existingEventId}`
     : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
 
   const res = await fetch(url, {
     method: existingEventId ? "PUT" : "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(event),
   });
-
   const data = await res.json();
   if (!res.ok) {
-    console.error("Google Calendar error:", data);
+    console.error("Google Calendar error (legacy):", data);
     throw new Error(`Calendar API error: ${data.error?.message || res.status}`);
   }
-
   return data.id;
 }
 
-async function deleteEvent(accessToken: string, eventId: string) {
+async function legacyDeleteEvent(accessToken: string, eventId: string) {
+  const calId = await getLegacyCalendarId();
+  if (!calId) return;
   await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(await getCalendarId())}/events/${eventId}`,
-    {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${eventId}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
   );
 }
 
@@ -165,111 +354,119 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const { action, assignment_id, einsatz_id } = body;
     const payloadGoogleEventId: string | undefined = body.google_event_id;
+    const payloadGoogleCalendarId: string | undefined = body.google_calendar_id;
 
     if (!action) {
-      return new Response(JSON.stringify({ error: "action required (sync/delete)" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "action required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const accessToken = await getGoogleAccessToken();
 
-    if (action === "delete" && assignment_id) {
-      // Find the google_event_id stored on the assignment
-      const { data: assignment } = await supabase
-        .from("worker_assignments")
-        .select("google_event_id")
-        .eq("id", assignment_id)
-        .maybeSingle();
+    // ─── Einsatz-Pfade (neu, kategorie-basiert) ───
 
-      if (assignment?.google_event_id) {
-        try {
-          await deleteEvent(accessToken, assignment.google_event_id);
-        } catch (e) {
-          console.error("Delete event failed (may already be gone):", e);
+    if (action === "sync_einsatz" && einsatz_id) {
+      const result = await syncOneEinsatz(accessToken, einsatz_id);
+      return new Response(JSON.stringify(result), {
+        status: (result as any).ok ? 200 : 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "delete_einsatz") {
+      // google_event_id + google_calendar_id kommen aus dem DB-Trigger-
+      // Payload (DELETE), oder werden aus der Einsatz-Row gelesen (bei
+      // manuellem Admin-Aufruf — solange die Zeile noch existiert).
+      let gid = payloadGoogleEventId;
+      let gcal = payloadGoogleCalendarId;
+      if ((!gid || !gcal) && einsatz_id) {
+        const { data: einsatz } = await supabase
+          .from("einsaetze")
+          .select("google_event_id, google_calendar_id")
+          .eq("id", einsatz_id).maybeSingle();
+        gid = gid || einsatz?.google_event_id || undefined;
+        gcal = gcal || einsatz?.google_calendar_id || undefined;
+      }
+      if (gid && gcal) {
+        try { await googleDeleteEvent(accessToken, gcal, gid); }
+        catch (e) {
+          if (!isNotFoundError(e)) console.error("Google delete failed:", e);
         }
       }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    // Bulk-Resync aller Einsätze (vom Admin-UI getriggert)
+    if (action === "sync_all_einsaetze") {
+      const { data: allEinsaetze } = await supabase
+        .from("einsaetze")
+        .select("id")
+        .order("start_date", { ascending: false })
+        .limit(2000);
+
+      let ok = 0, fail = 0;
+      for (const row of (allEinsaetze as any[]) || []) {
+        const result = await syncOneEinsatz(accessToken, row.id);
+        if ((result as any).ok) ok++; else fail++;
+      }
+      return new Response(JSON.stringify({ ok: true, synced: ok, failed: fail }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ─── Legacy worker_assignments-Pfade (unverändert) ───
+
+    if (action === "delete" && assignment_id) {
+      const { data: assignment } = await supabase
+        .from("worker_assignments").select("google_event_id").eq("id", assignment_id).maybeSingle();
+      if (assignment?.google_event_id) {
+        try { await legacyDeleteEvent(accessToken, assignment.google_event_id); }
+        catch (e) { console.error("Delete event failed (may already be gone):", e); }
+      }
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (action === "sync" && assignment_id) {
-      // Fetch assignment (without join for reliability)
-      const { data: assignment, error: assignErr } = await supabase
-        .from("worker_assignments")
-        .select("*")
-        .eq("id", assignment_id)
-        .maybeSingle();
-
-      if (assignErr) {
-        console.error("Assignment query error:", assignErr);
-        return new Response(JSON.stringify({ error: "Assignment query failed", details: assignErr.message }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
+      const { data: assignment } = await supabase
+        .from("worker_assignments").select("*").eq("id", assignment_id).maybeSingle();
       if (!assignment) {
-        console.error("Assignment not found for id:", assignment_id);
-        return new Response(JSON.stringify({ error: "Assignment not found", id: assignment_id }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "Assignment not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Get project name separately
       let projectName = "Projekt";
       if (assignment.project_id) {
         const { data: project } = await supabase
-          .from("projects")
-          .select("name")
-          .eq("id", assignment.project_id)
-          .maybeSingle();
+          .from("projects").select("name").eq("id", assignment.project_id).maybeSingle();
         if (project) projectName = project.name;
       }
-
-      // Get worker name
       const { data: profile } = await supabase
-        .from("profiles")
-        .select("vorname, nachname")
-        .eq("id", assignment.user_id)
-        .maybeSingle();
-
+        .from("profiles").select("vorname, nachname").eq("id", assignment.user_id).maybeSingle();
       const workerName = profile ? `${profile.vorname} ${profile.nachname}` : "Mitarbeiter";
 
-      const googleEventId = await createOrUpdateEvent(
-        accessToken,
-        assignment,
-        projectName,
-        workerName,
+      const gid = await legacyCreateOrUpdateEvent(
+        accessToken, assignment, projectName, workerName,
         assignment.google_event_id || undefined
       );
+      await supabase.from("worker_assignments").update({ google_event_id: gid }).eq("id", assignment.id);
 
-      // Store the Google Event ID on the assignment
-      await supabase
-        .from("worker_assignments")
-        .update({ google_event_id: googleEventId })
-        .eq("id", assignment.id);
-
-      return new Response(JSON.stringify({ ok: true, google_event_id: googleEventId }), {
+      return new Response(JSON.stringify({ ok: true, google_event_id: gid }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Bulk sync: sync ALL assignments for a date range
     if (action === "sync_all") {
-      const { start_date, end_date } = await req.json().catch(() => ({}));
-      const from = start_date || new Date().toISOString().split("T")[0];
-      const to = end_date || from;
+      const from = body.start_date || new Date().toISOString().split("T")[0];
+      const to = body.end_date || from;
 
       const { data: allAssignments } = await supabase
-        .from("worker_assignments")
-        .select("*, projects(name)")
-        .gte("datum", from)
-        .lte("datum", to);
+        .from("worker_assignments").select("*, projects(name)")
+        .gte("datum", from).lte("datum", to);
 
       if (!allAssignments?.length) {
         return new Response(JSON.stringify({ ok: true, synced: 0 }), {
@@ -277,146 +474,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
       }
 
-      // Get all profiles
       const userIds = [...new Set(allAssignments.map((a: any) => a.user_id))];
       const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, vorname, nachname")
-        .in("id", userIds);
-
+        .from("profiles").select("id, vorname, nachname").in("id", userIds);
       const profileMap: Record<string, string> = {};
-      (profiles || []).forEach((p: any) => {
-        profileMap[p.id] = `${p.vorname} ${p.nachname}`;
-      });
+      (profiles || []).forEach((p: any) => { profileMap[p.id] = `${p.vorname} ${p.nachname}`; });
 
       let synced = 0;
       for (const a of allAssignments) {
         try {
-          const gid = await createOrUpdateEvent(
-            accessToken,
-            a,
+          const gid = await legacyCreateOrUpdateEvent(
+            accessToken, a,
             (a as any).projects?.name || "Projekt",
             profileMap[a.user_id] || "Mitarbeiter",
             a.google_event_id || undefined
           );
-
-          await supabase
-            .from("worker_assignments")
-            .update({ google_event_id: gid })
-            .eq("id", a.id);
-
+          await supabase.from("worker_assignments").update({ google_event_id: gid }).eq("id", a.id);
           synced++;
-        } catch (e) {
-          console.error(`Sync failed for ${a.id}:`, e);
-        }
+        } catch (e) { console.error(`Sync failed for ${a.id}:`, e); }
       }
-
       return new Response(JSON.stringify({ ok: true, synced }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ─── Einsatz sync (date-range deployments) ───
-    if (action === "sync_einsatz" && einsatz_id) {
-      const { data: einsatz } = await supabase
-        .from("einsaetze")
-        .select("*")
-        .eq("id", einsatz_id)
-        .maybeSingle();
-
-      if (!einsatz) {
-        return new Response(JSON.stringify({ error: "Einsatz not found" }), {
-          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      let projectName = "Projekt";
-      if (einsatz.project_id) {
-        const { data: project } = await supabase.from("projects").select("name").eq("id", einsatz.project_id).maybeSingle();
-        if (project) projectName = project.name;
-      }
-
-      const { data: profile } = await supabase.from("profiles").select("vorname, nachname").eq("id", einsatz.user_id).maybeSingle();
-      const workerName = profile ? `${profile.vorname} ${profile.nachname}` : "Mitarbeiter";
-
-      const calId = await getCalendarId();
-      const isMultiDay = einsatz.start_date !== einsatz.end_date;
-
-      // Build event
-      const event: Record<string, any> = {
-        summary: `${workerName} → ${projectName}`,
-        description: (einsatz.beschreibung || "") + (einsatz.adresse ? `\nAdresse: ${einsatz.adresse}` : "") + "\n[montipro-plantafel]",
-      };
-
-      if (einsatz.ganztaegig || isMultiDay) {
-        // All-day event (end date is exclusive in Google Calendar API)
-        const endDate = new Date(einsatz.end_date + "T12:00:00");
-        endDate.setDate(endDate.getDate() + 1);
-        event.start = { date: einsatz.start_date };
-        event.end = { date: endDate.toISOString().split("T")[0] };
-      } else {
-        event.start = { dateTime: `${einsatz.start_date}T${einsatz.start_time || "07:00"}:00`, timeZone: "Europe/Vienna" };
-        event.end = { dateTime: `${einsatz.end_date}T${einsatz.end_time || "16:00"}:00`, timeZone: "Europe/Vienna" };
-      }
-
-      const existingEventId = einsatz.google_event_id || undefined;
-      const url = existingEventId
-        ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${existingEventId}`
-        : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
-
-      const res = await fetch(url, {
-        method: existingEventId ? "PUT" : "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(event),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Google Calendar error:", data);
-        return new Response(JSON.stringify({ error: data.error?.message || "Calendar API error" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      await supabase.from("einsaetze").update({ google_event_id: data.id }).eq("id", einsatz.id);
-
-      return new Response(JSON.stringify({ ok: true, google_event_id: data.id }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (action === "delete_einsatz") {
-      // google_event_id kann mitgegeben werden (falls die einsaetze-Zeile schon
-      // gelöscht ist, z. B. wenn der DB-Trigger nach DELETE aufruft). Fallback:
-      // aus der DB lesen, solange sie noch existiert.
-      let gid = payloadGoogleEventId;
-      if (!gid && einsatz_id) {
-        const { data: einsatz } = await supabase
-          .from("einsaetze").select("google_event_id").eq("id", einsatz_id).maybeSingle();
-        gid = einsatz?.google_event_id || undefined;
-      }
-      if (gid) {
-        try { await deleteEvent(accessToken, gid); } catch (e) { console.error("Google delete failed:", e); }
-      }
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Cleanup: delete ALL [montipro-plantafel] events from Google Calendar
     if (action === "cleanup_all") {
-      const calId = await getCalendarId();
+      // Cleanup im Legacy-Kalender (worker_assignments) — unverändert.
+      // Für Multi-Kalender-Cleanup siehe google-calendar-sync:cleanup_multi.
+      const calId = await getLegacyCalendarId();
       if (!calId) {
-        return new Response(JSON.stringify({ error: "No calendar ID configured" }), {
+        return new Response(JSON.stringify({ error: "No legacy calendar ID configured" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Fetch all events from Google Calendar
       const params = new URLSearchParams({
-        singleEvents: "true",
-        maxResults: "2500",
-        timeMin: "2025-01-01T00:00:00Z",
+        singleEvents: "true", maxResults: "2500", timeMin: "2025-01-01T00:00:00Z",
       });
       const listRes = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?${params}`,
@@ -424,39 +516,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
       const listData = await listRes.json();
       const allEvents = listData.items || [];
-
       let deleted = 0;
       for (const ev of allEvents) {
         if (ev.description?.includes("[montipro-plantafel]")) {
-          try {
-            await deleteEvent(accessToken, ev.id);
-            deleted++;
-          } catch (e) {
-            console.error(`Failed to delete ${ev.id}:`, e);
-          }
+          try { await legacyDeleteEvent(accessToken, ev.id); deleted++; }
+          catch (e) { console.error(`Failed to delete ${ev.id}:`, e); }
         }
       }
-
-      // Also clear google_event_id from all worker_assignments
       await supabase.from("worker_assignments").update({ google_event_id: null }).neq("id", "00000000-0000-0000-0000-000000000000");
-
-      // Delete imported plantafel calendar_events
       await supabase.from("calendar_events").delete().like("title", "%→%");
-
       return new Response(JSON.stringify({ ok: true, deleted }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // Export: bekannte Kategorie-Werte für UI-Konsistenz-Check
+    if (action === "ping") {
+      return new Response(JSON.stringify({ ok: true, kategorien: KATEGORIE_VALUES }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
     console.error("Sync error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

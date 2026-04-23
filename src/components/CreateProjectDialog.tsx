@@ -115,6 +115,7 @@ export function CreateProjectDialog({
 
   // --- Section 1b: Bereich/Mandant ---
   const [bereich, setBereich] = useState("");
+  const [kategorie, setKategorie] = useState<string>("");  // Geschäftsbereich → Google Calendar
 
   // --- Section 4: Projektinhalt ---
   const [projektTyp, setProjektTyp] = useState("");
@@ -384,6 +385,7 @@ export function CreateProjectDialog({
           projekt_kontakt_name: projektKontaktName.trim() || null,
           projekt_kontakt_telefon: projektKontaktTelefon.trim() || null,
           bereich: bereich || null,
+          kategorie: kategorie || null,
           zusatzinfos: zusatzinfos.trim() || null,
           wegbeschreibung: wegbeschreibung.trim() || null,
           // Projektinhalt
@@ -745,7 +747,24 @@ export function CreateProjectDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">Mandant für Kalender-Zuordnung (Monti.pro, Gartenmacher, …).</p>
+                <p className="text-xs text-muted-foreground mt-1">Freier Bereichstext (admin-konfigurierbar).</p>
+              </div>
+              <div>
+                <Label>Geschäftsbereich (Google Calendar)</Label>
+                <Select value={kategorie || "none"} onValueChange={(v) => setKategorie(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Default-Kalender" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— ohne Bereich (Default-Kalender)</SelectItem>
+                    <SelectItem value="montipro">Monti.pro</SelectItem>
+                    <SelectItem value="bks">BKS-BauKomplettService</SelectItem>
+                    <SelectItem value="gartenmacher">Gartenmacher</SelectItem>
+                    <SelectItem value="fensterwerk">Fensterwerk</SelectItem>
+                    <SelectItem value="ladenbau">Ladenbau</SelectItem>
+                    <SelectItem value="portas">Portas</SelectItem>
+                    <SelectItem value="chef">CHEF (privater Kalender)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Plantafel-Einsätze landen automatisch im Google-Kalender dieses Bereichs.</p>
               </div>
               <div>
                 <Label>Beschreibung / Kurzbeschreibung</Label>

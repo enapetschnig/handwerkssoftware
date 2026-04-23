@@ -840,6 +840,115 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // TEST_CALENDAR_ACCESS: Testet Schreibzugriff des Service-Accounts
+    // ──────────────────────────────────────────────────────────────
+    if (req.method === "POST" && action === "test_calendar_access") {
+      const testBody = await req.json().catch(() => ({}));
+      const { calendarId } = testBody ?? {};
+      if (!calendarId || typeof calendarId !== "string") {
+        return new Response(
+          JSON.stringify({ ok: false, error: "calendarId required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const now = new Date();
+      const end = new Date(now.getTime() + 60_000);
+      const testPayload = {
+        summary: `[Monti.pro Sync-Test] ${now.toLocaleString("de-AT", { timeZone: "Europe/Vienna" })}`,
+        description: "Automatisch erstellter Zugriffstest — wird sofort wieder gelöscht.",
+        start: { dateTime: now.toISOString().replace(/\.\d+Z$/, "Z"), timeZone: "Europe/Vienna" },
+        end:   { dateTime: end.toISOString().replace(/\.\d+Z$/, "Z"), timeZone: "Europe/Vienna" },
+      };
+      try {
+        // create
+        const createRes = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(testPayload),
+          }
+        );
+        const createData = await createRes.json();
+        if (!createRes.ok) {
+          return new Response(
+            JSON.stringify({ ok: false, error: createData.error?.message || `HTTP ${createRes.status}` }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // delete
+        await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${createData.id}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        return new Response(
+          JSON.stringify({ ok: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({ ok: false, error: err.message || "unknown error" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // LIST_EVENTS_MULTI: Liest Events aus allen 7 Kategorie-Kalendern
+    // + Default gleichzeitig. Kein DB-Upsert — reine Live-Abfrage für
+    // den App-Calendar-Viewer. Rückgabe: flache Event-Liste mit
+    // _kategorie-Annotation.
+    // ──────────────────────────────────────────────────────────────
+    if ((req.method === "POST" || req.method === "GET") && action === "list_events_multi") {
+      let multiBody: any = {};
+      if (req.method === "POST") {
+        try { multiBody = await req.json(); } catch { multiBody = {}; }
+      }
+      const timeMin = url.searchParams.get("timeMin") || multiBody?.timeMin;
+      const timeMax = url.searchParams.get("timeMax") || multiBody?.timeMax;
+
+      // Kategorien-Keys aus app_settings laden (7 + default)
+      const KATS = ["montipro", "bks", "gartenmacher", "fensterwerk", "ladenbau", "portas", "chef"];
+      const keys = [...KATS.map(k => `google_calendar_id_${k}`), "google_calendar_id_default"];
+
+      const { data: settingsData } = await supabase
+        .from("app_settings").select("key, value").in("key", keys);
+
+      const calIdByKat: Record<string, string> = {};
+      for (const row of (settingsData as any[]) || []) {
+        const m = row.key.match(/^google_calendar_id_(.+)$/);
+        const id = (row.value || "").trim();
+        if (m && id) calIdByKat[m[1]] = id;
+      }
+
+      const tasks: Promise<{ kategorie: string; events: any[] }>[] = [];
+      for (const [kat, calId] of Object.entries(calIdByKat)) {
+        tasks.push((async () => {
+          try {
+            const events = await fetchEventsFromGoogle(accessToken, calId, timeMin || undefined, timeMax || undefined);
+            return { kategorie: kat, events };
+          } catch (e) {
+            console.error(`list_events_multi: fetch für ${kat} (${calId.slice(0, 20)}…) fehlgeschlagen:`, e);
+            return { kategorie: kat, events: [] };
+          }
+        })());
+      }
+
+      const results = await Promise.all(tasks);
+      const flat: any[] = [];
+      for (const r of results) {
+        for (const ev of r.events) {
+          flat.push({ ...ev, _kategorie: r.kategorie });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, events: flat, calendarsChecked: Object.keys(calIdByKat).length }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: "Invalid action", receivedAction: action }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

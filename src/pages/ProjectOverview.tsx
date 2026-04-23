@@ -54,6 +54,7 @@ const ProjectOverview = () => {
     projekt_kontakt_name: "", projekt_kontakt_telefon: "",
     // Sonstiges Projekt
     bereich: "",
+    kategorie: "",  // Geschäftsbereich für Google Calendar
     projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
     budget: "", auftragsvolumen: "", bauleiter_id: "",
     zugewiesene_mitarbeiter: [] as string[],
@@ -218,6 +219,7 @@ const ProjectOverview = () => {
       projekt_kontakt_telefon: (proj as any).projekt_kontakt_telefon || "",
       // Sonstiges
       bereich: (proj as any).bereich || "",
+      kategorie: (proj as any).kategorie || "",
       projektart: (proj as any).projektart || "",
       prioritaet: (proj as any).prioritaet || "normal",
       geplanter_start: (proj as any).geplanter_start || "",
@@ -266,6 +268,7 @@ const ProjectOverview = () => {
       projekt_kontakt_name: editForm.projekt_kontakt_name.trim() || null,
       projekt_kontakt_telefon: editForm.projekt_kontakt_telefon.trim() || null,
       bereich: editForm.bereich || null,
+      kategorie: editForm.kategorie || null,
       customer_id: editForm.customer_id,
       projektart: editForm.projektart || null,
       prioritaet: editForm.prioritaet || "normal",
@@ -1023,7 +1026,30 @@ const ProjectOverview = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">Mandant für Kalender-Zuordnung (Monti.pro, Gartenmacher, …).</p>
+                <p className="text-xs text-muted-foreground mt-1">Freier Bereichstext (admin-konfigurierbar).</p>
+              </div>
+              <div>
+                <Label>Geschäftsbereich (Google Calendar)</Label>
+                <Select
+                  value={editForm.kategorie || "none"}
+                  onValueChange={(v) => setEditForm(f => ({ ...f, kategorie: v === "none" ? "" : v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Default-Kalender" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— ohne Bereich (Default-Kalender)</SelectItem>
+                    <SelectItem value="montipro">Monti.pro</SelectItem>
+                    <SelectItem value="bks">BKS-BauKomplettService</SelectItem>
+                    <SelectItem value="gartenmacher">Gartenmacher</SelectItem>
+                    <SelectItem value="fensterwerk">Fensterwerk</SelectItem>
+                    <SelectItem value="ladenbau">Ladenbau</SelectItem>
+                    <SelectItem value="portas">Portas</SelectItem>
+                    <SelectItem value="chef">CHEF (privater Kalender)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Plantafel-Einsätze landen automatisch im zugehörigen Google Calendar.
+                  Ändern ⇒ alle Einsätze werden automatisch umgehängt.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

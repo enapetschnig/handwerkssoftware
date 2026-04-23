@@ -37,6 +37,18 @@ type Project = {
   auftragsvolumen: number | null;
   bauleiter_id: string | null;
   ort: string | null;
+  kategorie?: string | null;
+};
+
+/** Geschäftsbereich → Google-Kalender. 7 Kategorien + Default. */
+const KATEGORIE_META: Record<string, { label: string; color: string; bg: string }> = {
+  montipro:     { label: "Monti.pro",     color: "#166534", bg: "#dcfce7" },
+  bks:          { label: "BKS",           color: "#1e40af", bg: "#dbeafe" },
+  gartenmacher: { label: "Gartenmacher",  color: "#3f6212", bg: "#ecfccb" },
+  fensterwerk:  { label: "Fensterwerk",   color: "#155e75", bg: "#cffafe" },
+  ladenbau:     { label: "Ladenbau",      color: "#92400e", bg: "#fef3c7" },
+  portas:       { label: "Portas",        color: "#9a3412", bg: "#ffedd5" },
+  chef:         { label: "CHEF",          color: "#6b21a8", bg: "#f3e8ff" },
 };
 
 const Projects = () => {
@@ -528,6 +540,17 @@ const Projects = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
+                        {(project as any).kategorie && KATEGORIE_META[(project as any).kategorie] && (
+                          <Badge
+                            className="whitespace-nowrap text-xs border-0"
+                            style={{
+                              backgroundColor: KATEGORIE_META[(project as any).kategorie].bg,
+                              color: KATEGORIE_META[(project as any).kategorie].color,
+                            }}
+                          >
+                            {KATEGORIE_META[(project as any).kategorie].label}
+                          </Badge>
+                        )}
                         {(project as any).bereich && (
                           <Badge variant="secondary" className="whitespace-nowrap text-xs">
                             {bereichOptions.find((o) => o.wert === (project as any).bereich)?.label || (project as any).bereich}
