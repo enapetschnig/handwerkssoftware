@@ -765,7 +765,11 @@ export async function generateInvoicePdf(
   return pdf.output("blob");
 }
 
-// Generate a Storno confirmation PDF
+// Generate a Storno confirmation PDF.
+// `docTypeLabel` ist optional und steuert die Beschriftung im PDF
+// ("Rechnungsnummer:" vs. "Nummer der Auftragsbestätigung:" etc.).
+// Wird kein Label übergeben, fällt es auf "Rechnung" zurück — damit
+// bleiben bestehende Aufrufer unverändert gültig.
 export function generateStornoPdf(
   invoice: { nummer: string; kunde_name: string; brutto_summe: number; datum: string },
   stornoNummer: string,
@@ -773,7 +777,8 @@ export function generateStornoPdf(
   stornoGrund: string,
   bank: BankData = DEFAULT_BANK,
   logoDataUri?: string,
-  layout?: InvoiceLayoutSettings
+  layout?: InvoiceLayoutSettings,
+  docTypeLabel: string = "Rechnung"
 ): Blob {
   const L = layout || DEFAULT_LAYOUT;
   const [acR, acG, acB] = hexToRgb(L.accent_color);
@@ -804,13 +809,16 @@ export function generateStornoPdf(
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
 
+  // Bei AB ist brutto_summe i. d. R. unverrechnet — der Betrag wird
+  // trotzdem als Info-Zeile gezeigt, aber mit neutralem Label.
+  const betragLabel = docTypeLabel === "Rechnung" ? "Rechnungsbetrag:" : "Auftragssumme:";
   const details: [string, string][] = [
     ["Stornonummer:", stornoNummer],
     ["Stornodatum:", fmtDate(stornoDatum)],
-    ["Rechnungsnummer:", invoice.nummer],
-    ["Rechnungsdatum:", fmtDate(invoice.datum)],
+    [`${docTypeLabel}snummer:`, invoice.nummer],
+    [`${docTypeLabel}sdatum:`, fmtDate(invoice.datum)],
     ["Kunde:", invoice.kunde_name],
-    ["Rechnungsbetrag:", fmtCurrency(invoice.brutto_summe)],
+    [betragLabel, fmtCurrency(invoice.brutto_summe)],
   ];
 
   details.forEach(([label, value]) => {
@@ -841,9 +849,14 @@ export function generateStornoPdf(
   // Confirmation text
   pdf.setFontSize(9);
   pdf.setTextColor(0, 0, 0);
-  pdf.text("Hiermit wird bestätigt, dass die oben genannte Rechnung storniert wurde.", ml, y);
+  const docLower = docTypeLabel.toLowerCase();
+  pdf.text(`Hiermit wird bestätigt, dass die oben genannte ${docLower} storniert wurde.`, ml, y);
   y += 5;
-  pdf.text("Der Rechnungsbetrag wird nicht mehr zur Zahlung fällig.", ml, y);
+  if (docTypeLabel === "Rechnung") {
+    pdf.text("Der Rechnungsbetrag wird nicht mehr zur Zahlung fällig.", ml, y);
+  } else {
+    pdf.text("Der Auftrag gilt damit als aufgehoben; eventuelle Folgedokumente sind separat zu behandeln.", ml, y);
+  }
 
   // Einheitlicher BKS-Footer
   drawFooter(pdf, L, { withPageNumbers: false });

@@ -1628,24 +1628,27 @@ export default function InvoiceDetail() {
     }
   };
 
-  const handleCancel = async () => {
+  // Storno-Helper: generisch für Rechnung, Anzahlungsrechnung, Schlussrechnung,
+  // Gutschrift UND Auftragsbestätigung. Grund + PDF-Label sind parametrierbar;
+  // Defaults erhalten die bisherige Rechnungs-Semantik.
+  const handleCancel = async (opts?: { grund?: string; docTypeLabel?: string }) => {
     if (!invoiceId) return;
+    const stornoGrund = (opts?.grund?.trim()) || "Storniert durch Benutzer";
+    const docTypeLabel = opts?.docTypeLabel || "Rechnung";
     try {
       const stornoNummer = `S-${form.nummer || invoiceId.substring(0, 8)}`;
       const stornoDatum = new Date().toISOString().split("T")[0];
       // bezahlt_betrag beim Storno auf 0 — sonst bleibt der Teilzahlungs-
-      // Wert stehen und verzerrt Umsatz-/Offen-Statistiken. Die
-      // tatsächliche Zahlung wird bei Bedarf über eine Gutschrift
-      // dokumentiert.
+      // Wert stehen und verzerrt Umsatz-/Offen-Statistiken.
       const { error } = await supabase.from("invoices").update({
         status: "storniert",
         storno_nummer: stornoNummer,
         storno_datum: stornoDatum,
-        storno_grund: "Storniert durch Benutzer",
+        storno_grund: stornoGrund,
         bezahlt_betrag: 0,
       }).eq("id", invoiceId);
       if (error) throw error;
-      setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: "Storniert durch Benutzer", bezahlt_betrag: 0 }));
+      setForm(prev => ({ ...prev, status: "storniert", storno_nummer: stornoNummer, storno_datum: stornoDatum, storno_grund: stornoGrund, bezahlt_betrag: 0 }));
 
       // Stornobeleg sofort erstellen und herunterladen
       try {
@@ -1660,8 +1663,8 @@ export default function InvoiceDetail() {
         });
         const pdfBlob = generateStornoPdf(
           { nummer: form.nummer, kunde_name: form.kunde_name, brutto_summe: bruttoSumme, datum: form.datum },
-          stornoNummer, stornoDatum, "Storniert durch Benutzer",
-          bank1, logoUri, invoiceLayout
+          stornoNummer, stornoDatum, stornoGrund,
+          bank1, logoUri, invoiceLayout, docTypeLabel
         );
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement("a"); a.href = url; a.download = `Storno_${stornoNummer}.pdf`; a.click();
@@ -1670,11 +1673,72 @@ export default function InvoiceDetail() {
         console.error("Storno-PDF Fehler:", pdfErr);
       }
 
-      toast({ title: "Rechnung storniert", description: `Stornobeleg ${stornoNummer} wurde erstellt` });
+      toast({ title: `${docTypeLabel} storniert`, description: `Stornobeleg ${stornoNummer} wurde erstellt` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Fehler", description: err.message || "Stornierung fehlgeschlagen" });
     }
   };
+
+  // ========= AB-Aktion: Aufheben (Delete oder Storno, kontextabhängig) =========
+  type FollowupDoc = { id: string; typ: string; nummer: string; status: string };
+
+  const getFollowupDocs = async (parentId: string): Promise<FollowupDoc[]> => {
+    const { data } = await supabase
+      .from("invoices")
+      .select("id, typ, nummer, status")
+      .eq("parent_invoice_id", parentId)
+      .neq("status", "storniert")
+      .order("datum", { ascending: true });
+    return (data as FollowupDoc[]) || [];
+  };
+
+  const [abActionOpen, setAbActionOpen] = useState(false);
+  const [abActionLoading, setAbActionLoading] = useState(false);
+  const [abCanHardDelete, setAbCanHardDelete] = useState(false);
+  const [abFollowups, setAbFollowups] = useState<FollowupDoc[]>([]);
+  const [abStornoGrund, setAbStornoGrund] = useState("Auftrag aufgehoben");
+
+  const openAbActionDialog = async () => {
+    if (!invoiceId) return;
+    setAbActionLoading(true);
+    try {
+      const followups = await getFollowupDocs(invoiceId);
+      const canHard = form.status === "entwurf" && followups.length === 0;
+      setAbCanHardDelete(canHard);
+      setAbFollowups(followups);
+      setAbStornoGrund("Auftrag aufgehoben");
+      setAbActionOpen(true);
+    } finally {
+      setAbActionLoading(false);
+    }
+  };
+
+  const handleHardDeleteAb = async () => {
+    if (!invoiceId) return;
+    try {
+      // invoice_items werden via ON DELETE CASCADE automatisch entfernt
+      const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+      if (error) throw error;
+      toast({ title: "Gelöscht", description: `${typLabel} ${form.nummer || ""} wurde endgültig entfernt.` });
+      navigate("/invoices");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler", description: err.message || "Löschen fehlgeschlagen" });
+    }
+  };
+
+  const confirmAbAction = async () => {
+    setAbActionOpen(false);
+    if (abCanHardDelete) {
+      await handleHardDeleteAb();
+    } else {
+      await handleCancel({ grund: abStornoGrund, docTypeLabel: "Auftragsbestätigung" });
+    }
+  };
+
+  const canAbAction =
+    !isNew && !!invoiceId && id !== "new"
+    && form.typ === "auftragsbestaetigung"
+    && form.status !== "storniert";
 
   const handleMahnstufeUp = async () => {
     if (!invoiceId) return;
@@ -2091,6 +2155,83 @@ export default function InvoiceDetail() {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                    )}
+                    {canAbAction && (
+                      <>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={openAbActionDialog}
+                          disabled={abActionLoading}
+                        >
+                          <Ban className="w-4 h-4" />
+                          Auftrag aufheben
+                        </Button>
+                        <AlertDialog open={abActionOpen} onOpenChange={setAbActionOpen}>
+                          <AlertDialogContent className="max-w-lg">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-destructive" />
+                                {abCanHardDelete ? "Auftragsbestätigung endgültig löschen?" : "Auftrag stornieren?"}
+                              </AlertDialogTitle>
+                              <AlertDialogDescription asChild>
+                                <div className="space-y-3">
+                                  {abCanHardDelete ? (
+                                    <p>
+                                      Die Auftragsbestätigung {form.nummer} ist im Status „Entwurf" und hat keine
+                                      Folgedokumente. Sie wird <b>unwiderruflich entfernt</b>, inkl. aller Positionen.
+                                      Kein Storno-Beleg nötig.
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <p>
+                                        Die Auftragsbestätigung {form.nummer} wird als <b>storniert</b> markiert
+                                        und ein Storno-PDF wird automatisch erzeugt & heruntergeladen.
+                                      </p>
+                                      {abFollowups.length > 0 && (
+                                        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                                          <p className="font-medium text-destructive mb-1">
+                                            ⚠ Es existieren {abFollowups.length} Folgedokument{abFollowups.length === 1 ? "" : "e"}:
+                                          </p>
+                                          <ul className="text-foreground space-y-0.5">
+                                            {abFollowups.map(f => (
+                                              <li key={f.id} className="text-xs">
+                                                • <span className="font-mono">{f.nummer}</span> ({f.typ} · {f.status})
+                                              </li>
+                                            ))}
+                                          </ul>
+                                          <p className="text-xs text-muted-foreground mt-2">
+                                            Diese bleiben unberührt. Bei Bedarf musst du sie separat stornieren.
+                                          </p>
+                                        </div>
+                                      )}
+                                      <div className="space-y-1.5">
+                                        <Label htmlFor="ab-storno-grund">Grund der Stornierung</Label>
+                                        <Textarea
+                                          id="ab-storno-grund"
+                                          rows={2}
+                                          value={abStornoGrund}
+                                          onChange={(e) => setAbStornoGrund(e.target.value)}
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={confirmAbAction}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {abCanHardDelete ? "Endgültig löschen" : "Stornieren & PDF erzeugen"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
                     )}
                   </div>
                 </div>
