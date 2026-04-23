@@ -68,6 +68,11 @@ interface InvoiceItem {
   // Wenn true, ist gesamtpreis bereits BRUTTO und wird aus der MwSt-
   // Berechnung ausgenommen (Anzahlungs-Abzüge in Schlussrechnungen).
   mwst_exempt?: boolean;
+  // Set-Summary: wenn gesetzt, ist diese Zeile eine Material-Set-Summary.
+  // Das PDF/HTML rendert weiterhin nur die Zeile — der Snapshot ist nur
+  // für interne Nachkalkulation im Rechnungs-Editor sichtbar.
+  set_template_id?: string | null;
+  set_snapshot?: any;
 }
 
 interface InvoiceData {
@@ -391,6 +396,8 @@ export default function InvoiceDetail() {
             einzelpreis: Number(it.einzelpreis) || 0,
             rabatt_prozent: Number(it.rabatt_prozent) || 0,
             gesamtpreis: Number(it.gesamtpreis) || 0,
+            set_template_id: it.set_template_id || null,
+            set_snapshot: it.set_snapshot || null,
           }));
 
           // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag.
@@ -654,6 +661,8 @@ export default function InvoiceDetail() {
         produktnummer: (it as any).produktnummer || "",
         gesamtpreis: Number(it.gesamtpreis),
         mwst_exempt: !!(it as any).mwst_exempt,
+        set_template_id: (it as any).set_template_id || null,
+        set_snapshot: (it as any).set_snapshot || null,
       })));
     }
 
@@ -736,14 +745,16 @@ export default function InvoiceDetail() {
   };
 
   const addFromTemplate = async (t: TemplateItem) => {
-    // Set (Stückliste): alle Komponenten des Sets aus der DB laden und
-    // als einzelne Positionen in die Rechnung einfügen. Mengen = Komponenten-
-    // Menge × Set-Menge (aus dem Template-Picker; Default 1).
+    // Set (Stückliste) — Summary-Mode: EINE Zeile pro Set in der Rechnung,
+    // mit dem Set-VK als Einzelpreis. Die Komponenten-Stückliste wird als
+    // JSON-Snapshot gespeichert, damit sie später für interne Nach-
+    // kalkulation noch verfügbar ist — auch wenn das Set im Katalog
+    // geändert oder gelöscht wird.
     if ((t as any).ist_set) {
       const setMenge = Number(templateMengen[t.id]) > 0 ? Number(templateMengen[t.id]) : 1;
       const { data: comps } = await (supabase as any)
         .from("invoice_template_components")
-        .select("menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, langbezeichnung, einheit, einzelpreis, produktnummer)")
+        .select("menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, einheit, einzelpreis, ek_netto, vk_netto)")
         .eq("parent_template_id", t.id)
         .order("sort_order");
       const rows = ((comps as any[]) || []);
@@ -751,32 +762,49 @@ export default function InvoiceDetail() {
         toast({ variant: "destructive", title: "Set ist leer", description: `${t.name} hat keine Komponenten.` });
         return;
       }
-      const newItems: InvoiceItem[] = rows.map((r, idx) => {
+      const vkNetto = Number((t as any).vk_netto ?? (t as any).netto_preis ?? t.einzelpreis) || 0;
+      const bezugseinheit = (t as any).bezugseinheit || t.einheit || "Stk.";
+      const aufschlag = Number((t as any).aufschlag_prozent) || 0;
+      const komponenten = rows.map(r => {
         const c = r.component || {};
-        const netto = Number(c.einzelpreis) || 0;
-        const menge = Math.round((Number(r.menge) || 1) * setMenge * 1000) / 1000;
+        const cvk = Number(c.vk_netto ?? c.einzelpreis) || 0;
         return {
-          position: idx + 1,
-          beschreibung: c.kurzbezeichnung || c.name || "",
-          kurztext: c.kurzbezeichnung || c.name || "",
-          langtext: (c.langbezeichnung && c.langbezeichnung !== (c.kurzbezeichnung || c.name)) ? c.langbezeichnung : "",
-          menge,
+          name: c.kurzbezeichnung || c.name || "?",
           einheit: c.einheit || "Stk.",
-          einzelpreis: netto,
-          rabatt_prozent: 0,
-          produktnummer: c.produktnummer || "",
-          gesamtpreis: Math.round(menge * netto * 100) / 100,
+          menge: Number(r.menge) || 1,  // pro 1 Bezugseinheit
+          ek: Number(c.ek_netto ?? cvk) || 0,
+          vk: cvk,
         };
       });
-      setItems(prev => mergeItems(prev, newItems));
+      const summaryRow: InvoiceItem = {
+        position: 1,
+        beschreibung: (t as any).kurzbezeichnung || t.name,
+        kurztext: (t as any).kurzbezeichnung || t.name,
+        langtext: ((t as any).langbezeichnung && (t as any).langbezeichnung !== ((t as any).kurzbezeichnung || t.name))
+          ? (t as any).langbezeichnung
+          : "",
+        menge: setMenge,
+        einheit: bezugseinheit,
+        einzelpreis: vkNetto,
+        rabatt_prozent: 0,
+        produktnummer: (t as any).produktnummer || "",
+        gesamtpreis: Math.round(setMenge * vkNetto * 100) / 100,
+        set_template_id: t.id,
+        set_snapshot: {
+          bezugseinheit,
+          aufschlag_prozent: aufschlag,
+          komponenten,
+        },
+      };
+      setItems(prev => mergeItems(prev, [summaryRow]));
       toast({
-        title: `Set hinzugefügt: ${t.name}${setMenge !== 1 ? ` × ${setMenge}` : ""}`,
-        description: `${newItems.length} Komponenten aufgeschlüsselt${setMenge !== 1 ? ` (Komponenten-Mengen × ${setMenge})` : ""}.`,
+        title: `Set hinzugefügt: ${t.name}`,
+        description: `${setMenge} × ${bezugseinheit} (${komponenten.length} Komponenten im Snapshot).`,
       });
       return;
     }
 
-    const netto = Number((t as any).netto_preis) || t.einzelpreis;
+    const netto = Number((t as any).vk_netto ?? (t as any).netto_preis) || t.einzelpreis;
     const newItem: InvoiceItem = {
       position: 1,
       beschreibung: (t as any).kurzbezeichnung || t.name || t.beschreibung,
@@ -1132,6 +1160,8 @@ export default function InvoiceDetail() {
         produktnummer: item.produktnummer || null,
         rabatt_prozent: item.rabatt_prozent || 0,
         mwst_exempt: item.mwst_exempt || false,
+        set_template_id: item.set_template_id || null,
+        set_snapshot: item.set_snapshot || null,
       }));
 
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert);
@@ -1533,6 +1563,8 @@ export default function InvoiceDetail() {
         produktnummer: (item as any).produktnummer || null,
         rabatt_prozent: (item as any).rabatt_prozent || 0,
         mwst_exempt: (item as any).mwst_exempt || false,
+        set_template_id: (item as any).set_template_id || null,
+        set_snapshot: (item as any).set_snapshot || null,
       }));
 
       await supabase.from("invoice_items").insert(itemsToInsert);

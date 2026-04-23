@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useEinheiten } from "@/hooks/useEinheiten";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MaterialSetEditor, type SetComponent } from "@/components/MaterialSetEditor";
+import { BulkPriceDialog } from "@/components/BulkPriceDialog";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,11 @@ interface Template {
   ist_favorit: boolean;
   foto_path: string | null;
   ist_set: boolean;
+  ek_netto: number;
+  vk_netto: number;
+  bezugseinheit: string | null;
+  aufschlag_prozent: number;
+  vk_preis_manuell: boolean;
 }
 
 export default function InvoiceTemplates() {
@@ -59,8 +65,14 @@ export default function InvoiceTemplates() {
     ist_lagerartikel: false, lieferant: "", produktgruppe: "",
     foto_path: null as string | null,
     ist_set: false,
+    ek_netto: 0,
+    vk_netto: 0,
+    bezugseinheit: "" as string,
+    aufschlag_prozent: 0,
+    vk_preis_manuell: false,
   });
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
   const [priceAdjustMode, setPriceAdjustMode] = useState<"prozent" | "euro">("prozent");
   const [priceAdjustValue, setPriceAdjustValue] = useState("");
   // Foto-Vorschau-URLs (signed) für Katalog-Liste + Edit-Dialog
@@ -86,24 +98,32 @@ export default function InvoiceTemplates() {
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Materialien konnten nicht geladen werden" });
     } else {
-      const rows = (data || []).map(t => ({
-        ...t,
-        einzelpreis: Number(t.einzelpreis),
-        netto_preis: Number((t as any).netto_preis) || Number(t.einzelpreis),
-        brutto_preis: Number((t as any).brutto_preis) || 0,
-        ust_satz: Number((t as any).ust_satz) || 20,
-        ist_aktiv: (t as any).ist_aktiv !== false,
-        ist_lagerartikel: (t as any).ist_lagerartikel || false,
-        artikelnummer: (t as any).artikelnummer || null,
-        produktnummer: (t as any).produktnummer || null,
-        produktgruppe: (t as any).produktgruppe || null,
-        kurzbezeichnung: (t as any).kurzbezeichnung || null,
-        langbezeichnung: (t as any).langbezeichnung || null,
-        lieferant: (t as any).lieferant || null,
-        ist_favorit: (t as any).ist_favorit || false,
-        foto_path: (t as any).foto_path || null,
-        ist_set: !!(t as any).ist_set,
-      })) as Template[];
+      const rows = (data || []).map(t => {
+        const nettoPreis = Number((t as any).netto_preis) || Number(t.einzelpreis);
+        return {
+          ...t,
+          einzelpreis: Number(t.einzelpreis),
+          netto_preis: nettoPreis,
+          brutto_preis: Number((t as any).brutto_preis) || 0,
+          ust_satz: Number((t as any).ust_satz) || 20,
+          ist_aktiv: (t as any).ist_aktiv !== false,
+          ist_lagerartikel: (t as any).ist_lagerartikel || false,
+          artikelnummer: (t as any).artikelnummer || null,
+          produktnummer: (t as any).produktnummer || null,
+          produktgruppe: (t as any).produktgruppe || null,
+          kurzbezeichnung: (t as any).kurzbezeichnung || null,
+          langbezeichnung: (t as any).langbezeichnung || null,
+          lieferant: (t as any).lieferant || null,
+          ist_favorit: (t as any).ist_favorit || false,
+          foto_path: (t as any).foto_path || null,
+          ist_set: !!(t as any).ist_set,
+          ek_netto: Number((t as any).ek_netto ?? nettoPreis) || 0,
+          vk_netto: Number((t as any).vk_netto ?? nettoPreis) || 0,
+          bezugseinheit: (t as any).bezugseinheit || null,
+          aufschlag_prozent: Number((t as any).aufschlag_prozent) || 0,
+          vk_preis_manuell: !!(t as any).vk_preis_manuell,
+        };
+      }) as Template[];
       setTemplates(rows);
 
       // Signed URLs für alle Fotos parallel generieren (1h gültig)
@@ -156,6 +176,7 @@ export default function InvoiceTemplates() {
       produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
       ist_lagerartikel: false, lieferant: "", produktgruppe: "",
       foto_path: null, ist_set: false,
+      ek_netto: 0, vk_netto: 0, bezugseinheit: "", aufschlag_prozent: 0, vk_preis_manuell: false,
     });
     setSetComponents([]);
     setOriginalComponentIds([]);
@@ -174,6 +195,11 @@ export default function InvoiceTemplates() {
       lieferant: t.lieferant || "", produktgruppe: t.produktgruppe || t.kategorie,
       foto_path: t.foto_path,
       ist_set: t.ist_set,
+      ek_netto: t.ek_netto,
+      vk_netto: t.vk_netto || t.netto_preis,
+      bezugseinheit: t.bezugseinheit || "",
+      aufschlag_prozent: t.aufschlag_prozent,
+      vk_preis_manuell: t.vk_preis_manuell,
     });
     setPriceAdjustValue("");
     setEditFotoUrl(t.foto_path ? (fotoUrls[t.id] || null) : null);
@@ -183,18 +209,22 @@ export default function InvoiceTemplates() {
     if (t.ist_set) {
       const { data } = await (supabase as any)
         .from("invoice_template_components")
-        .select("id, component_template_id, menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, einheit, einzelpreis)")
+        .select("id, component_template_id, menge, sort_order, component:invoice_templates!component_template_id(id, name, kurzbezeichnung, einheit, einzelpreis, ek_netto, vk_netto)")
         .eq("parent_template_id", t.id)
         .order("sort_order");
-      const rows = ((data as any[]) || []).map(r => ({
-        id: r.id,
-        component_template_id: r.component_template_id,
-        component_name: r.component?.kurzbezeichnung || r.component?.name || "?",
-        component_einheit: r.component?.einheit || "Stk.",
-        component_netto_preis: Number(r.component?.einzelpreis) || 0,
-        menge: Number(r.menge) || 1,
-        sort_order: Number(r.sort_order) || 0,
-      })) as SetComponent[];
+      const rows = ((data as any[]) || []).map(r => {
+        const nettoFallback = Number(r.component?.einzelpreis) || 0;
+        return {
+          id: r.id,
+          component_template_id: r.component_template_id,
+          component_name: r.component?.kurzbezeichnung || r.component?.name || "?",
+          component_einheit: r.component?.einheit || "Stk.",
+          component_netto_preis: Number(r.component?.vk_netto ?? nettoFallback) || 0,
+          component_ek_netto: Number(r.component?.ek_netto ?? nettoFallback) || 0,
+          menge: Number(r.menge) || 1,
+          sort_order: Number(r.sort_order) || 0,
+        };
+      }) as SetComponent[];
       setSetComponents(rows);
       setOriginalComponentIds(rows.map(r => r.id!).filter(Boolean));
     } else {
@@ -245,34 +275,45 @@ export default function InvoiceTemplates() {
     }
 
     // H-4: Preise dürfen nicht negativ sein (DB-Constraint wirft sonst nur technische Meldung)
-    const netto = Number(form.netto_preis) || 0;
-    const brutto = Number(form.brutto_preis) || 0;
-    if (netto < 0 || brutto < 0) {
-      toast({ variant: "destructive", title: "Preis ungültig", description: "Netto- und Brutto-Preis dürfen nicht negativ sein." });
+    const ek = Number(form.ek_netto) || 0;
+    const vk = Number(form.vk_netto) || 0;
+    if (ek < 0 || vk < 0) {
+      toast({ variant: "destructive", title: "Preis ungültig", description: "EK und VK dürfen nicht negativ sein." });
       return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // VK ist der Primärwert für Rechnungen; netto_preis und einzelpreis werden
+    // daraus gespiegelt für Abwärtskompatibilität mit Altcode.
+    const vkEffective = Number(form.vk_netto) || Number(form.netto_preis) || 0;
+    const ekEffective = Number(form.ek_netto) || vkEffective;
+    const bruttoEffective = Math.round(vkEffective * (1 + Number(form.ust_satz) / 100) * 100) / 100;
+
     const payload: any = {
       name: form.kurzbezeichnung || form.name,
       beschreibung: form.langbezeichnung || form.beschreibung || form.kurzbezeichnung || form.name,
-      einheit: form.einheit,
-      einzelpreis: form.netto_preis,
+      einheit: form.ist_set && form.bezugseinheit ? form.bezugseinheit : form.einheit,
+      einzelpreis: vkEffective,
       kategorie: form.produktgruppe || form.kategorie,
       artikelnummer: form.produktnummer || form.artikelnummer || null,
       produktnummer: form.produktnummer || null,
       produktgruppe: form.produktgruppe || null,
       kurzbezeichnung: form.kurzbezeichnung || form.name,
       langbezeichnung: form.langbezeichnung || null,
-      netto_preis: form.netto_preis,
-      brutto_preis: form.brutto_preis,
+      netto_preis: vkEffective,
+      brutto_preis: bruttoEffective,
       ust_satz: form.ust_satz,
       ist_lagerartikel: form.ist_lagerartikel,
       lieferant: form.lieferant || null,
       foto_path: form.foto_path,
       ist_set: form.ist_set,
+      ek_netto: ekEffective,
+      vk_netto: vkEffective,
+      bezugseinheit: form.ist_set ? (form.bezugseinheit || null) : null,
+      aufschlag_prozent: form.ist_set ? Number(form.aufschlag_prozent) || 0 : 0,
+      vk_preis_manuell: form.ist_set ? form.vk_preis_manuell : false,
     };
 
     let templateId = editId;
@@ -369,6 +410,10 @@ export default function InvoiceTemplates() {
             </Select>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkPriceOpen(true)} className="gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Preise anpassen
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
               <Upload className="w-4 h-4" />
               Importieren
@@ -586,7 +631,7 @@ export default function InvoiceTemplates() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div>
                   <Label>Einheit</Label>
                   <Select value={form.einheit} onValueChange={(v) => setForm(f => ({ ...f, einheit: v }))}>
@@ -599,17 +644,37 @@ export default function InvoiceTemplates() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Netto-Preis (€)</Label>
-                  <Input type="number" value={form.netto_preis || ""} onChange={(e) => {
-                    const netto = Number(e.target.value);
-                    setForm(f => ({ ...f, netto_preis: netto, brutto_preis: Math.round(netto * (1 + f.ust_satz / 100) * 100) / 100 }));
+                  <Label>EK netto (€)</Label>
+                  <Input type="number" value={form.ek_netto || ""} onChange={(e) => {
+                    const ek = Number(e.target.value);
+                    setForm(f => ({ ...f, ek_netto: ek }));
                   }} min={0} step={0.01} />
+                </div>
+                <div>
+                  <Label>VK netto (€)</Label>
+                  <Input
+                    type="number"
+                    value={form.vk_netto || ""}
+                    onChange={(e) => {
+                      const vk = Number(e.target.value);
+                      setForm(f => ({
+                        ...f,
+                        vk_netto: vk,
+                        netto_preis: vk,
+                        brutto_preis: Math.round(vk * (1 + f.ust_satz / 100) * 100) / 100,
+                        vk_preis_manuell: f.ist_set ? true : f.vk_preis_manuell,
+                      }));
+                    }}
+                    min={0}
+                    step={0.01}
+                    disabled={form.ist_set && !form.vk_preis_manuell}
+                  />
                 </div>
                 <div>
                   <Label>USt-Satz (%)</Label>
                   <Select value={String(form.ust_satz)} onValueChange={(v) => {
                     const ust = Number(v);
-                    setForm(f => ({ ...f, ust_satz: ust, brutto_preis: Math.round(f.netto_preis * (1 + ust / 100) * 100) / 100 }));
+                    setForm(f => ({ ...f, ust_satz: ust, brutto_preis: Math.round((f.vk_netto || f.netto_preis) * (1 + ust / 100) * 100) / 100 }));
                   }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -621,13 +686,39 @@ export default function InvoiceTemplates() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Brutto-Preis (€)</Label>
-                  <Input type="number" value={form.brutto_preis || ""} onChange={(e) => {
-                    const brutto = Number(e.target.value);
-                    setForm(f => ({ ...f, brutto_preis: brutto, netto_preis: f.ust_satz > 0 ? Math.round(brutto / (1 + f.ust_satz / 100) * 100) / 100 : brutto }));
-                  }} min={0} step={0.01} />
+                  <Label>Brutto (€)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round((form.vk_netto || 0) * (1 + form.ust_satz / 100) * 100) / 100 || ""}
+                    onChange={(e) => {
+                      const brutto = Number(e.target.value);
+                      const vk = form.ust_satz > 0 ? Math.round(brutto / (1 + form.ust_satz / 100) * 100) / 100 : brutto;
+                      setForm(f => ({
+                        ...f,
+                        vk_netto: vk,
+                        netto_preis: vk,
+                        brutto_preis: brutto,
+                        vk_preis_manuell: f.ist_set ? true : f.vk_preis_manuell,
+                      }));
+                    }}
+                    min={0}
+                    step={0.01}
+                    disabled={form.ist_set && !form.vk_preis_manuell}
+                  />
                 </div>
               </div>
+              {/* Marge-Anzeige */}
+              {form.vk_netto > 0 && (
+                <div className="text-xs text-muted-foreground -mt-2">
+                  {form.ek_netto > 0 ? (
+                    <>Marge: <span className={`font-mono ${form.vk_netto >= form.ek_netto ? "text-green-600" : "text-destructive"}`}>
+                      {(((form.vk_netto - form.ek_netto) / form.ek_netto) * 100).toFixed(1)} %
+                    </span> (€ {(form.vk_netto - form.ek_netto).toFixed(2)} Aufschlag)</>
+                  ) : (
+                    <>Kein EK hinterlegt — Marge nicht berechenbar.</>
+                  )}
+                </div>
+              )}
               {/* Preisanpassung — nur bei bestehendem Material */}
               {editId && (
                 <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
@@ -672,22 +763,25 @@ export default function InvoiceTemplates() {
                         const val = Number(priceAdjustValue);
                         if (!val) return;
                         setForm(f => {
-                          let newNetto: number;
+                          const baseVk = f.vk_netto || f.netto_preis;
+                          let newVk: number;
                           if (priceAdjustMode === "prozent") {
-                            newNetto = Math.round(f.netto_preis * (1 + val / 100) * 100) / 100;
+                            newVk = Math.round(baseVk * (1 + val / 100) * 100) / 100;
                           } else {
-                            newNetto = Math.round((f.netto_preis + val) * 100) / 100;
+                            newVk = Math.round((baseVk + val) * 100) / 100;
                           }
-                          if (newNetto < 0) newNetto = 0;
+                          if (newVk < 0) newVk = 0;
                           return {
                             ...f,
-                            netto_preis: newNetto,
-                            brutto_preis: Math.round(newNetto * (1 + f.ust_satz / 100) * 100) / 100,
+                            vk_netto: newVk,
+                            netto_preis: newVk,
+                            brutto_preis: Math.round(newVk * (1 + f.ust_satz / 100) * 100) / 100,
+                            vk_preis_manuell: f.ist_set ? true : f.vk_preis_manuell,
                           };
                         });
                         const val2 = Number(priceAdjustValue);
                         const label = priceAdjustMode === "prozent" ? `${val2 > 0 ? "+" : ""}${val2}%` : `${val2 > 0 ? "+" : ""}€${Math.abs(val2).toFixed(2)}`;
-                        toast({ title: `Preis angepasst: ${label}` });
+                        toast({ title: `VK angepasst: ${label}` });
                         setPriceAdjustValue("");
                       }}
                     >
@@ -698,15 +792,16 @@ export default function InvoiceTemplates() {
                     <p className="text-xs text-muted-foreground">
                       {(() => {
                         const val = Number(priceAdjustValue);
-                        let newNetto: number;
+                        const baseVk = form.vk_netto || form.netto_preis;
+                        let newVk: number;
                         if (priceAdjustMode === "prozent") {
-                          newNetto = Math.round(form.netto_preis * (1 + val / 100) * 100) / 100;
+                          newVk = Math.round(baseVk * (1 + val / 100) * 100) / 100;
                         } else {
-                          newNetto = Math.round((form.netto_preis + val) * 100) / 100;
+                          newVk = Math.round((baseVk + val) * 100) / 100;
                         }
-                        if (newNetto < 0) newNetto = 0;
-                        const diff = newNetto - form.netto_preis;
-                        return `€ ${form.netto_preis.toFixed(2)} → € ${newNetto.toFixed(2)} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`;
+                        if (newVk < 0) newVk = 0;
+                        const diff = newVk - baseVk;
+                        return `VK: € ${baseVk.toFixed(2)} → € ${newVk.toFixed(2)} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`;
                       })()}
                     </p>
                   )}
@@ -732,13 +827,25 @@ export default function InvoiceTemplates() {
                 <MaterialSetEditor
                   components={setComponents}
                   onChange={setSetComponents}
-                  onRecalcPrice={(netto) => {
+                  bezugseinheit={form.bezugseinheit}
+                  onBezugseinheitChange={(v) =>
+                    setForm(f => ({ ...f, bezugseinheit: v, einheit: v || f.einheit }))
+                  }
+                  aufschlag_prozent={form.aufschlag_prozent}
+                  onAufschlagChange={(v) =>
+                    setForm(f => ({ ...f, aufschlag_prozent: v }))
+                  }
+                  currentVk={form.vk_netto}
+                  vk_preis_manuell={form.vk_preis_manuell}
+                  onAcceptAutoVk={(autoVk) => {
                     setForm(f => ({
                       ...f,
-                      netto_preis: netto,
-                      brutto_preis: Math.round(netto * (1 + f.ust_satz / 100) * 100) / 100,
+                      vk_netto: autoVk,
+                      netto_preis: autoVk,
+                      brutto_preis: Math.round(autoVk * (1 + f.ust_satz / 100) * 100) / 100,
+                      vk_preis_manuell: false,
                     }));
-                    toast({ title: "Preis übernommen", description: `Netto-Preis des Sets auf € ${netto.toFixed(2)} gesetzt.` });
+                    toast({ title: "Set-VK übernommen", description: `Auto-Kalkulation: € ${autoVk.toFixed(2)} netto.` });
                   }}
                 />
               )}
@@ -757,6 +864,14 @@ export default function InvoiceTemplates() {
           open={importOpen}
           onClose={() => setImportOpen(false)}
           onImported={() => { setImportOpen(false); fetchTemplates(); }}
+        />
+
+        <BulkPriceDialog
+          open={bulkPriceOpen}
+          onClose={() => setBulkPriceOpen(false)}
+          onApplied={fetchTemplates}
+          kategorien={kategorien}
+          lieferanten={lieferanten}
         />
       </div>
     </div>

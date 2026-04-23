@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Search, Calculator, ArrowLeft, Save } from "lucide-react";
+import { Plus, Trash2, Search, Calculator, ArrowLeft, Save, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,8 @@ export interface SetComponent {
   component_template_id: string;
   component_name: string;
   component_einheit: string;
-  component_netto_preis: number;
+  component_netto_preis: number;  // VK der Komponente
+  component_ek_netto?: number;    // EK der Komponente (für Set-Kalkulation)
   menge: number;
   sort_order: number;
 }
@@ -31,24 +32,48 @@ interface MaterialOption {
   name: string;
   kurzbezeichnung: string | null;
   einheit: string;
-  netto_preis: number;
+  netto_preis: number;  // VK
+  ek_netto: number;
   produktgruppe: string | null;
 }
 
 interface MaterialSetEditorProps {
   components: SetComponent[];
   onChange: (components: SetComponent[]) => void;
-  onRecalcPrice?: (netto: number) => void;
+  /** Bezugseinheit des Sets (z. B. "m²", "lfm"). */
+  bezugseinheit?: string;
+  onBezugseinheitChange?: (v: string) => void;
+  /** Aufschlag-% auf Σ EK für die Auto-VK-Kalkulation. */
+  aufschlag_prozent?: number;
+  onAufschlagChange?: (v: number) => void;
+  /** Aktuell in Katalog hinterlegter Set-VK (zum Vergleich mit Auto-VK). */
+  currentVk?: number;
+  /** TRUE = VK ist manueller Override, FALSE = Auto aus Komponenten+Aufschlag. */
+  vk_preis_manuell?: boolean;
+  /** Wird aufgerufen wenn User Auto-VK übernimmt. Setzt vk_preis_manuell=FALSE und vk_netto=autoVk. */
+  onAcceptAutoVk?: (autoVk: number) => void;
 }
 
 /**
  * Editor für Material-Sets (Stücklisten).
  * Zeigt die Komponenten einer Stückliste als editierbare Liste, erlaubt
  * Hinzufügen aus dem Katalog (gefiltert auf ist_set=false — keine
- * Verschachtelung), Menge ändern, Entfernen. Berechnet die Gesamt-
- * Nettokosten des Sets live.
+ * Verschachtelung), Menge ändern, Entfernen. Berechnet Σ EK (für
+ * Auto-VK-Kalkulation) und Σ VK (Info) live. Neu: Bezugseinheit
+ * (worauf beziehen sich die Komponenten-Mengen) und Aufschlag-% als
+ * Basis für einen kalkulierten Set-VK.
  */
-export function MaterialSetEditor({ components, onChange, onRecalcPrice }: MaterialSetEditorProps) {
+export function MaterialSetEditor({
+  components,
+  onChange,
+  bezugseinheit,
+  onBezugseinheitChange,
+  aufschlag_prozent,
+  onAufschlagChange,
+  currentVk,
+  vk_preis_manuell,
+  onAcceptAutoVk,
+}: MaterialSetEditorProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [options, setOptions] = useState<MaterialOption[]>([]);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -69,19 +94,23 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
   const loadOptions = async () => {
     const { data } = await supabase
       .from("invoice_templates")
-      .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, ist_set")
+      .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, ist_set, ek_netto, vk_netto")
       .eq("ist_set", false)
       .order("kategorie")
       .order("name")
       .limit(5000);
-    setOptions(((data as any[]) || []).map(d => ({
-      id: d.id,
-      name: d.name,
-      kurzbezeichnung: d.kurzbezeichnung ?? null,
-      einheit: d.einheit || "Stk.",
-      netto_preis: Number(d.einzelpreis) || 0,
-      produktgruppe: d.kategorie || "Allgemein",
-    })));
+    setOptions(((data as any[]) || []).map(d => {
+      const vk = Number(d.vk_netto ?? d.einzelpreis) || 0;
+      return {
+        id: d.id,
+        name: d.name,
+        kurzbezeichnung: d.kurzbezeichnung ?? null,
+        einheit: d.einheit || "Stk.",
+        netto_preis: vk,
+        ek_netto: Number(d.ek_netto ?? vk) || 0,
+        produktgruppe: d.kategorie || "Allgemein",
+      };
+    }));
   };
 
   useEffect(() => {
@@ -103,6 +132,7 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
         component_name: opt.kurzbezeichnung || opt.name,
         component_einheit: opt.einheit,
         component_netto_preis: opt.netto_preis,
+        component_ek_netto: opt.ek_netto,
         menge: 1,
         sort_order: nextSort,
       },
@@ -112,8 +142,7 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
   /**
    * Legt ein neues Material in invoice_templates an und fügt es direkt
    * als Komponente dem Set hinzu. Prüft vorher, ob bereits eines mit dem
-   * gleichen Namen existiert — wenn ja, benutzt es das bestehende (wie
-   * vom User im Plan festgelegt: doppelte Namen vermeiden).
+   * gleichen Namen existiert — wenn ja, benutzt es das bestehende.
    */
   const handleQuickCreate = async () => {
     const kurz = quickForm.kurzbezeichnung.trim();
@@ -134,13 +163,11 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
       // Duplikat-Check auf Kurzbezeichnung (case-insensitive)
       const { data: existing } = await supabase
         .from("invoice_templates")
-        .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, ist_set")
+        .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, ist_set, ek_netto, vk_netto")
         .or(`kurzbezeichnung.ilike.${kurz},name.ilike.${kurz}`)
         .limit(1);
       const dup = ((existing as any[]) || [])[0];
       if (dup) {
-        // Duplikat gefunden — User entscheiden lassen (einfache confirm-
-        // Abfrage; kein eigener Dialog, weil selten).
         const useExisting = window.confirm(
           `Ein Material "${dup.kurzbezeichnung || dup.name}" existiert bereits. Möchtest du das bestehende verwenden?\n\n` +
             `• OK = bestehendes verwenden\n` +
@@ -148,10 +175,6 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
         );
         if (useExisting) {
           if (dup.ist_set) {
-            // Das bestehende Material ist selbst ein Set — kann nicht als
-            // Komponente dienen. Statt festzustecken: in den Such-Modus
-            // zurückkehren und dem User erklären, dass er einen anderen
-            // Namen wählen oder ein Material ohne Set-Konflikt suchen soll.
             toast({
               variant: "destructive",
               title: "Kein Set als Komponente",
@@ -163,12 +186,14 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
             setQuickSaving(false);
             return;
           }
+          const dupVk = Number(dup.vk_netto ?? dup.einzelpreis) || 0;
           addComponent({
             id: dup.id,
             name: dup.name,
             kurzbezeichnung: dup.kurzbezeichnung ?? null,
             einheit: dup.einheit || "Stk.",
-            netto_preis: Number(dup.einzelpreis) || 0,
+            netto_preis: dupVk,
+            ek_netto: Number(dup.ek_netto ?? dupVk) || 0,
             produktgruppe: dup.kategorie || "Allgemein",
           });
           setPickerOpen(false);
@@ -194,17 +219,21 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
           ust_satz: ust,
           kategorie: "Allgemein",
           ist_set: false,
+          ek_netto: netto,
+          vk_netto: netto,
         } as any)
-        .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie")
+        .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, ek_netto, vk_netto")
         .single();
       if (error) throw error;
 
+      const insVk = Number((inserted as any).vk_netto ?? (inserted as any).einzelpreis) || netto;
       addComponent({
         id: (inserted as any).id,
         name: (inserted as any).name,
         kurzbezeichnung: (inserted as any).kurzbezeichnung ?? kurz,
         einheit: (inserted as any).einheit || quickForm.einheit,
-        netto_preis: Number((inserted as any).einzelpreis) || netto,
+        netto_preis: insVk,
+        ek_netto: Number((inserted as any).ek_netto ?? insVk) || netto,
         produktgruppe: (inserted as any).kategorie || "Allgemein",
       });
       toast({ title: "Material angelegt", description: `${kurz} wurde erstellt und als Komponente übernommen.` });
@@ -224,10 +253,24 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
     onChange(components.filter(c => c.component_template_id !== componentTemplateId));
   };
 
-  const netto = useMemo(
+  const sumEk = useMemo(
+    () => components.reduce((s, c) => s + (Number(c.component_ek_netto) || 0) * (Number(c.menge) || 0), 0),
+    [components],
+  );
+  const sumVk = useMemo(
     () => components.reduce((s, c) => s + (Number(c.component_netto_preis) || 0) * (Number(c.menge) || 0), 0),
     [components],
   );
+
+  const aufschlagNum = Number(aufschlag_prozent) || 0;
+  const autoVk = useMemo(
+    () => Math.round(sumEk * (1 + aufschlagNum / 100) * 100) / 100,
+    [sumEk, aufschlagNum],
+  );
+
+  const vkDiverges = !!vk_preis_manuell
+    && typeof currentVk === "number"
+    && Math.abs((currentVk || 0) - autoVk) > 0.005;
 
   const s = pickerSearch.trim().toLowerCase();
   const filtered = options.filter(o => {
@@ -241,11 +284,42 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
 
   return (
     <div className="border rounded-lg p-3 bg-muted/20 space-y-3">
+      {/* Set-Kopfzeile: Bezugseinheit + Aufschlag */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-sm">Bezugseinheit</Label>
+          <Select
+            value={bezugseinheit || "Stk."}
+            onValueChange={(v) => onBezugseinheitChange?.(v)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {einheiten.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Komponenten-Mengen beziehen sich auf 1 {bezugseinheit || "Stk."} Set.
+          </p>
+        </div>
+        <div>
+          <Label className="text-sm">Aufschlag auf EK (%)</Label>
+          <Input
+            type="number"
+            step={0.1}
+            value={aufschlag_prozent ?? 0}
+            onChange={(e) => onAufschlagChange?.(Number(e.target.value) || 0)}
+          />
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Auto-VK = Σ EK × (1 + Aufschlag/100).
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">Komponenten der Stückliste</p>
           <p className="text-xs text-muted-foreground">
-            Mengen beziehen sich auf <b>1 Einheit</b> dieses Sets (z. B. 1 m²).
+            Mengen je <b>1 {bezugseinheit || "Stk."}</b> Set (z. B. 5 lfm Alu pro m²).
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setPickerOpen(true)}>
@@ -260,10 +334,19 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
         </p>
       ) : (
         <div className="space-y-1.5">
+          <div className="grid grid-cols-[1fr_70px_50px_70px_70px_28px] gap-2 items-center text-[10px] uppercase text-muted-foreground px-1">
+            <span>Material</span>
+            <span className="text-right">Menge</span>
+            <span></span>
+            <span className="text-right">EK/Einh.</span>
+            <span className="text-right">Σ EK</span>
+            <span></span>
+          </div>
           {components.map((c) => {
-            const zwischen = (Number(c.component_netto_preis) || 0) * (Number(c.menge) || 0);
+            const ek = Number(c.component_ek_netto) || 0;
+            const zwischenEk = ek * (Number(c.menge) || 0);
             return (
-              <div key={c.component_template_id} className="grid grid-cols-[1fr_80px_60px_80px_30px] gap-2 items-center text-sm">
+              <div key={c.component_template_id} className="grid grid-cols-[1fr_70px_50px_70px_70px_28px] gap-2 items-center text-sm">
                 <div className="truncate">
                   <span className="font-medium">{c.component_name}</span>
                 </div>
@@ -276,8 +359,11 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
                   className="h-8 text-right"
                 />
                 <span className="text-xs text-muted-foreground">{c.component_einheit}</span>
-                <span className="text-xs font-mono text-right">
-                  € {zwischen.toFixed(2)}
+                <span className="text-xs font-mono text-right text-muted-foreground">
+                  € {ek.toFixed(2)}
+                </span>
+                <span className="text-xs font-mono text-right font-medium">
+                  € {zwischenEk.toFixed(2)}
                 </span>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
                   onClick={() => removeComponent(c.component_template_id)}>
@@ -286,23 +372,45 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
               </div>
             );
           })}
-          <div className="flex items-center justify-between border-t pt-2 mt-2">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">Σ Kalkulation</Badge>
-              {onRecalcPrice && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1"
-                  onClick={() => onRecalcPrice(Math.round(netto * 100) / 100)}
-                >
-                  <Calculator className="w-3.5 h-3.5" />
-                  Preis übernehmen
-                </Button>
-              )}
+
+          {/* Kalkulations-Block */}
+          <div className="border-t pt-2 mt-2 space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Σ EK / {bezugseinheit || "Stk."}</span>
+              <span className="font-mono">€ {sumEk.toFixed(2)}</span>
             </div>
-            <span className="font-mono font-bold">€ {netto.toFixed(2)} netto</span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Σ VK-Komponenten (Info)</span>
+              <span className="font-mono text-muted-foreground">€ {sumVk.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">Auto-VK (EK + {aufschlagNum.toFixed(1)} %)</Badge>
+                {onAcceptAutoVk && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1"
+                    onClick={() => onAcceptAutoVk(autoVk)}
+                    disabled={autoVk <= 0}
+                  >
+                    <Calculator className="w-3.5 h-3.5" />
+                    Als Set-VK übernehmen
+                  </Button>
+                )}
+              </div>
+              <span className="font-mono font-bold">€ {autoVk.toFixed(2)}</span>
+            </div>
+            {vkDiverges && (
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Manueller Set-VK (€ {(currentVk || 0).toFixed(2)}) weicht von der Kalkulation ab
+                  ({((currentVk! - autoVk) >= 0 ? "+" : "")}€ {(currentVk! - autoVk).toFixed(2)}).
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -322,7 +430,6 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
           </DialogHeader>
 
           {quickCreateMode ? (
-            // Quick-Create-Formular: minimaler Feldsatz, fokussiert
             <div className="space-y-3">
               <div>
                 <Label>Kurzbezeichnung *</Label>
@@ -357,7 +464,7 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
                 </div>
               </div>
               <div>
-                <Label>Netto-Preis (€)</Label>
+                <Label>Netto-Preis (€) — EK = VK (Marge 0 %)</Label>
                 <Input
                   type="number"
                   min={0}
@@ -367,7 +474,7 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
                   placeholder="0,00"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Weitere Felder (Langbeschreibung, Foto, Lieferant, …) kannst du später im Hauptkatalog ergänzen.
+                  EK und VK kannst du später im Hauptkatalog getrennt pflegen.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">
@@ -398,7 +505,6 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
                   variant="outline"
                   className="gap-1 shrink-0"
                   onClick={() => {
-                    // Suchtext als Start für den Namen übernehmen
                     setQuickForm(f => ({ ...f, kurzbezeichnung: pickerSearch.trim() }));
                     setQuickCreateMode(true);
                   }}
@@ -447,7 +553,7 @@ export function MaterialSetEditor({ components, onChange, onRecalcPrice }: Mater
                             <span className="text-xs text-muted-foreground ml-1">· {o.produktgruppe}</span>
                           </div>
                           <span className="text-xs text-muted-foreground">{o.einheit}</span>
-                          <span className="text-xs font-mono text-right w-16">€ {o.netto_preis.toFixed(2)}</span>
+                          <span className="text-xs font-mono text-right w-16" title="EK">€ {o.ek_netto.toFixed(2)}</span>
                         </button>
                       );
                     })}
