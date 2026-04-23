@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle, Camera } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle, Camera, Receipt, Lock } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,9 @@ type PurchaseInvoice = {
   notizen: string | null;
   created_at: string;
   projects?: { name: string } | null;
+  verrechnet_am?: string | null;
+  verrechnet_in_invoice_id?: string | null;
+  beleg_locked?: boolean | null;
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
@@ -53,6 +57,7 @@ const FALLBACK_LABELS: Record<string, string> = {
 export default function PurchaseInvoices() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin } = usePermissions();
   const [searchParams] = useSearchParams();
   const projectFilter = searchParams.get("project");
 
@@ -118,7 +123,11 @@ export default function PurchaseInvoices() {
 
   const filtered = useMemo(() => {
     return invoices.filter(inv => {
-      if (statusFilter !== "alle" && inv.status !== statusFilter) return false;
+      if (statusFilter === "verrechnet") {
+        if (!inv.verrechnet_am) return false;
+      } else if (statusFilter !== "alle") {
+        if (inv.status !== statusFilter) return false;
+      }
       if (kategorieFilter !== "alle" && inv.kategorie !== kategorieFilter) return false;
       if (search) {
         const match =
@@ -133,12 +142,23 @@ export default function PurchaseInvoices() {
   }, [invoices, search, statusFilter, kategorieFilter]);
 
   const stats = useMemo(() => {
-    const offen = filtered.filter(i => i.status === "offen");
+    const offen = filtered.filter(i => i.status === "offen" && !i.verrechnet_am);
     const bezahlt = filtered.filter(i => i.status === "bezahlt");
+    const verrechnet = filtered.filter(i => i.verrechnet_am);
     const offenSumme = offen.reduce((s, i) => s + Number(i.betrag_brutto), 0);
     const bezahltSumme = bezahlt.reduce((s, i) => s + Number(i.betrag_brutto), 0);
+    const verrechnetSumme = verrechnet.reduce((s, i) => s + Number(i.betrag_brutto), 0);
     const gesamt = filtered.reduce((s, i) => s + Number(i.betrag_brutto), 0);
-    return { offen: offen.length, bezahlt: bezahlt.length, offenSumme, bezahltSumme, gesamt, count: filtered.length };
+    return {
+      offen: offen.length,
+      bezahlt: bezahlt.length,
+      verrechnet: verrechnet.length,
+      offenSumme,
+      bezahltSumme,
+      verrechnetSumme,
+      gesamt,
+      count: filtered.length,
+    };
   }, [filtered]);
 
   const openFile = async (inv: PurchaseInvoice) => {
@@ -150,7 +170,19 @@ export default function PurchaseInvoices() {
   const handleDelete = async () => {
     if (!deleteId) return;
     const inv = invoices.find(i => i.id === deleteId);
-    if (inv?.pdf_path) {
+    if (!inv) { setDeleteId(null); return; }
+    // Guard: verrechnete Belege dürfen nie gelöscht werden — dafür zuerst
+    // "Verrechnung aufheben" im Detail-Dialog (Admin) nötig.
+    if (inv.verrechnet_am) {
+      toast({
+        variant: "destructive",
+        title: "Verrechneter Beleg",
+        description: "Hebe die Verrechnung auf, bevor du den Beleg löschst.",
+      });
+      setDeleteId(null);
+      return;
+    }
+    if (inv.pdf_path) {
       await supabase.storage.from("purchase-invoices").remove([inv.pdf_path]);
     }
     const { error } = await supabase.from("purchase_invoices").delete().eq("id", deleteId);
@@ -172,10 +204,16 @@ export default function PurchaseInvoices() {
     loadData();
   };
 
-  const statusBadge = (status: string | null) => {
-    if (status === "bezahlt") return <Badge className="bg-green-100 text-green-800 hover:bg-green-100"><CheckCircle2 className="h-3 w-3 mr-1" />Bezahlt</Badge>;
-    if (status === "abgelehnt") return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Abgelehnt</Badge>;
-    return <Badge variant="outline" className="text-orange-700 border-orange-300"><ClockIcon className="h-3 w-3 mr-1" />Offen</Badge>;
+  const statusBadge = (inv: PurchaseInvoice) => {
+    const status = inv.status;
+    const nodes: React.ReactNode[] = [];
+    if (status === "bezahlt") nodes.push(<Badge key="bez" className="bg-green-100 text-green-800 hover:bg-green-100"><CheckCircle2 className="h-3 w-3 mr-1" />Bezahlt</Badge>);
+    else if (status === "abgelehnt") nodes.push(<Badge key="ab" variant="destructive"><XCircle className="h-3 w-3 mr-1" />Abgelehnt</Badge>);
+    else nodes.push(<Badge key="of" variant="outline" className="text-orange-700 border-orange-300"><ClockIcon className="h-3 w-3 mr-1" />Offen</Badge>);
+    if (inv.verrechnet_am) {
+      nodes.push(<Badge key="ver" className="bg-blue-100 text-blue-800 hover:bg-blue-100"><Receipt className="h-3 w-3 mr-1" />Verrechnet</Badge>);
+    }
+    return <>{nodes}</>;
   };
 
   return (
@@ -244,8 +282,9 @@ export default function PurchaseInvoices() {
           </Card>
           <Card>
             <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Durchschnitt</p>
-              <p className="text-xl font-bold">€ {stats.count > 0 ? (stats.gesamt / stats.count).toFixed(2) : "0.00"}</p>
+              <p className="text-xs text-muted-foreground">Verrechnet</p>
+              <p className="text-xl font-bold text-blue-600">{stats.verrechnet}</p>
+              <p className="text-xs text-blue-600">€ {stats.verrechnetSumme.toFixed(2)}</p>
             </CardContent>
           </Card>
         </div>
@@ -275,6 +314,7 @@ export default function PurchaseInvoices() {
                 <SelectItem value="alle">Alle Status</SelectItem>
                 <SelectItem value="offen">Offen</SelectItem>
                 <SelectItem value="bezahlt">Bezahlt</SelectItem>
+                <SelectItem value="verrechnet">Verrechnet</SelectItem>
                 <SelectItem value="abgelehnt">Abgelehnt</SelectItem>
               </SelectContent>
             </Select>
@@ -335,7 +375,7 @@ export default function PurchaseInvoices() {
                         {inv.rechnungsnummer && (
                           <span className="text-xs text-muted-foreground">#{inv.rechnungsnummer}</span>
                         )}
-                        {statusBadge(inv.status)}
+                        {statusBadge(inv)}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                         {inv.rechnungsdatum && (
@@ -379,14 +419,23 @@ export default function PurchaseInvoices() {
                       >
                         <CheckCircle2 className={`h-4 w-4 ${inv.status === "bezahlt" ? "text-green-600" : "text-muted-foreground"}`} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={(e) => { e.stopPropagation(); setDeleteId(inv.id); }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {inv.verrechnet_am ? (
+                        <span
+                          className="h-8 w-8 flex items-center justify-center text-muted-foreground/60"
+                          title="Verrechneter Beleg — löschen nicht möglich"
+                        >
+                          <Lock className="h-4 w-4" />
+                        </span>
+                      ) : isAdmin ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setDeleteId(inv.id); }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

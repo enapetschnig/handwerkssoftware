@@ -329,8 +329,14 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
           throw new Error(upErr.message);
         }
 
-        // 3. Update pdf_path + original filename
-        await supabase.from("purchase_invoices").update({ pdf_path: path, file_name: file.name }).eq("id", inv.id);
+        // 3. Update pdf_path + original filename + beleg_locked.
+        // Der Beleg ist ab jetzt unveränderbar — kein Re-Upload, kein Delete
+        // des Files ohne explizite Entsperrung durch Admin.
+        await supabase.from("purchase_invoices").update({
+          pdf_path: path,
+          file_name: file.name,
+          beleg_locked: true,
+        } as any).eq("id", inv.id);
       }
 
       toast({ title: "Gespeichert", description: `${files.length} ${files.length === 1 ? "Rechnung" : "Rechnungen"} hochgeladen` });
