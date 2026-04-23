@@ -41,9 +41,23 @@ async function getSetting(key: string, fallback: string): Promise<string> {
   return data?.value || fallback;
 }
 
+// Wochentag in Europe/Vienna (0=Sonntag, 1=Montag, …, 6=Samstag).
+// `new Date().getDay()` gibt UTC, was z. B. Montag 00:30 Vienna als Sonntag
+// auswerten würde (und damit 0 statt 8.5 Std. Tagessoll).
+function getViennaWeekdayIdx(): number {
+  const short = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Vienna",
+    weekday: "short",
+  }).format(new Date());
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return map[short] ?? new Date().getDay();
+}
+
 // Working hours per day (same as webhook)
 function getDailyTarget(): number {
-  const day = new Date().getDay();
+  const day = getViennaWeekdayIdx();
   if (day === 0 || day === 6) return 0;
   if (day >= 1 && day <= 4) return 8.5;
   if (day === 5) return 5.0;
@@ -139,7 +153,7 @@ async function generateReminderMessage(
     "Sonntag", "Montag", "Dienstag", "Mittwoch",
     "Donnerstag", "Freitag", "Samstag",
   ];
-  const dayName = dayNames[new Date().getDay()];
+  const dayName = dayNames[getViennaWeekdayIdx()];
 
   const einteilungBlock = scheduleInfo
     ? `📋 *Deine Einteilung heute:*\n${scheduleInfo}\n\n`
