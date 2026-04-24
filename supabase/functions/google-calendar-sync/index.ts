@@ -133,18 +133,47 @@ async function getCalendarIdForType(supabase: any, calendarType: CalendarType): 
   return data?.value || null;
 }
 
-// Get all configured calendar IDs
-async function getAllCalendarIds(supabase: any): Promise<{ type: CalendarType; id: string }[]> {
-  const types: CalendarType[] = ['allgemein', 'kleinigkeiten', 'baustellen'];
-  const calendars: { type: CalendarType; id: string }[] = [];
-  
-  for (const type of types) {
-    const id = await getCalendarIdForType(supabase, type);
-    if (id && id.trim() !== '') {
-      calendars.push({ type, id });
-    }
+// Get all configured calendar IDs.
+// Seit der Kategorie-Umstellung liefern wir die 7 Geschäftsbereich-
+// Kalender + Default als Hauptquelle zurück, die alten 3-Typen
+// (allgemein/kleinigkeiten/baustellen) als Legacy-Fallback — nur wenn
+// sie in app_settings noch gesetzt sind. Dedup über calendar-ID, damit
+// keine Events doppelt geladen werden.
+async function getAllCalendarIds(supabase: any): Promise<{ type: string; id: string }[]> {
+  const kategorieKeys = [
+    'google_calendar_id_montipro',
+    'google_calendar_id_bks',
+    'google_calendar_id_gartenmacher',
+    'google_calendar_id_fensterwerk',
+    'google_calendar_id_ladenbau',
+    'google_calendar_id_portas',
+    'google_calendar_id_chef',
+    'google_calendar_id_default',
+    // Legacy
+    'google_calendar_id_allgemein',
+    'google_calendar_id_kleinigkeiten',
+    'google_calendar_id_baustellen',
+  ];
+
+  const { data } = await supabase
+    .from('app_settings')
+    .select('key, value')
+    .in('key', kategorieKeys);
+
+  const calendars: { type: string; id: string }[] = [];
+  const seenIds = new Set<string>();
+
+  for (const row of (data as any[]) || []) {
+    const id = (row.value || '').trim();
+    if (!id) continue;
+    if (seenIds.has(id)) continue;  // Dedup: gleicher Kalender nicht doppelt lesen
+    seenIds.add(id);
+
+    const m = String(row.key).match(/^google_calendar_id_(.+)$/);
+    const type = m ? m[1] : row.key;
+    calendars.push({ type, id });
   }
-  
+
   return calendars;
 }
 

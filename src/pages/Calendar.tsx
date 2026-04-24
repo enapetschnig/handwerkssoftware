@@ -62,6 +62,29 @@ const emptyFormData: EventFormData = {
   calendar_type: "allgemein",
 };
 
+/**
+ * Meta-Info pro Kalender-Kategorie: UI-Label, Stilfarbe.
+ * Wird verwendet für Badges, Farb-Streifen und Filter-Chips.
+ * Die Keys entsprechen `calendar_type` aus DB/Edge Function.
+ */
+const KATEGORIE_META: Record<string, { label: string; badgeClass: string; barClass: string }> = {
+  montipro:     { label: "Monti.pro",     badgeClass: "bg-green-100 text-green-800",  barClass: "bg-green-500" },
+  bks:          { label: "BKS",           badgeClass: "bg-blue-100 text-blue-800",    barClass: "bg-blue-500" },
+  gartenmacher: { label: "Gartenmacher",  badgeClass: "bg-lime-100 text-lime-800",    barClass: "bg-lime-500" },
+  fensterwerk:  { label: "Fensterwerk",   badgeClass: "bg-cyan-100 text-cyan-800",    barClass: "bg-cyan-500" },
+  ladenbau:     { label: "Ladenbau",      badgeClass: "bg-amber-100 text-amber-800",  barClass: "bg-amber-500" },
+  portas:       { label: "Portas",        badgeClass: "bg-orange-100 text-orange-800",barClass: "bg-orange-500" },
+  chef:         { label: "CHEF",          badgeClass: "bg-purple-100 text-purple-800",barClass: "bg-purple-500" },
+  default:      { label: "Default",       badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
+  // Legacy-Keys (falls Events mit alten Typen noch in der DB sind)
+  allgemein:    { label: "Allgemein",     badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
+  kleinigkeiten:{ label: "Kleinigkeiten", badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
+  baustellen:   { label: "Baustellen",    badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
+};
+
+const katMeta = (type: string | null | undefined) =>
+  KATEGORIE_META[type || "default"] || KATEGORIE_META.default;
+
 export default function Calendar() {
   const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -84,6 +107,19 @@ export default function Calendar() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Kategorie-Filter: wenn eine Kategorie ausgeblendet ist, zeigen wir die
+  // Events dieser Kategorie nicht. Default: alle aktiv.
+  const [hiddenKats, setHiddenKats] = useState<Set<string>>(new Set());
+  const toggleKat = (k: string) => {
+    setHiddenKats(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  };
+  const isKatVisible = (k: string | null | undefined) => !hiddenKats.has(k || "default");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -362,8 +398,13 @@ export default function Calendar() {
 
   const getEventsForDay = (d: Date) => {
     const dStr = format(d, "yyyy-MM-dd");
-    return calendarEvents.filter((e) => e.start_date === dStr);
+    return calendarEvents.filter((e) => e.start_date === dStr && isKatVisible(e.calendar_type));
   };
+
+  // Alle tatsächlich vorkommenden Kategorien (für Filter-Chips).
+  const presentKats = Array.from(new Set(
+    calendarEvents.map(e => e.calendar_type || "default")
+  )).sort();
 
   const selectedAssignments = selectedDate ? getAssignmentsForDay(selectedDate) : [];
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
@@ -409,6 +450,33 @@ export default function Calendar() {
           </div>
         </div>
 
+        {/* Kategorie-Filter-Chips (nur wenn Events mit Kategorien vorhanden) */}
+        {presentKats.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 my-3">
+            <span className="text-xs text-muted-foreground mr-1">Kalender:</span>
+            {presentKats.map(kat => {
+              const meta = katMeta(kat);
+              const hidden = hiddenKats.has(kat);
+              return (
+                <button
+                  key={kat}
+                  type="button"
+                  onClick={() => toggleKat(kat)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                    hidden
+                      ? "opacity-40 border-dashed"
+                      : meta.badgeClass + " border-transparent"
+                  }`}
+                  title={hidden ? "Einblenden" : "Ausblenden"}
+                >
+                  <span className={`inline-block w-2 h-2 rounded-full ${meta.barClass}`} />
+                  {meta.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Calendar grid */}
         <Card>
           <CardContent className="p-0 sm:p-2">
@@ -453,11 +521,19 @@ export default function Calendar() {
                             {a.profiles ? `${a.profiles.vorname.charAt(0)}.` : ""} {a.projects?.name?.slice(0, 10) || "?"}
                           </div>
                         ))}
-                        {dayEvents.slice(0, 2).map((e) => (
-                          <div key={e.id} className="text-[10px] leading-tight truncate px-0.5 py-px rounded bg-blue-100 text-blue-700">
-                            {e.title?.slice(0, 12) || "Termin"}
-                          </div>
-                        ))}
+                        {dayEvents.slice(0, 2).map((e) => {
+                          const meta = katMeta(e.calendar_type);
+                          return (
+                            <div
+                              key={e.id}
+                              className={`text-[10px] leading-tight truncate px-0.5 py-px rounded ${meta.badgeClass} border-l-2`}
+                              style={{ borderLeftColor: `var(--color-kat, currentColor)` }}
+                              title={`${meta.label}: ${e.title}`}
+                            >
+                              {e.title?.slice(0, 12) || "Termin"}
+                            </div>
+                          );
+                        })}
                         {(dayAssignments.length + dayEvents.length) > 4 && (
                           <div className="text-[10px] text-muted-foreground">+{dayAssignments.length + dayEvents.length - 4}</div>
                         )}
@@ -519,37 +595,47 @@ export default function Calendar() {
                       </div>
                     </div>
                   ))}
-                  {selectedEvents.map((e) => (
-                    <div key={e.id} className="flex items-start gap-3 p-2 rounded-lg border border-blue-200 bg-blue-50/50">
-                      <CalIcon className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{e.title}</p>
-                        {!e.all_day && e.start_time && (
-                          <p className="text-xs text-muted-foreground">
-                            {e.start_time} – {e.end_time || "?"}
-                          </p>
-                        )}
-                        {e.description && <p className="text-xs text-muted-foreground mt-1">{e.description}</p>}
-                        {e.mitarbeiter && e.mitarbeiter.length > 0 && (
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {e.mitarbeiter.map((m, i) => (
-                              <Badge key={i} variant="outline" className="text-xs">{m}</Badge>
-                            ))}
+                  {selectedEvents.map((e) => {
+                    const meta = katMeta(e.calendar_type);
+                    return (
+                      <div key={e.id} className="relative flex items-start gap-3 p-2 rounded-lg border overflow-hidden">
+                        {/* Farbstreifen links = Kategorie */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${meta.barClass}`} />
+                        <CalIcon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0 ml-1.5" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm">{e.title}</p>
+                            <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${meta.badgeClass}`}>
+                              {meta.label}
+                            </Badge>
+                          </div>
+                          {!e.all_day && e.start_time && (
+                            <p className="text-xs text-muted-foreground">
+                              {e.start_time} – {e.end_time || "?"}
+                            </p>
+                          )}
+                          {e.description && <p className="text-xs text-muted-foreground mt-1">{e.description}</p>}
+                          {e.mitarbeiter && e.mitarbeiter.length > 0 && (
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {e.mitarbeiter.map((m, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">{m}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <div className="flex gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditDialog(e)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => confirmDelete(e)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         )}
                       </div>
-                      {isAdmin && (
-                        <div className="flex gap-1 shrink-0">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditDialog(e)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => confirmDelete(e)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
