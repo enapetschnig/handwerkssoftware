@@ -36,8 +36,9 @@ type Assignment = {
   end_time: string | null;
   notizen: string | null;
   user_id: string;
-  projects: { name: string } | null;
+  projects: { name: string; kategorie?: string | null } | null;
   profiles: { vorname: string; nachname: string } | null;
+  kategorie?: string | null;
 };
 
 type EventFormData = {
@@ -138,9 +139,11 @@ export default function Calendar() {
     const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
     // Fetch Einsätze (Plantafel-Einsätze) overlapping with month
+    // — inkl. Projekt-Kategorie, damit im Viewer das richtige Badge
+    // + die Filter-Chips wirken.
     const { data: einsatzData } = await supabase
       .from("einsaetze")
-      .select("id, user_id, project_id, start_date, end_date, ganztaegig, start_time, end_time, beschreibung, google_event_id, projects(name)")
+      .select("id, user_id, project_id, start_date, end_date, ganztaegig, start_time, end_time, beschreibung, google_event_id, projects(name, kategorie)")
       .lte("start_date", monthEnd)
       .gte("end_date", monthStart)
       .order("start_date");
@@ -184,6 +187,7 @@ export default function Calendar() {
             google_event_id: (e as any).google_event_id,
             projects: (e as any).projects,
             profiles: profileMap[(e as any).user_id] || null,
+            kategorie: (e as any).projects?.kategorie || "default",
           });
         }
       }
@@ -393,7 +397,7 @@ export default function Calendar() {
 
   const getAssignmentsForDay = (d: Date) => {
     const dStr = format(d, "yyyy-MM-dd");
-    return assignments.filter((a) => a.datum === dStr);
+    return assignments.filter((a) => a.datum === dStr && isKatVisible(a.kategorie));
   };
 
   const getEventsForDay = (d: Date) => {
@@ -401,10 +405,12 @@ export default function Calendar() {
     return calendarEvents.filter((e) => e.start_date === dStr && isKatVisible(e.calendar_type));
   };
 
-  // Alle tatsächlich vorkommenden Kategorien (für Filter-Chips).
-  const presentKats = Array.from(new Set(
-    calendarEvents.map(e => e.calendar_type || "default")
-  )).sort();
+  // Alle tatsächlich vorkommenden Kategorien (für Filter-Chips) —
+  // Assignments (Plantafel-Einsätze) UND Events werden berücksichtigt.
+  const presentKats = Array.from(new Set([
+    ...assignments.map(a => a.kategorie || "default"),
+    ...calendarEvents.map(e => e.calendar_type || "default"),
+  ])).sort();
 
   const selectedAssignments = selectedDate ? getAssignmentsForDay(selectedDate) : [];
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
@@ -516,11 +522,18 @@ export default function Calendar() {
                       </div>
                       {/* Event indicators */}
                       <div className="space-y-0.5">
-                        {dayAssignments.slice(0, 2).map((a) => (
-                          <div key={a.id} className="text-[10px] leading-tight truncate px-0.5 py-px rounded bg-primary/10 text-primary">
-                            {a.profiles ? `${a.profiles.vorname.charAt(0)}.` : ""} {a.projects?.name?.slice(0, 10) || "?"}
-                          </div>
-                        ))}
+                        {dayAssignments.slice(0, 2).map((a) => {
+                          const meta = katMeta(a.kategorie);
+                          return (
+                            <div
+                              key={a.id}
+                              className={`text-[10px] leading-tight truncate px-0.5 py-px rounded ${meta.badgeClass}`}
+                              title={`${meta.label}: ${a.projects?.name || "?"}`}
+                            >
+                              {a.profiles ? `${a.profiles.vorname.charAt(0)}.` : ""} {a.projects?.name?.slice(0, 10) || "?"}
+                            </div>
+                          );
+                        })}
                         {dayEvents.slice(0, 2).map((e) => {
                           const meta = katMeta(e.calendar_type);
                           return (
@@ -573,28 +586,35 @@ export default function Calendar() {
                 <p className="text-sm text-muted-foreground">Keine Eintraege fuer diesen Tag.</p>
               ) : (
                 <div className="space-y-3">
-                  {selectedAssignments.map((a) => (
-                    <div key={a.id} className="flex items-start gap-3 p-2 rounded-lg border">
-                      <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm">{a.projects?.name || "?"}</p>
-                          {(a.start_time || a.end_time) && (
-                            <Badge variant="secondary" className="text-xs">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {a.start_time?.slice(0, 5)} – {a.end_time?.slice(0, 5)}
+                  {selectedAssignments.map((a) => {
+                    const meta = katMeta(a.kategorie);
+                    return (
+                      <div key={a.id} className="relative flex items-start gap-3 p-2 rounded-lg border overflow-hidden">
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${meta.barClass}`} />
+                        <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0 ml-1.5" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm">{a.projects?.name || "?"}</p>
+                            <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${meta.badgeClass}`}>
+                              {meta.label}
                             </Badge>
+                            {(a.start_time || a.end_time) && (
+                              <Badge variant="secondary" className="text-xs">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {a.start_time?.slice(0, 5)} – {a.end_time?.slice(0, 5)}
+                              </Badge>
+                            )}
+                          </div>
+                          {a.profiles && (
+                            <p className="text-xs text-muted-foreground">{a.profiles.vorname} {a.profiles.nachname}</p>
+                          )}
+                          {a.notizen && (
+                            <p className="text-xs text-muted-foreground mt-1">{a.notizen}</p>
                           )}
                         </div>
-                        {a.profiles && (
-                          <p className="text-xs text-muted-foreground">{a.profiles.vorname} {a.profiles.nachname}</p>
-                        )}
-                        {a.notizen && (
-                          <p className="text-xs text-muted-foreground mt-1">{a.notizen}</p>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {selectedEvents.map((e) => {
                     const meta = katMeta(e.calendar_type);
                     return (
