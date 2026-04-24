@@ -296,22 +296,26 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     let action = url.searchParams.get("action");
 
-    // Also support action from body (for supabase.functions.invoke with body)
-    if (!action && req.method === "POST") {
+    // Body wird nur EINMAL konsumiert. Wenn die action aus dem Body kommt
+    // (supabase.functions.invoke), nutzen sowohl der action-Peek als auch
+    // alle nachgelagerten Handler die selbe gecachte Variable. Manche
+    // Runtimes geben bei Zweitlesen via req.clone() "body already read"
+    // zurück — deshalb einmal parsen und festhalten.
+    let cachedBody: any = null;
+    if (req.method === "POST" || req.method === "DELETE") {
       try {
-        const clonedReq = req.clone();
-        const bodyPeek = await clonedReq.json();
-        if (bodyPeek?.action) {
-          action = bodyPeek.action;
-        }
-      } catch { /* ignore parse errors */ }
+        cachedBody = await req.json();
+      } catch { /* z. B. bei GET oder leerem Body */ }
+    }
+    if (!action && cachedBody?.action) {
+      action = cachedBody.action;
     }
 
     console.log(`Processing action: ${action}`);
 
     // ─── CREATE_EVENT: Create event in Google Calendar AND local DB ───
     if (req.method === "POST" && action === "create_event") {
-      const body = await req.json();
+      const body = cachedBody ?? {};
       const { title, start_date, end_date, start_time, end_time, description, all_day, calendar_type: reqCalType } = body;
       const calendarType: CalendarType = reqCalType || 'allgemein';
 
@@ -367,7 +371,7 @@ Deno.serve(async (req) => {
 
     // ─── UPDATE_EVENT: Update event in Google Calendar AND local DB ───
     if (req.method === "POST" && action === "update_event") {
-      const body = await req.json();
+      const body = cachedBody ?? {};
       const { event_id, title, start_date, end_date, start_time, end_time, description, all_day, calendar_type: reqCalType } = body;
 
       if (!event_id) {
@@ -456,7 +460,7 @@ Deno.serve(async (req) => {
 
     // ─── DELETE_EVENT: Delete event from Google Calendar AND local DB ───
     if ((req.method === "POST" || req.method === "DELETE") && action === "delete_event") {
-      const body = await req.json();
+      const body = cachedBody ?? {};
       const { event_id } = body;
 
       if (!event_id) {
@@ -631,7 +635,7 @@ Deno.serve(async (req) => {
 
     // SYNC: Create/Update event in Google Calendar (legacy - used by Plantafel)
     if (req.method === "POST" && action === "sync") {
-      const event: CalendarEvent = await req.json();
+      const event: CalendarEvent = (cachedBody ?? {}) as CalendarEvent;
       const calendarType = event.calendar_type || 'allgemein';
       
       const calendarId = await getCalendarIdForType(supabase, calendarType);
@@ -690,7 +694,7 @@ Deno.serve(async (req) => {
 
     // DELETE: Remove event from Google Calendar
     if (req.method === "DELETE" && action === "delete") {
-      const { project_id } = await req.json();
+      const { project_id } = cachedBody ?? {};
 
       const { data: existingEvent } = await supabase
         .from("calendar_events")
@@ -844,8 +848,8 @@ Deno.serve(async (req) => {
     // TEST_CALENDAR_ACCESS: Testet Schreibzugriff des Service-Accounts
     // ──────────────────────────────────────────────────────────────
     if (req.method === "POST" && action === "test_calendar_access") {
-      const testBody = await req.json().catch(() => ({}));
-      const { calendarId } = testBody ?? {};
+      const testBody = cachedBody ?? {};
+      const { calendarId } = testBody;
       if (!calendarId || typeof calendarId !== "string") {
         return new Response(
           JSON.stringify({ ok: false, error: "calendarId required" }),
@@ -901,10 +905,7 @@ Deno.serve(async (req) => {
     // _kategorie-Annotation.
     // ──────────────────────────────────────────────────────────────
     if ((req.method === "POST" || req.method === "GET") && action === "list_events_multi") {
-      let multiBody: any = {};
-      if (req.method === "POST") {
-        try { multiBody = await req.json(); } catch { multiBody = {}; }
-      }
+      const multiBody = cachedBody ?? {};
       const timeMin = url.searchParams.get("timeMin") || multiBody?.timeMin;
       const timeMax = url.searchParams.get("timeMax") || multiBody?.timeMax;
 
