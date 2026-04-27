@@ -365,14 +365,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const today = vienna.date;
 
-    // Nur an aktive Mitarbeiter mit freigeschaltetem WhatsApp UND aktivem Profil senden
-    // (entspricht exakt der Liste in den WhatsApp-Admin-Einstellungen)
+    // Nur an aktive Mitarbeiter mit freigeschaltetem WhatsApp UND aktivem Profil senden.
+    // Zwei-Stufen-Lookup statt embedded Inner-Join-Filter: erst aktive Profile-IDs holen,
+    // dann employees darauf filtern. Der Embedded-Filter
+    // ".eq('profiles.is_active', true)" mit Alias-Inner-Join hat im Supabase-JS-Client
+    // ein leeres Result geliefert (Plain-SQL liefert die Mitarbeiter korrekt). Diese
+    // Variante ist explizit, debuggbar und ohne PostgREST-Edge-Cases.
+    const { data: activeProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("is_active", true);
+    const activeProfileIds = (activeProfiles ?? []).map((p: any) => p.id);
+
     const { data: employees } = await (supabase.from("employees" as never) as any)
-      .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date, profiles:user_id!inner(is_active)")
+      .select("id, vorname, nachname, telefon, user_id, whatsapp_last_morning_date, whatsapp_last_evening_date")
       .eq("whatsapp_aktiv", true)
       .eq("aktiv", true)
-      .eq("profiles.is_active", true)
-      .not("telefon", "is", null);
+      .not("telefon", "is", null)
+      .in("user_id", activeProfileIds);
 
     if (!employees?.length) {
       return new Response(
