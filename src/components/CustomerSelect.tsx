@@ -20,20 +20,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Search, Plus, X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import {
+  CustomerForm,
+  EMPTY_CUSTOMER_FORM,
+  composeCustomerName,
+  type CustomerFormData,
+} from "@/components/CustomerForm";
 
 export interface CustomerData {
   id: string;
@@ -59,22 +55,6 @@ interface CustomerSelectProps {
   className?: string;
 }
 
-const emptyNewCustomer = {
-  kundentyp: "geschaeftskunde" as "geschaeftskunde" | "privatkunde",
-  firmenname: "",
-  vorname: "",
-  nachname: "",
-  anrede: "",
-  titel: "",
-  adresse: "",
-  plz: "",
-  ort: "",
-  land: "Österreich",
-  email: "",
-  telefon: "",
-  uid_nummer: "",
-};
-
 export function CustomerSelect({
   value,
   onChange,
@@ -85,7 +65,7 @@ export function CustomerSelect({
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newCustomer, setNewCustomer] = useState(emptyNewCustomer);
+  const [customerForm, setCustomerForm] = useState<CustomerFormData>(EMPTY_CUSTOMER_FORM);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -117,16 +97,15 @@ export function CustomerSelect({
   };
 
   const handleCreateCustomer = async () => {
-    const isGeschaeftlich = newCustomer.kundentyp === "geschaeftskunde";
-    const displayName = isGeschaeftlich
-      ? newCustomer.firmenname.trim()
-      : [newCustomer.titel, newCustomer.vorname, newCustomer.nachname]
-          .map((s) => (s || "").trim()).filter(Boolean).join(" ");
+    const isGeschaeftlich = customerForm.kundentyp === "geschaeftskunde";
+    const displayName = composeCustomerName(customerForm);
 
     if (!displayName) {
       toast({
         title: isGeschaeftlich ? "Firmenname erforderlich" : "Name erforderlich",
-        description: isGeschaeftlich ? "Bitte Firmennamen eingeben." : "Bitte Vor- und Nachname eingeben.",
+        description: isGeschaeftlich
+          ? "Bitte Firmennamen eingeben."
+          : "Bitte Vor- und Nachname eingeben.",
         variant: "destructive",
       });
       return;
@@ -135,28 +114,35 @@ export function CustomerSelect({
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast({ title: "Fehler", description: "Nicht eingeloggt", variant: "destructive" }); setSaving(false); return; }
+      if (!user) {
+        toast({ title: "Fehler", description: "Nicht eingeloggt", variant: "destructive" });
+        setSaving(false);
+        return;
+      }
 
       const insertData: Record<string, any> = {
         user_id: user.id,
         name: displayName,
-        kundentyp: newCustomer.kundentyp,
-        land: newCustomer.land || "Österreich",
+        kundentyp: customerForm.kundentyp,
+        land: customerForm.land || "Österreich",
       };
-      if (!isGeschaeftlich) {
-        insertData.vorname = newCustomer.vorname;
-        insertData.nachname = newCustomer.nachname;
-        if (newCustomer.anrede) insertData.anrede = newCustomer.anrede;
-        if (newCustomer.titel) insertData.titel = newCustomer.titel;
+      if (isGeschaeftlich) {
+        insertData.firmenname = customerForm.firmenname.trim() || null;
+        insertData.ansprechpartner = customerForm.ansprechpartner.trim() || null;
       } else {
-        insertData.firmenname = newCustomer.firmenname.trim();
+        insertData.vorname = customerForm.vorname.trim() || null;
+        insertData.nachname = customerForm.nachname.trim() || null;
+        if (customerForm.anrede) insertData.anrede = customerForm.anrede;
+        if (customerForm.titel) insertData.titel = customerForm.titel.trim();
       }
-      if (newCustomer.adresse) insertData.adresse = newCustomer.adresse;
-      if (newCustomer.plz) insertData.plz = newCustomer.plz;
-      if (newCustomer.ort) insertData.ort = newCustomer.ort;
-      if (newCustomer.email) insertData.email = newCustomer.email;
-      if (newCustomer.telefon) insertData.telefon = newCustomer.telefon;
-      if (newCustomer.uid_nummer) insertData.uid_nummer = newCustomer.uid_nummer;
+      if (customerForm.adresse) insertData.adresse = customerForm.adresse.trim();
+      if (customerForm.plz) insertData.plz = customerForm.plz.trim();
+      if (customerForm.ort) insertData.ort = customerForm.ort.trim();
+      if (customerForm.email) insertData.email = customerForm.email.trim();
+      if (customerForm.telefon) insertData.telefon = customerForm.telefon.trim();
+      if (isGeschaeftlich && customerForm.uid_nummer) {
+        insertData.uid_nummer = customerForm.uid_nummer.trim();
+      }
 
       const { data, error } = await supabase
         .from("customers")
@@ -172,7 +158,7 @@ export function CustomerSelect({
       setCustomers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       onChange(created.id, created);
       setDialogOpen(false);
-      setNewCustomer(emptyNewCustomer);
+      setCustomerForm(EMPTY_CUSTOMER_FORM);
       toast({ title: "Kunde erstellt", description: created.name });
     } catch (err: any) {
       toast({
@@ -183,10 +169,6 @@ export function CustomerSelect({
     } finally {
       setSaving(false);
     }
-  };
-
-  const updateNew = (field: string, val: string) => {
-    setNewCustomer((prev) => ({ ...prev, [field]: val }));
   };
 
   return (
@@ -265,6 +247,7 @@ export function CustomerSelect({
                   value="__neuer_kunde__"
                   onSelect={() => {
                     setPopoverOpen(false);
+                    setCustomerForm(EMPTY_CUSTOMER_FORM);
                     setDialogOpen(true);
                   }}
                   className="text-primary"
@@ -283,178 +266,18 @@ export function CustomerSelect({
           <DialogHeader>
             <DialogTitle>Neuen Kunden erstellen</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Geschäftlich / Privat Toggle — IMMER ZUERST */}
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={newCustomer.kundentyp === "geschaeftskunde" ? "default" : "outline"}
-                className="flex-1 gap-2 h-10"
-                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "geschaeftskunde" }))}
-              >
-                🏢 Geschäftlich
-              </Button>
-              <Button
-                type="button"
-                variant={newCustomer.kundentyp === "privatkunde" ? "default" : "outline"}
-                className="flex-1 gap-2 h-10"
-                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "privatkunde", anrede: prev.anrede === "Firma" ? "" : prev.anrede }))}
-              >
-                👤 Privat
-              </Button>
-            </div>
-
-            {/* Identitäts-Felder konditional */}
-            {newCustomer.kundentyp === "geschaeftskunde" ? (
-              <div className="space-y-3">
-                <div>
-                  <Label>Firmenname <span className="text-destructive">*</span></Label>
-                  <Input
-                    value={newCustomer.firmenname}
-                    onChange={(e) => updateNew("firmenname", e.target.value)}
-                    placeholder="Firmenname"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <Label>Ansprechpartner</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      value={newCustomer.vorname}
-                      onChange={(e) => updateNew("vorname", e.target.value)}
-                      placeholder="Vorname"
-                    />
-                    <Input
-                      value={newCustomer.nachname}
-                      onChange={(e) => updateNew("nachname", e.target.value)}
-                      placeholder="Nachname"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>UID-Nummer</Label>
-                  <Input
-                    value={newCustomer.uid_nummer}
-                    onChange={(e) => updateNew("uid_nummer", e.target.value)}
-                    placeholder="ATU..."
-                  />
-                </div>
-              </div>
-            ) : (
-              /* Privatperson-Felder */
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Anrede</Label>
-                    <Select
-                      value={newCustomer.anrede}
-                      onValueChange={(v) => updateNew("anrede", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Anrede" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Herr">Herr</SelectItem>
-                        <SelectItem value="Frau">Frau</SelectItem>
-                        <SelectItem value="Divers">Divers</SelectItem>
-                        <SelectItem value="Familie">Familie</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Titel</Label>
-                    <Input
-                      value={newCustomer.titel}
-                      onChange={(e) => updateNew("titel", e.target.value)}
-                      placeholder="z.B. Ing., DI"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Vorname <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={newCustomer.vorname}
-                      onChange={(e) => updateNew("vorname", e.target.value)}
-                      placeholder="Vorname"
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <Label>Nachname <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={newCustomer.nachname}
-                      onChange={(e) => updateNew("nachname", e.target.value)}
-                      placeholder="Nachname"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Gemeinsame Felder */}
-            <div className="border-t pt-3 space-y-3">
-              <AddressAutocomplete
-                label="Adresse"
-                value={newCustomer.adresse}
-                onChange={(v) => updateNew("adresse", v)}
-                onSelect={(addr) => {
-                  setNewCustomer((prev) => ({
-                    ...prev,
-                    adresse: addr.street,
-                    plz: addr.plz,
-                    ort: addr.ort,
-                  }));
-                }}
-                placeholder="Straße und Hausnummer"
-              />
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label>PLZ</Label>
-                  <Input
-                    value={newCustomer.plz}
-                    onChange={(e) => updateNew("plz", e.target.value)}
-                    placeholder="PLZ"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label>Ort</Label>
-                  <Input
-                    value={newCustomer.ort}
-                    onChange={(e) => updateNew("ort", e.target.value)}
-                    placeholder="Ort"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>E-Mail</Label>
-                <Input
-                  type="email"
-                  value={newCustomer.email}
-                  onChange={(e) => updateNew("email", e.target.value)}
-                  placeholder="email@beispiel.at"
-                />
-              </div>
-              <div>
-                <Label>Telefon</Label>
-                <Input
-                  value={newCustomer.telefon}
-                  onChange={(e) => updateNew("telefon", e.target.value)}
-                  placeholder="+43..."
-                />
-              </div>
-            </div>
-          </div>
-
+          <CustomerForm
+            value={customerForm}
+            onChange={setCustomerForm}
+            variant="minimal"
+            hideSaveButton
+          />
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setDialogOpen(false);
-                setNewCustomer(emptyNewCustomer);
+                setCustomerForm(EMPTY_CUSTOMER_FORM);
               }}
             >
               Abbrechen

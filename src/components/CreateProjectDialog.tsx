@@ -10,10 +10,16 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, UserPlus, Building, User as UserIcon, Upload, Trash2, CheckCircle, FileText, Image, Map } from "lucide-react";
+import { Search, UserPlus, Building, Upload, Trash2, CheckCircle, FileText, Image, Map } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
+import {
+  CustomerForm,
+  EMPTY_CUSTOMER_FORM,
+  composeCustomerName,
+  type CustomerFormData,
+} from "@/components/CustomerForm";
 
 interface CustomerOption {
   id: string;
@@ -26,6 +32,12 @@ interface CustomerOption {
   land: string | null;
   email: string | null;
   telefon: string | null;
+  kundentyp: string | null;
+  firmenname: string | null;
+  vorname: string | null;
+  nachname: string | null;
+  anrede: string | null;
+  titel: string | null;
 }
 
 interface CreateProjectDialogProps {
@@ -91,24 +103,23 @@ export function CreateProjectDialog({
   const [beschreibung, setBeschreibung] = useState("");
 
   // --- Section 2: Kunde ---
+  // Einheitliche Eingabemaske: customerForm bündelt ALLE Kundendaten (Identität +
+  // Kontakt + Adresse + Kundentyp). Dieselbe Datenstruktur wie in Customers.tsx und
+  // CustomerSelect.tsx — über `<CustomerForm variant="minimal">` gerendert.
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(defaultCustomerId);
-  const [customerName, setCustomerName] = useState(defaultCustomerName);
-  const [adresse, setAdresse] = useState(defaultAdresse);
-  const [plz, setPlz] = useState(defaultPlz);
-  const [ort, setOrt] = useState(defaultOrt);
-  const [land, setLand] = useState("Österreich");
-  const [email, setEmail] = useState("");
-  const [telefon, setTelefon] = useState("");
-  const [uidNummer, setUidNummer] = useState("");
-  const [anrede, setAnrede] = useState("");
-  const [titel, setTitel] = useState("");
-  // Kundentyp-Toggle + Identitäts-Felder für "Neuer Kunde"-Tab.
-  // Konsistent zur Customers.tsx-Hauptmaske: erst Geschäftlich/Privat,
-  // dann konditional Firmenname ODER Vorname+Nachname.
-  const [kundentyp, setKundentyp] = useState<"geschaeftskunde" | "privatkunde">("geschaeftskunde");
-  const [firmenname, setFirmenname] = useState("");
-  const [vorname, setVorname] = useState("");
-  const [nachname, setNachname] = useState("");
+  const [customerForm, setCustomerForm] = useState<CustomerFormData>(() => ({
+    ...EMPTY_CUSTOMER_FORM,
+    name: defaultCustomerName,
+    firmenname: defaultCustomerName,
+    adresse: defaultAdresse,
+    plz: defaultPlz,
+    ort: defaultOrt,
+    email: defaultEmail,
+    telefon: defaultTelefon,
+    uid_nummer: defaultUidNummer,
+    anrede: defaultAnrede,
+    titel: defaultTitel,
+  }));
 
   // --- Section 3: Projektadresse / Leistungsort ---
   const [projektAdresse, setProjektAdresse] = useState("");
@@ -158,16 +169,19 @@ export function CreateProjectDialog({
       setErfassungsDatum(new Date().toISOString().split("T")[0]);
       setBeschreibung("");
       setSelectedCustomerId(defaultCustomerId);
-      setCustomerName(defaultCustomerName);
-      setAdresse(defaultAdresse);
-      setPlz(defaultPlz);
-      setOrt(defaultOrt);
-      setLand("Österreich");
-      setEmail(defaultEmail);
-      setTelefon(defaultTelefon);
-      setUidNummer(defaultUidNummer);
-      setAnrede(defaultAnrede);
-      setTitel(defaultTitel);
+      setCustomerForm({
+        ...EMPTY_CUSTOMER_FORM,
+        name: defaultCustomerName,
+        firmenname: defaultCustomerName,
+        adresse: defaultAdresse,
+        plz: defaultPlz,
+        ort: defaultOrt,
+        email: defaultEmail,
+        telefon: defaultTelefon,
+        uid_nummer: defaultUidNummer,
+        anrede: defaultAnrede,
+        titel: defaultTitel,
+      });
       setProjektAdresse("");
       setProjektPlz("");
       setProjektOrt("");
@@ -197,10 +211,10 @@ export function CreateProjectDialog({
       // Load customers
       supabase
         .from("customers")
-        .select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon")
+        .select("id, name, ansprechpartner, uid_nummer, adresse, plz, ort, land, email, telefon, kundentyp, firmenname, vorname, nachname, anrede, titel")
         .order("name")
         .then(({ data }) => {
-          if (data) setCustomers(data);
+          if (data) setCustomers(data as CustomerOption[]);
         });
 
       // Load employees (hidden Profile ausblenden)
@@ -233,16 +247,26 @@ export function CreateProjectDialog({
 
   const selectCustomer = (c: CustomerOption) => {
     setSelectedCustomerId(c.id);
-    setCustomerName(c.name);
-    setAdresse(c.adresse || "");
-    setPlz(c.plz || "");
-    setOrt(c.ort || "");
-    setLand(c.land || "Österreich");
-    setEmail(c.email || "");
-    setTelefon(c.telefon || "");
-    setUidNummer(c.uid_nummer || "");
-    setAnrede((c as any).anrede || "");
-    setTitel((c as any).titel || "");
+    const typ: "geschaeftskunde" | "privatkunde" =
+      c.kundentyp === "privatkunde" ? "privatkunde" : "geschaeftskunde";
+    setCustomerForm({
+      ...EMPTY_CUSTOMER_FORM,
+      name: c.name || "",
+      kundentyp: typ,
+      firmenname: c.firmenname || (typ === "geschaeftskunde" ? c.name || "" : ""),
+      vorname: c.vorname || "",
+      nachname: c.nachname || "",
+      anrede: c.anrede || "",
+      titel: c.titel || "",
+      ansprechpartner: c.ansprechpartner || "",
+      adresse: c.adresse || "",
+      plz: c.plz || "",
+      ort: c.ort || "",
+      land: c.land || "Österreich",
+      email: c.email || "",
+      telefon: c.telefon || "",
+      uid_nummer: c.uid_nummer || "",
+    });
     setCustomerPopoverOpen(false);
     if (!projectName) setProjectName(c.name);
   };
@@ -282,13 +306,14 @@ export function CreateProjectDialog({
     }
 
     // H-3: Projekt ohne Kunde — erlaubt (z.B. interne Projekte), aber mit Hinweis
-    if (!selectedCustomerId && !customerName.trim()) {
+    const composedCustomerName = composeCustomerName(customerForm);
+    if (!selectedCustomerId && !composedCustomerName) {
       const ok = window.confirm("Dieses Projekt hat keinen Kunden. Wirklich ohne Kunde anlegen?");
       if (!ok) return;
     }
 
     // E-Mail-Validierung wenn gesetzt
-    if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (customerForm.email && customerForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerForm.email.trim())) {
       toast({ variant: "destructive", title: "Ungültige E-Mail", description: "Bitte gültige E-Mail-Adresse eingeben" });
       return;
     }
@@ -301,11 +326,12 @@ export function CreateProjectDialog({
       if (!user) throw new Error("Nicht angemeldet");
 
       let customerId = selectedCustomerId;
+      const isGeschaeftlich = customerForm.kundentyp === "geschaeftskunde";
 
       // Find or create customer (duplicate protection by name)
-      if (!customerId && customerName.trim()) {
-        let query = supabase.from("customers").select("id").ilike("name", customerName.trim());
-        if (plz.trim()) query = query.eq("plz", plz.trim());
+      if (!customerId && composedCustomerName) {
+        let query = supabase.from("customers").select("id").ilike("name", composedCustomerName);
+        if (customerForm.plz.trim()) query = query.eq("plz", customerForm.plz.trim());
         const { data: existing } = await query.limit(1).maybeSingle();
 
         if (existing) {
@@ -313,14 +339,14 @@ export function CreateProjectDialog({
           await supabase
             .from("customers")
             .update({
-              adresse: adresse.trim() || undefined,
-              plz: plz.trim() || undefined,
-              ort: ort.trim() || undefined,
-              email: email.trim() || undefined,
-              telefon: telefon.trim() || undefined,
-              uid_nummer: uidNummer.trim() || undefined,
-              anrede: anrede || undefined,
-              titel: titel.trim() || undefined,
+              adresse: customerForm.adresse.trim() || undefined,
+              plz: customerForm.plz.trim() || undefined,
+              ort: customerForm.ort.trim() || undefined,
+              email: customerForm.email.trim() || undefined,
+              telefon: customerForm.telefon.trim() || undefined,
+              uid_nummer: isGeschaeftlich ? (customerForm.uid_nummer.trim() || undefined) : undefined,
+              anrede: customerForm.anrede || undefined,
+              titel: customerForm.titel.trim() || undefined,
             })
             .eq("id", existing.id);
         } else {
@@ -328,20 +354,21 @@ export function CreateProjectDialog({
             .from("customers")
             .insert({
               user_id: user.id,
-              name: customerName.trim(),
-              kundentyp,
-              firmenname: kundentyp === "geschaeftskunde" ? (firmenname.trim() || null) : null,
-              vorname: kundentyp === "privatkunde" ? (vorname.trim() || null) : null,
-              nachname: kundentyp === "privatkunde" ? (nachname.trim() || null) : null,
-              adresse: adresse.trim() || null,
-              plz: plz.trim() || null,
-              ort: ort.trim() || null,
-              land: land.trim() || null,
-              email: email.trim() || null,
-              telefon: telefon.trim() || null,
-              uid_nummer: uidNummer.trim() || null,
-              anrede: anrede || null,
-              titel: titel.trim() || null,
+              name: composedCustomerName,
+              kundentyp: customerForm.kundentyp,
+              firmenname: isGeschaeftlich ? (customerForm.firmenname.trim() || null) : null,
+              vorname: !isGeschaeftlich ? (customerForm.vorname.trim() || null) : null,
+              nachname: !isGeschaeftlich ? (customerForm.nachname.trim() || null) : null,
+              ansprechpartner: isGeschaeftlich ? (customerForm.ansprechpartner.trim() || null) : null,
+              adresse: customerForm.adresse.trim() || null,
+              plz: customerForm.plz.trim() || null,
+              ort: customerForm.ort.trim() || null,
+              land: customerForm.land.trim() || null,
+              email: customerForm.email.trim() || null,
+              telefon: customerForm.telefon.trim() || null,
+              uid_nummer: isGeschaeftlich ? (customerForm.uid_nummer.trim() || null) : null,
+              anrede: customerForm.anrede || null,
+              titel: customerForm.titel.trim() || null,
             })
             .select("id")
             .single();
@@ -801,7 +828,15 @@ export function CreateProjectDialog({
                 )}
               </div>
 
-              <Tabs value={customerTab} onValueChange={(v) => setCustomerTab(v as any)}>
+              <Tabs value={customerTab} onValueChange={(v) => {
+                setCustomerTab(v as any);
+                if (v === "new") {
+                  // Beim Wechsel auf "Neu" — bestehende Kundenwahl lösen,
+                  // Form leer für eine frische Eingabe.
+                  setSelectedCustomerId(null);
+                  setCustomerForm(EMPTY_CUSTOMER_FORM);
+                }
+              }}>
                 <TabsList className="w-full mb-3">
                   <TabsTrigger value="existing" className="flex-1 gap-1">
                     <Search className="w-3.5 h-3.5" />
@@ -818,7 +853,7 @@ export function CreateProjectDialog({
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start gap-2">
                         <Search className="w-4 h-4" />
-                        {customerName || "Kunde suchen..."}
+                        {composeCustomerName(customerForm) || customerForm.name || "Kunde suchen..."}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[350px] p-0" align="start">
@@ -850,159 +885,21 @@ export function CreateProjectDialog({
                   </Popover>
                 </TabsContent>
 
-                <TabsContent value="new" className="space-y-3">
-                  {/* Kundentyp-Toggle ZUERST */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={kundentyp === "geschaeftskunde" ? "default" : "outline"}
-                      onClick={() => {
-                        setKundentyp("geschaeftskunde");
-                        setSelectedCustomerId(null);
-                        // composedName-Sync für Adressauto-Übernahme
-                        setCustomerName(firmenname);
-                      }}
-                      className="gap-2 h-10"
-                    >
-                      <Building className="w-4 h-4" />
-                      Geschäftlich
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={kundentyp === "privatkunde" ? "default" : "outline"}
-                      onClick={() => {
-                        setKundentyp("privatkunde");
-                        setSelectedCustomerId(null);
-                        setCustomerName([titel, vorname, nachname].filter(Boolean).join(" "));
-                      }}
-                      className="gap-2 h-10"
-                    >
-                      <UserIcon className="w-4 h-4" />
-                      Privat
-                    </Button>
-                  </div>
-
-                  {/* Identitäts-Felder konditional */}
-                  {kundentyp === "geschaeftskunde" ? (
-                    <div>
-                      <Label>Firmenname *</Label>
-                      <Input
-                        value={firmenname}
-                        onChange={(e) => {
-                          setFirmenname(e.target.value);
-                          setCustomerName(e.target.value);
-                          setSelectedCustomerId(null);
-                        }}
-                        placeholder="z. B. Hobinger GmbH"
-                      />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Vorname *</Label>
-                        <Input
-                          value={vorname}
-                          onChange={(e) => {
-                            setVorname(e.target.value);
-                            setCustomerName([titel, e.target.value, nachname].filter(Boolean).join(" "));
-                            setSelectedCustomerId(null);
-                          }}
-                          placeholder="Vorname"
-                        />
-                      </div>
-                      <div>
-                        <Label>Nachname *</Label>
-                        <Input
-                          value={nachname}
-                          onChange={(e) => {
-                            setNachname(e.target.value);
-                            setCustomerName([titel, vorname, e.target.value].filter(Boolean).join(" "));
-                            setSelectedCustomerId(null);
-                          }}
-                          placeholder="Nachname"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
+                <TabsContent value="new" />
               </Tabs>
 
-              {/* Anrede/Titel + Adresse (always visible) */}
-              <div className="space-y-3 mt-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Anrede/Firma</Label>
-                    <Select
-                      value={anrede || "none"}
-                      onValueChange={(v) => setAnrede(v === "none" ? "" : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Wählen..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">--</SelectItem>
-                        <SelectItem value="Herr">Herr</SelectItem>
-                        <SelectItem value="Frau">Frau</SelectItem>
-                        <SelectItem value="Firma">Firma</SelectItem>
-                        <SelectItem value="Divers">Divers</SelectItem>
-                        <SelectItem value="Familie">Familie</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Titel</Label>
-                    <Input
-                      value={titel}
-                      onChange={(e) => setTitel(e.target.value)}
-                      placeholder="Mag., Dr., Ing."
-                    />
-                  </div>
-                </div>
-                <AddressAutocomplete
-                  label="Adresse"
-                  value={adresse}
-                  onChange={setAdresse}
-                  onSelect={(addr) => { setAdresse(addr.street); setPlz(addr.plz); setOrt(addr.ort); }}
-                  placeholder="Straße + Hausnr."
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label>PLZ</Label>
-                    <Input value={plz} onChange={(e) => setPlz(e.target.value)} placeholder="8831" />
-                  </div>
-                  <div className="col-span-2">
-                    <Label>Ort</Label>
-                    <Input value={ort} onChange={(e) => setOrt(e.target.value)} placeholder="Niederwölz" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>E-Mail</Label>
-                    <Input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="kunde@email.at"
-                      type="email"
-                    />
-                  </div>
-                  <div>
-                    <Label>Telefon</Label>
-                    <Input
-                      value={telefon}
-                      onChange={(e) => setTelefon(e.target.value)}
-                      placeholder="+43 ..."
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>UID-Nummer</Label>
-                  <Input
-                    value={uidNummer}
-                    onChange={(e) => setUidNummer(e.target.value)}
-                    placeholder="ATU..."
-                  />
-                </div>
-              </div>
+              {/* Einheitliche Kunden-Eingabemaske — gleiche wie Customers.tsx + CustomerSelect */}
+              <CustomerForm
+                value={customerForm}
+                onChange={(next) => {
+                  setCustomerForm(next);
+                  // Wenn der User Felder ändert während ein bestehender Kunde gewählt
+                  // ist, bleibt der Link bestehen — der Customer-Datensatz wird beim
+                  // Speichern via UPDATE angepasst (siehe handleSave).
+                }}
+                variant="minimal"
+                hideSaveButton
+              />
             </div>
 
             {/* ======== Section 3: Projektadresse / Leistungsort ======== */}
@@ -1011,17 +908,17 @@ export function CreateProjectDialog({
                 <Label className="text-base font-semibold block">
                   Projektadresse / Leistungsort
                 </Label>
-                {(adresse || plz || ort) && (
+                {(customerForm.adresse || customerForm.plz || customerForm.ort) && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setProjektAdresse(adresse);
-                      setProjektPlz(plz);
-                      setProjektOrt(ort);
-                      if (!projektKontaktName) setProjektKontaktName(customerName);
-                      if (!projektKontaktTelefon) setProjektKontaktTelefon(telefon);
+                      setProjektAdresse(customerForm.adresse);
+                      setProjektPlz(customerForm.plz);
+                      setProjektOrt(customerForm.ort);
+                      if (!projektKontaktName) setProjektKontaktName(composeCustomerName(customerForm));
+                      if (!projektKontaktTelefon) setProjektKontaktTelefon(customerForm.telefon);
                     }}
                   >
                     Kundenadresse übernehmen

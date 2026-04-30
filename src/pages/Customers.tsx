@@ -688,7 +688,7 @@ export default function Customers() {
           <DialogHeader>
             <DialogTitle>{editId ? "Kunde bearbeiten" : "Neuer Kunde"}</DialogTitle>
           </DialogHeader>
-          <CustomerForm form={form} setForm={setForm} onSave={handleSave} saving={saving} editId={editId} />
+          <CustomerForm value={form} onChange={setForm} onSave={handleSave} saving={saving} editId={editId} />
         </DialogContent>
       </Dialog>
     </div>
