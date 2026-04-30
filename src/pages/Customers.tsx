@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, Search, Users, X, Receipt, ArrowLeft } from "lucide-react";
 import { getDocConfig } from "@/lib/documentTypes";
+import { CustomerForm, EMPTY_CUSTOMER_FORM, composeCustomerName, type CustomerFormData } from "@/components/CustomerForm";
 import { PageHeader } from "@/components/PageHeader";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
@@ -66,6 +67,12 @@ interface Customer {
   skonto_prozent: number | null;
   skonto_tage: number | null;
   nettofrist: number | null;
+  herkunft?: string | null;
+  wichtige_daten?: any[] | null;
+  created_at?: string;
+  user_id?: string;
+  farbe_bg?: string | null;
+  farbe_text?: string | null;
 }
 
 interface CustomerInvoice {
@@ -107,6 +114,7 @@ const emptyForm = {
   rechnungs_ort: "",
   rechnungs_land: "",
   herkunft: "",
+  wichtige_daten: [] as any[],
 };
 
 const statusLabels: Record<string, string> = {
@@ -142,13 +150,20 @@ export default function Customers() {
   const fetchCustomers = async () => {
     const { data, error } = await supabase
       .from("customers")
-      .select("*")
-      .order("name");
+      .select("*");
 
     if (error) {
       toast({ variant: "destructive", title: "Fehler", description: "Kunden konnten nicht geladen werden" });
     } else {
-      setCustomers(data || []);
+      // Sortier-Schlüssel: bei Privat = Nachname, bei Firma = Firmenname.
+      // Fallback auf "name" (Legacy-Spalte). Lokal sortieren ist
+      // pragmatisch — bei < ~5000 Kunden völlig unkritisch.
+      const sorted = ((data as any[]) || []).slice().sort((a, b) => {
+        const ka = ((a.kundentyp === "privatkunde" ? a.nachname : a.firmenname) || a.name || "").toLowerCase();
+        const kb = ((b.kundentyp === "privatkunde" ? b.nachname : b.firmenname) || b.name || "").toLowerCase();
+        return ka.localeCompare(kb, "de");
+      });
+      setCustomers(sorted as Customer[]);
       // Farben direkt aus customers.farbe_bg / farbe_text ableiten
       const map: Record<string, { bg: string; text: string }> = {};
       ((data as any[]) || []).forEach((c: any) => {
@@ -239,13 +254,24 @@ export default function Customers() {
       rechnungs_ort: (c as any).rechnungs_ort || "",
       rechnungs_land: (c as any).rechnungs_land || "",
       herkunft: (c as any).herkunft || "",
+      wichtige_daten: Array.isArray((c as any).wichtige_daten) ? (c as any).wichtige_daten : [],
     });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "Fehler", description: "Name ist erforderlich" });
+    // Name automatisch aus Kundentyp-Feldern komponieren (firmenname bzw.
+    // titel/vorname/nachname). Damit muss der User keinen separaten "Name"
+    // eintragen — das Feld bleibt für DB-Backwards-Compat erhalten.
+    const composedName = composeCustomerName(form as CustomerFormData);
+    if (!composedName) {
+      toast({
+        variant: "destructive",
+        title: "Pflichtfelder fehlen",
+        description: form.kundentyp === "geschaeftskunde"
+          ? "Firmenname ist erforderlich."
+          : "Vor- und Nachname sind erforderlich.",
+      });
       return;
     }
 
@@ -294,8 +320,8 @@ export default function Customers() {
     if (!user) { setSaving(false); return; }
 
     try {
-      const payload = {
-          name: form.name,
+      const payload: any = {
+          name: composedName,
           kundennummer: form.kundennummer || null,
           anrede: form.anrede || null,
           titel: form.titel || null,
@@ -324,6 +350,7 @@ export default function Customers() {
           rechnungs_ort: form.rechnungs_ort || null,
           rechnungs_land: form.rechnungs_land || null,
           herkunft: form.herkunft || null,
+          wichtige_daten: form.wichtige_daten || [],
       };
 
       if (editId) {
@@ -499,7 +526,13 @@ export default function Customers() {
             <DialogHeader>
               <DialogTitle>Kunde bearbeiten</DialogTitle>
             </DialogHeader>
-            <CustomerForm form={form} setForm={setForm} onSave={handleSave} saving={saving} editId={editId} />
+            <CustomerForm
+              value={form}
+              onChange={setForm}
+              onSave={handleSave}
+              saving={saving}
+              editId={editId}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -564,12 +597,22 @@ export default function Customers() {
             {loading ? (
               <p className="text-center py-8 text-muted-foreground">Lädt...</p>
             ) : filtered.length === 0 ? (
-              <EmptyState
-                icon={<Users className="w-12 h-12" />}
-                title={search ? "Keine Kunden gefunden" : "Noch keine Kunden"}
-                description={search ? "Passe deine Suche an oder lege einen neuen Kunden an." : "Lege deinen ersten Kunden an um Rechnungen und Angebote zu erstellen."}
-                action={!search ? { label: "Ersten Kunden anlegen", onClick: openNew } : undefined}
-              />
+              <div className="text-center py-12">
+                <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-lg font-semibold mb-1">
+                  {search ? "Keine Kunden gefunden" : "Noch keine Kunden"}
+                </p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {search
+                    ? "Passe deine Suche an oder lege einen neuen Kunden an."
+                    : "Lege deinen ersten Kunden an um Rechnungen und Angebote zu erstellen."}
+                </p>
+                {!search && (
+                  <Button onClick={openNew} className="gap-2">
+                    <Plus className="w-4 h-4" /> Ersten Kunden anlegen
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -660,223 +703,6 @@ export default function Customers() {
           <CustomerForm form={form} setForm={setForm} onSave={handleSave} saving={saving} editId={editId} />
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function CustomerForm({ form, setForm, onSave, saving, editId }: {
-  form: typeof emptyForm;
-  setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
-  onSave: () => void;
-  saving: boolean;
-  editId: string | null;
-}) {
-  const [vatChecking, setVatChecking] = useState(false);
-  const [vatResult, setVatResult] = useState<{ valid: boolean; name?: string; address?: string; error?: string } | null>(null);
-  const [herkunftOptions, setHerkunftOptions] = useState<Array<{ wert: string; label: string }>>([]);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await (supabase.from("admin_config_options" as never) as any)
-        .select("wert, label")
-        .eq("kategorie", "kunde_herkunft")
-        .eq("is_active", true)
-        .order("sort_order");
-      setHerkunftOptions(((data as any[]) || []).map((o: any) => ({ wert: o.wert, label: o.label })));
-    })();
-  }, []);
-
-  return (
-    <div className="space-y-4">
-      {/* Kundentyp toggle */}
-      <div className="flex gap-2 mb-4">
-        <Button type="button" variant={form.kundentyp === "geschaeftskunde" ? "default" : "outline"} size="sm" className="flex-1"
-          onClick={() => setForm(prev => ({...prev, kundentyp: "geschaeftskunde"}))}>
-          Geschäftskunde
-        </Button>
-        <Button type="button" variant={form.kundentyp === "privatkunde" ? "default" : "outline"} size="sm" className="flex-1"
-          onClick={() => setForm(prev => ({...prev, kundentyp: "privatkunde"}))}>
-          Privatkunde
-        </Button>
-      </div>
-
-      {/* Firmenname & Branche (nur Geschäftskunde) */}
-      {form.kundentyp === "geschaeftskunde" && (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Firmenname</Label>
-            <Input value={form.firmenname} onChange={(e) => setForm(p => ({ ...p, firmenname: e.target.value }))} placeholder="Firmenname" />
-          </div>
-          <div>
-            <Label>Branche</Label>
-            <Input value={form.branche} onChange={(e) => setForm(p => ({ ...p, branche: e.target.value }))} placeholder="z.B. Bau, IT, Handel" />
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <Label>Kundennr.</Label>
-          <Input value={form.kundennummer} onChange={(e) => setForm(p => ({ ...p, kundennummer: e.target.value }))} placeholder="z.B. 10001" />
-        </div>
-        <div>
-          <Label>Anrede/Firma</Label>
-          <Select value={form.anrede || "none"} onValueChange={(v) => setForm(p => ({ ...p, anrede: v === "none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="Wählen..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">—</SelectItem>
-              <SelectItem value="Herr">Herr</SelectItem>
-              <SelectItem value="Frau">Frau</SelectItem>
-              <SelectItem value="Firma">Firma</SelectItem>
-              <SelectItem value="Divers">Divers</SelectItem>
-              <SelectItem value="Familie">Familie</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Titel</Label>
-          <Input value={form.titel} onChange={(e) => setForm(p => ({ ...p, titel: e.target.value }))} placeholder="Mag., Dr., Ing." />
-        </div>
-      </div>
-      <div>
-        <Label>Firma / Name *</Label>
-        <Input value={form.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Firmenname oder Personenname" />
-      </div>
-      <div>
-        <Label>Ansprechpartner</Label>
-        <Input value={form.ansprechpartner} onChange={(e) => setForm(p => ({ ...p, ansprechpartner: e.target.value }))} placeholder="Kontaktperson" />
-      </div>
-      <div>
-        <Label>UID-Nummer</Label>
-        <div className="flex gap-2">
-          <Input value={form.uid_nummer} onChange={(e) => setForm(p => ({ ...p, uid_nummer: e.target.value }))} placeholder="ATU12345678" className="flex-1" />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!form.uid_nummer || form.uid_nummer.length < 4 || vatChecking}
-            onClick={async () => {
-              setVatChecking(true);
-              setVatResult(null);
-              try {
-                const { data, error } = await supabase.functions.invoke("check-vat", {
-                  body: { vatNumber: form.uid_nummer.replace(/\s/g, "") },
-                });
-                if (error) throw error;
-                setVatResult(data);
-                if (data.valid) {
-                  toast({ title: "UID gültig", description: data.name ? `${data.name}` : "UID-Nummer ist gültig" });
-                  // Auto-fill name if empty
-                  if (data.name && !form.name.trim()) {
-                    setForm(p => ({ ...p, name: data.name.trim() }));
-                  }
-                  if (data.address && !form.adresse.trim()) {
-                    setForm(p => ({ ...p, adresse: data.address.trim() }));
-                  }
-                } else {
-                  toast({ variant: "destructive", title: "UID ungültig", description: data.error || "UID-Nummer konnte nicht verifiziert werden" });
-                }
-              } catch (err: any) {
-                toast({ variant: "destructive", title: "Prüfung fehlgeschlagen", description: err.message });
-              } finally {
-                setVatChecking(false);
-              }
-            }}
-          >
-            {vatChecking ? "..." : "Prüfen"}
-          </Button>
-        </div>
-        {vatResult && (
-          <p className={`text-xs mt-1 ${vatResult.valid ? "text-green-600" : "text-red-600"}`}>
-            {vatResult.valid ? `✓ Gültig${vatResult.name ? `: ${vatResult.name}` : ""}` : `✗ ${vatResult.error || "Ungültig"}`}
-          </p>
-        )}
-      </div>
-      <AddressAutocomplete
-        label="Adresse"
-        value={form.adresse}
-        onChange={(v) => setForm(p => ({ ...p, adresse: v }))}
-        onSelect={(addr) => setForm(p => ({ ...p, adresse: addr.street, plz: addr.plz, ort: addr.ort, land: addr.land || p.land }))}
-        placeholder="Straße und Hausnummer"
-      />
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <Label>PLZ</Label>
-          <Input value={form.plz} onChange={(e) => setForm(p => ({ ...p, plz: e.target.value }))} />
-        </div>
-        <div>
-          <Label>Ort</Label>
-          <Input value={form.ort} onChange={(e) => setForm(p => ({ ...p, ort: e.target.value }))} />
-        </div>
-        <div>
-          <Label>Land</Label>
-          <Input value={form.land} onChange={(e) => setForm(p => ({ ...p, land: e.target.value }))} />
-        </div>
-      </div>
-      {/* Rechnungsadresse (abweichend) */}
-      <div className="border-t pt-3 mt-3">
-        <Label className="text-sm font-medium">Rechnungsadresse (falls abweichend)</Label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-          <Input placeholder="Straße" value={form.rechnungs_adresse} onChange={(e) => setForm(p => ({ ...p, rechnungs_adresse: e.target.value }))} />
-          <div className="flex gap-2">
-            <Input placeholder="PLZ" className="w-24" value={form.rechnungs_plz} onChange={(e) => setForm(p => ({ ...p, rechnungs_plz: e.target.value }))} />
-            <Input placeholder="Ort" className="flex-1" value={form.rechnungs_ort} onChange={(e) => setForm(p => ({ ...p, rechnungs_ort: e.target.value }))} />
-          </div>
-          <Input placeholder="Land" value={form.rechnungs_land} onChange={(e) => setForm(p => ({ ...p, rechnungs_land: e.target.value }))} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>E-Mail</Label>
-          <Input type="email" value={form.email} onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))} />
-        </div>
-        <div>
-          <Label>Telefon</Label>
-          <Input value={form.telefon} onChange={(e) => setForm(p => ({ ...p, telefon: e.target.value }))} />
-        </div>
-      </div>
-      <div>
-        <Label>Website</Label>
-        <Input value={form.website} onChange={(e) => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://www.beispiel.at" />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <Label>Zahlungsfrist (Tage)</Label>
-          <Input type="number" value={form.nettofrist || ""} onChange={(e) => setForm(p => ({ ...p, nettofrist: Number(e.target.value) }))} min={0} max={365} />
-        </div>
-        <div>
-          <Label>Skonto %</Label>
-          <Input type="number" value={form.skonto_prozent || ""} onChange={(e) => setForm(p => ({ ...p, skonto_prozent: Number(e.target.value) }))} min={0} max={20} step={0.5} />
-        </div>
-        <div>
-          <Label>Skonto Tage</Label>
-          <Input type="number" value={form.skonto_tage || ""} onChange={(e) => setForm(p => ({ ...p, skonto_tage: Number(e.target.value) }))} min={0} max={form.nettofrist || 365} />
-        </div>
-      </div>
-      <div>
-        <Label>Herkunft / Referenz</Label>
-        <Select
-          value={form.herkunft || "_none"}
-          onValueChange={(v) => setForm(p => ({ ...p, herkunft: v === "_none" ? "" : v }))}
-        >
-          <SelectTrigger><SelectValue placeholder="Woher kam der Kunde?" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_none">— keine Angabe —</SelectItem>
-            {herkunftOptions.map((o) => (
-              <SelectItem key={o.wert} value={o.label}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Liste erweiterbar unter Admin → Konfiguration → <em>kunde_herkunft</em>.</p>
-      </div>
-      <div>
-        <Label>Notizen</Label>
-        <Textarea value={form.notizen} onChange={(e) => setForm(p => ({ ...p, notizen: e.target.value }))} rows={2} />
-      </div>
-      <Button onClick={onSave} disabled={saving} className="w-full">
-        {saving ? "Speichert..." : editId ? "Speichern" : "Kunde anlegen"}
-      </Button>
     </div>
   );
 }

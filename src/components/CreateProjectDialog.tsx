@@ -10,7 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, UserPlus, Building, Upload, Trash2, CheckCircle, FileText, Image, Map } from "lucide-react";
+import { Search, UserPlus, Building, User as UserIcon, Upload, Trash2, CheckCircle, FileText, Image, Map } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
@@ -102,6 +102,13 @@ export function CreateProjectDialog({
   const [uidNummer, setUidNummer] = useState("");
   const [anrede, setAnrede] = useState("");
   const [titel, setTitel] = useState("");
+  // Kundentyp-Toggle + Identitäts-Felder für "Neuer Kunde"-Tab.
+  // Konsistent zur Customers.tsx-Hauptmaske: erst Geschäftlich/Privat,
+  // dann konditional Firmenname ODER Vorname+Nachname.
+  const [kundentyp, setKundentyp] = useState<"geschaeftskunde" | "privatkunde">("geschaeftskunde");
+  const [firmenname, setFirmenname] = useState("");
+  const [vorname, setVorname] = useState("");
+  const [nachname, setNachname] = useState("");
 
   // --- Section 3: Projektadresse / Leistungsort ---
   const [projektAdresse, setProjektAdresse] = useState("");
@@ -322,6 +329,10 @@ export function CreateProjectDialog({
             .insert({
               user_id: user.id,
               name: customerName.trim(),
+              kundentyp,
+              firmenname: kundentyp === "geschaeftskunde" ? (firmenname.trim() || null) : null,
+              vorname: kundentyp === "privatkunde" ? (vorname.trim() || null) : null,
+              nachname: kundentyp === "privatkunde" ? (nachname.trim() || null) : null,
               adresse: adresse.trim() || null,
               plz: plz.trim() || null,
               ort: ort.trim() || null,
@@ -840,17 +851,79 @@ export function CreateProjectDialog({
                 </TabsContent>
 
                 <TabsContent value="new" className="space-y-3">
-                  <div>
-                    <Label>Firma / Name *</Label>
-                    <Input
-                      value={customerName}
-                      onChange={(e) => {
-                        setCustomerName(e.target.value);
+                  {/* Kundentyp-Toggle ZUERST */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={kundentyp === "geschaeftskunde" ? "default" : "outline"}
+                      onClick={() => {
+                        setKundentyp("geschaeftskunde");
                         setSelectedCustomerId(null);
+                        // composedName-Sync für Adressauto-Übernahme
+                        setCustomerName(firmenname);
                       }}
-                      placeholder="Firma / Name"
-                    />
+                      className="gap-2 h-10"
+                    >
+                      <Building className="w-4 h-4" />
+                      Geschäftlich
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={kundentyp === "privatkunde" ? "default" : "outline"}
+                      onClick={() => {
+                        setKundentyp("privatkunde");
+                        setSelectedCustomerId(null);
+                        setCustomerName([titel, vorname, nachname].filter(Boolean).join(" "));
+                      }}
+                      className="gap-2 h-10"
+                    >
+                      <UserIcon className="w-4 h-4" />
+                      Privat
+                    </Button>
                   </div>
+
+                  {/* Identitäts-Felder konditional */}
+                  {kundentyp === "geschaeftskunde" ? (
+                    <div>
+                      <Label>Firmenname *</Label>
+                      <Input
+                        value={firmenname}
+                        onChange={(e) => {
+                          setFirmenname(e.target.value);
+                          setCustomerName(e.target.value);
+                          setSelectedCustomerId(null);
+                        }}
+                        placeholder="z. B. Hobinger GmbH"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Vorname *</Label>
+                        <Input
+                          value={vorname}
+                          onChange={(e) => {
+                            setVorname(e.target.value);
+                            setCustomerName([titel, e.target.value, nachname].filter(Boolean).join(" "));
+                            setSelectedCustomerId(null);
+                          }}
+                          placeholder="Vorname"
+                        />
+                      </div>
+                      <div>
+                        <Label>Nachname *</Label>
+                        <Input
+                          value={nachname}
+                          onChange={(e) => {
+                            setNachname(e.target.value);
+                            setCustomerName([titel, vorname, e.target.value].filter(Boolean).join(" "));
+                            setSelectedCustomerId(null);
+                          }}
+                          placeholder="Nachname"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
 

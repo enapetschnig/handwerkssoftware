@@ -60,8 +60,8 @@ interface CustomerSelectProps {
 }
 
 const emptyNewCustomer = {
-  kundentyp: "firma" as "firma" | "privat",
-  name: "",
+  kundentyp: "geschaeftskunde" as "geschaeftskunde" | "privatkunde",
+  firmenname: "",
   vorname: "",
   nachname: "",
   anrede: "",
@@ -117,15 +117,16 @@ export function CustomerSelect({
   };
 
   const handleCreateCustomer = async () => {
-    const isFirma = newCustomer.kundentyp === "firma";
-    const displayName = isFirma
-      ? newCustomer.name.trim()
-      : [newCustomer.vorname, newCustomer.nachname].filter(Boolean).join(" ").trim();
+    const isGeschaeftlich = newCustomer.kundentyp === "geschaeftskunde";
+    const displayName = isGeschaeftlich
+      ? newCustomer.firmenname.trim()
+      : [newCustomer.titel, newCustomer.vorname, newCustomer.nachname]
+          .map((s) => (s || "").trim()).filter(Boolean).join(" ");
 
     if (!displayName) {
       toast({
-        title: isFirma ? "Firmenname erforderlich" : "Name erforderlich",
-        description: isFirma ? "Bitte Firmennamen eingeben." : "Bitte Vor- und Nachname eingeben.",
+        title: isGeschaeftlich ? "Firmenname erforderlich" : "Name erforderlich",
+        description: isGeschaeftlich ? "Bitte Firmennamen eingeben." : "Bitte Vor- und Nachname eingeben.",
         variant: "destructive",
       });
       return;
@@ -139,17 +140,16 @@ export function CustomerSelect({
       const insertData: Record<string, any> = {
         user_id: user.id,
         name: displayName,
-        kundentyp: isFirma ? "geschaeftskunde" : "privatkunde",
+        kundentyp: newCustomer.kundentyp,
         land: newCustomer.land || "Österreich",
       };
-      if (!isFirma) {
+      if (!isGeschaeftlich) {
         insertData.vorname = newCustomer.vorname;
         insertData.nachname = newCustomer.nachname;
         if (newCustomer.anrede) insertData.anrede = newCustomer.anrede;
         if (newCustomer.titel) insertData.titel = newCustomer.titel;
       } else {
-        insertData.anrede = "Firma";
-        insertData.firmenname = newCustomer.name.trim();
+        insertData.firmenname = newCustomer.firmenname.trim();
       }
       if (newCustomer.adresse) insertData.adresse = newCustomer.adresse;
       if (newCustomer.plz) insertData.plz = newCustomer.plz;
@@ -284,36 +284,34 @@ export function CustomerSelect({
             <DialogTitle>Neuen Kunden erstellen</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {/* Firma / Privat Toggle */}
-            <div className="flex gap-2">
+            {/* Geschäftlich / Privat Toggle — IMMER ZUERST */}
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
-                variant={newCustomer.kundentyp === "firma" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "firma", anrede: "Firma" }))}
+                variant={newCustomer.kundentyp === "geschaeftskunde" ? "default" : "outline"}
+                className="flex-1 gap-2 h-10"
+                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "geschaeftskunde" }))}
               >
-                🏢 Firma
+                🏢 Geschäftlich
               </Button>
               <Button
                 type="button"
-                variant={newCustomer.kundentyp === "privat" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "privat", anrede: "" }))}
+                variant={newCustomer.kundentyp === "privatkunde" ? "default" : "outline"}
+                className="flex-1 gap-2 h-10"
+                onClick={() => setNewCustomer(prev => ({ ...prev, kundentyp: "privatkunde", anrede: prev.anrede === "Firma" ? "" : prev.anrede }))}
               >
-                👤 Privatperson
+                👤 Privat
               </Button>
             </div>
 
-            {/* Firma-Felder */}
-            {newCustomer.kundentyp === "firma" ? (
+            {/* Identitäts-Felder konditional */}
+            {newCustomer.kundentyp === "geschaeftskunde" ? (
               <div className="space-y-3">
                 <div>
                   <Label>Firmenname <span className="text-destructive">*</span></Label>
                   <Input
-                    value={newCustomer.name}
-                    onChange={(e) => updateNew("name", e.target.value)}
+                    value={newCustomer.firmenname}
+                    onChange={(e) => updateNew("firmenname", e.target.value)}
                     placeholder="Firmenname"
                     autoFocus
                   />
