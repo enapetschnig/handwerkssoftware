@@ -77,6 +77,10 @@ const Projects = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [bereichFilter, setBereichFilter] = useState<string>("all");
+  // Sortierung der Projektliste — clientseitig (Daten sind eh schon geladen).
+  // Default „created_desc" entspricht dem heutigen Server-Order.
+  type SortKey = "created_desc" | "start_asc" | "start_desc" | "name_asc";
+  const [sortKey, setSortKey] = useState<SortKey>("created_desc");
   const { statuses: projectStatuses, findByName } = useProjectStatuses();
   const { options: bereichOptions } = useConfigOptions("projekt_bereich");
 
@@ -460,8 +464,8 @@ const Projects = () => {
           </div>
         )}
 
-        <div className="mb-4">
-          <div className="relative">
+        <div className="mb-4 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
@@ -471,6 +475,17 @@ const Projects = () => {
               className="pl-10"
             />
           </div>
+          <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+            <SelectTrigger className="w-full sm:w-[260px]">
+              <SelectValue placeholder="Sortierung" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_desc">Zuletzt erstellt</SelectItem>
+              <SelectItem value="start_asc">Projektbeginn (frühester zuerst)</SelectItem>
+              <SelectItem value="start_desc">Projektbeginn (spätester zuerst)</SelectItem>
+              <SelectItem value="name_asc">Projektname (A–Z)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="grid gap-3 sm:gap-4 lg:gap-6">
@@ -486,6 +501,26 @@ const Projects = () => {
               const matchesBereich =
                 bereichFilter === "all" || (project as any).bereich === bereichFilter;
               return matchesSearch && matchesStatus && matchesBereich;
+            }).slice().sort((a, b) => {
+              switch (sortKey) {
+                case "start_asc":
+                case "start_desc": {
+                  // NULL-Daten ans Ende — Projekte ohne geplanten Start zuletzt.
+                  const av = a.geplanter_start || null;
+                  const bv = b.geplanter_start || null;
+                  if (!av && !bv) return 0;
+                  if (!av) return 1;
+                  if (!bv) return -1;
+                  return sortKey === "start_asc"
+                    ? av.localeCompare(bv)
+                    : bv.localeCompare(av);
+                }
+                case "name_asc":
+                  return (a.name || "").localeCompare(b.name || "", "de");
+                case "created_desc":
+                default:
+                  return (b.created_at || "").localeCompare(a.created_at || "");
+              }
             });
 
             if (filtered.length === 0) {

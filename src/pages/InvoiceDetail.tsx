@@ -532,13 +532,13 @@ export default function InvoiceDetail() {
 
 
   const fetchEmployees = async () => {
-    // Alle aktiven Mitarbeiter (austritt_datum NULL) laden für den
-    // Ansprechpartner-Dropdown. Sortiert nach Vornamen, sodass der
-    // gewohnte Picker-Flow erhalten bleibt.
+    // Aktive Mitarbeiter laden für den Ansprechpartner-Dropdown. `aktiv`
+    // ist die kanonische Quelle (wird per Trigger aus profiles.is_active
+    // synchronisiert) — `austritt_datum` filtert nicht alle Fälle.
     const { data } = await supabase
       .from("employees")
-      .select("id, vorname, nachname, telefon, email, position, austritt_datum")
-      .is("austritt_datum", null)
+      .select("id, vorname, nachname, telefon, email, position")
+      .eq("aktiv", true)
       .order("vorname");
     setEmployees(((data as any[]) || []).map(e => ({
       id: e.id,
