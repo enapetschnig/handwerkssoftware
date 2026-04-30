@@ -467,11 +467,29 @@ export function CustomerForm({
 
           <div>
             <Label>Kundennummer</Label>
-            <Input
-              value={form.kundennummer}
-              onChange={(e) => update("kundennummer", e.target.value)}
-              placeholder="z. B. 10001"
-            />
+            {editId ? (
+              <>
+                <Input
+                  value={form.kundennummer}
+                  onChange={(e) => update("kundennummer", e.target.value)}
+                  placeholder="z. B. 10001"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Manuelle Änderung nur bei Bedarf — Duplikate werden geprüft.
+                </p>
+              </>
+            ) : (
+              <>
+                <Input
+                  value=""
+                  disabled
+                  placeholder="Wird automatisch vergeben"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Nummer wird beim Speichern fortlaufend zugewiesen.
+                </p>
+              </>
+            )}
           </div>
 
           <div>

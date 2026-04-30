@@ -200,25 +200,13 @@ export default function Customers() {
       || matchesSearch(c.email, search);
   });
 
-  const openNew = async () => {
+  const openNew = () => {
     setEditId(null);
-    // Auto-generate next Kundennummer
-    let nextKnr = "";
-    try {
-      const { data } = await supabase
-        .from("customers")
-        .select("kundennummer")
-        .not("kundennummer", "is", null)
-        .order("kundennummer", { ascending: false })
-        .limit(1)
-        .single();
-      if (data?.kundennummer) {
-        const num = parseInt(data.kundennummer);
-        if (!isNaN(num)) nextKnr = String(num + 1);
-      }
-    } catch {}
-    if (!nextKnr) nextKnr = "10001";
-    setForm({ ...emptyForm, kundennummer: nextKnr });
+    // Kundennummer wird vom DB-Trigger (assign_kundennummer_before_insert)
+    // beim Speichern aus number_ranges fortlaufend vergeben — Frontend
+    // lässt das Feld leer. Vorab-Generierung im Frontend war race-anfällig
+    // und nicht synchron mit dem number_ranges-Counter.
+    setForm({ ...emptyForm });
     setDialogOpen(true);
   };
 
