@@ -96,6 +96,7 @@ interface InvoiceData {
   datum: string;
   faellig_am: string;
   leistungsdatum: string;
+  leistungsdatum_bis: string;
   zahlungsbedingungen: string;
   notizen: string;
   betreff: string;
@@ -271,6 +272,7 @@ export default function InvoiceDetail() {
     datum: format(new Date(), "yyyy-MM-dd"),
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
+    leistungsdatum_bis: "",
     zahlungsbedingungen: "14 Tage",
     notizen: "",
     betreff: "",
@@ -369,6 +371,7 @@ export default function InvoiceDetail() {
             customer_id: data.customer_id || null,
             project_id: data.project_id || null,
             leistungsdatum: data.leistungsdatum || "",
+            leistungsdatum_bis: data.leistungsdatum_bis || "",
             zahlungsbedingungen: data.zahlungsbedingungen || "",
             notizen: data.notizen || "",
             betreff: data.betreff || "",
@@ -597,6 +600,7 @@ export default function InvoiceDetail() {
       datum: data.datum,
       faellig_am: data.faellig_am || "",
       leistungsdatum: data.leistungsdatum || "",
+      leistungsdatum_bis: (data as any).leistungsdatum_bis || "",
       // Altdaten auf die neuen Dropdown-Werte mappen. Sofort/prompt und
       // die Standard-Tage bleiben erhalten; alles andere (Freitext,
       // ungültige Werte, krumme Tage wie "20 Tage") landet auf
@@ -1081,6 +1085,7 @@ export default function InvoiceDetail() {
         datum: form.datum,
         faellig_am: form.faellig_am || null,
         leistungsdatum: form.leistungsdatum || null,
+        leistungsdatum_bis: form.leistungsdatum_bis || null,
         zahlungsbedingungen: form.zahlungsbedingungen || null,
         notizen: form.notizen || null,
         betreff: form.betreff || null,
@@ -1234,11 +1239,12 @@ export default function InvoiceDetail() {
   const uploadInvoicePdfToProjectFolder = async (invId: string) => {
     if (!form.project_id) return;
     try {
-      const [{ generateInvoicePdf }, { loadInvoiceLogo }, { uploadProjectPdf }] =
+      const [{ generateInvoicePdf }, { loadInvoiceLogo }, { uploadProjectPdf }, { generateEpcQrCode }] =
         await Promise.all([
           import("@/lib/pdfGenerator"),
           import("@/lib/logoLoader"),
           import("@/lib/pdfUploader"),
+          import("@/lib/invoiceHtml"),
         ]);
 
       // Bankdaten + UID aus Einstellungen laden
@@ -1257,12 +1263,20 @@ export default function InvoiceDetail() {
 
       const logoUri = await loadInvoiceLogo();
       const invoiceForPdf = await buildInvoiceForPdf();
+      // EPC-QR-Code (GiroCode) wie im Download-/Print-Pfad
+      let qrDataUri: string | undefined;
+      const isInvoiceLike = ["rechnung", "anzahlungsrechnung", "schlussrechnung"].includes(form.typ);
+      if (isInvoiceLike && bank.iban && bank.bic && bank.kontoinhaber && bruttoSumme > 0) {
+        try {
+          qrDataUri = await generateEpcQrCode(bruttoSumme, form.nummer || "", bank);
+        } catch { /* optional */ }
+      }
       const pdfBlob = await generateInvoicePdf(
         invoiceForPdf,
         items as any,
         bank,
         logoUri,
-        undefined,
+        qrDataUri,
         firmenUid,
         invoiceLayout,
       );
@@ -1392,8 +1406,22 @@ export default function InvoiceDetail() {
     const { loadDocumentTexts, applyDocumentTextsToInvoice } = await import("@/lib/documentTextsLoader");
     const docTexts = await loadDocumentTexts(form.typ);
     const tageMatch = (form.zahlungsbedingungen || "").match(/\d+/);
+    // Kundentyp für PDF-Renderer mitliefern — Geschäftskunden zeigen
+    // keine "Anrede" über dem Firmennamen (verhindert "Firma\nFirma X"-
+    // Doppelung in der Anschrift). Fallback: leerer String.
+    let kundeKundentyp = "";
+    if (form.customer_id) {
+      try {
+        const { data: cust } = await (supabase.from("customers" as any) as any)
+          .select("kundentyp")
+          .eq("id", form.customer_id)
+          .maybeSingle();
+        kundeKundentyp = (cust as any)?.kundentyp || "";
+      } catch { /* ignore — heuristik im Renderer fängt das ab */ }
+    }
     const enriched: any = {
       ...form,
+      kunde_kundentyp: kundeKundentyp,
       netto_summe: nettoSumme,
       mwst_betrag: mwstBetrag,
       brutto_summe: bruttoSumme,
@@ -1406,9 +1434,10 @@ export default function InvoiceDetail() {
   /** Erzeugt das Rechnungs-PDF client-side (jsPDF). Lädt Bank+UID+Logo+Layout
    *  aus den Einstellungen. Liefert einen Blob zurück. */
   const buildInvoicePdfBlob = async (): Promise<Blob> => {
-    const [{ generateInvoicePdf }, { loadInvoiceLogo }] = await Promise.all([
+    const [{ generateInvoicePdf }, { loadInvoiceLogo }, { generateEpcQrCode }] = await Promise.all([
       import("@/lib/pdfGenerator"),
       import("@/lib/logoLoader"),
+      import("@/lib/invoiceHtml"),
     ]);
 
     const { data: bankSettings } = await supabase
@@ -1426,12 +1455,22 @@ export default function InvoiceDetail() {
 
     const logoUri = await loadInvoiceLogo();
     const invoiceForPdf = await buildInvoiceForPdf();
+    // EPC-QR-Code (GiroCode) nur für rechnungs-artige Dokumente, wenn Bank-
+    // Daten vollständig sind. Verwendungszweck = Rechnungsnummer (kommt aus
+    // dem Renderer als Unstructured Reference an die Banking-App).
+    let qrDataUri: string | undefined;
+    const isInvoiceLike = ["rechnung", "anzahlungsrechnung", "schlussrechnung"].includes(form.typ);
+    if (isInvoiceLike && bank.iban && bank.bic && bank.kontoinhaber && bruttoSumme > 0) {
+      try {
+        qrDataUri = await generateEpcQrCode(bruttoSumme, form.nummer || "", bank);
+      } catch { /* QR optional — Render geht ohne weiter */ }
+    }
     return generateInvoicePdf(
       invoiceForPdf,
       items as any,
       bank,
       logoUri,
-      undefined,
+      qrDataUri,
       firmenUid,
       invoiceLayout,
     );
@@ -1546,6 +1585,7 @@ export default function InvoiceDetail() {
           datum: format(new Date(), "yyyy-MM-dd"),
           faellig_am: null,
           leistungsdatum: form.leistungsdatum || null,
+          leistungsdatum_bis: form.leistungsdatum_bis || null,
           zahlungsbedingungen: form.zahlungsbedingungen || null,
           notizen: form.notizen || null,
           netto_summe: nettoSumme,
@@ -2797,9 +2837,26 @@ export default function InvoiceDetail() {
                   <Input type="date" value={form.datum} onChange={(e) => updateField("datum", e.target.value)} />
                 </div>
                 {getDocConfig(form.typ).showLeistungsdatum && (
-                  <div>
-                    <Label>Leistungsdatum</Label>
-                    <Input type="date" value={form.leistungsdatum} onChange={(e) => updateField("leistungsdatum", e.target.value)} />
+                  <div className="md:col-span-2">
+                    <Label>Leistungszeitraum</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={form.leistungsdatum}
+                        onChange={(e) => updateField("leistungsdatum", e.target.value)}
+                        placeholder="von"
+                      />
+                      <Input
+                        type="date"
+                        value={(form as any).leistungsdatum_bis || ""}
+                        onChange={(e) => updateField("leistungsdatum_bis" as any, e.target.value)}
+                        placeholder="bis (optional)"
+                        min={form.leistungsdatum || undefined}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Anfangsdatum ist Pflicht (§ 11 UStG). Enddatum nur ausfüllen, wenn die Leistung über mehrere Tage erbracht wurde.
+                    </p>
                   </div>
                 )}
                 {form.typ === "rechnung" && (
@@ -3525,6 +3582,7 @@ export default function InvoiceDetail() {
             datum: form.datum,
             faellig_am: form.faellig_am,
             leistungsdatum: form.leistungsdatum,
+            leistungsdatum_bis: (form as any).leistungsdatum_bis || "",
             gueltig_bis: form.gueltig_bis,
             zahlungsbedingungen: form.zahlungsbedingungen,
             notizen: form.notizen,

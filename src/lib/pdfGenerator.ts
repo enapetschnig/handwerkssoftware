@@ -181,9 +181,21 @@ export async function generateInvoicePdf(
   y = DIN_RECIPIENT_Y;
 
   // Recipient
-  const kundeAnrede = (invoice as any).kunde_anrede || "";
-  const kundeTitel = (invoice as any).kunde_titel || "";
-  if (kundeAnrede) {
+  const kundeAnrede = ((invoice as any).kunde_anrede || "").trim();
+  const kundeTitel = ((invoice as any).kunde_titel || "").trim();
+  const kundeKundentyp = ((invoice as any).kunde_kundentyp || "").toLowerCase();
+  const kundeName = (invoice.kunde_name || "–").trim();
+  // Bei Geschäftskunden ist Anrede irrelevant (steht implizit im Firmennamen).
+  // Bei Privatkunden Anrede zeigen, außer sie ist redundant zum Namen
+  // (z. B. anrede="Firma Hobinger GmbH", name="Hobinger GmbH").
+  const isGeschaeft = kundeKundentyp === "geschaeftskunde";
+  const anredeRedundant = !!kundeAnrede && (
+    kundeAnrede.toLowerCase() === "firma" ||
+    kundeName.toLowerCase().includes(kundeAnrede.toLowerCase()) ||
+    kundeAnrede.toLowerCase().includes(kundeName.toLowerCase())
+  );
+  const showAnrede = !isGeschaeft && !!kundeAnrede && !anredeRedundant;
+  if (showAnrede) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
     pdf.setTextColor(0, 0, 0);
@@ -193,25 +205,17 @@ export async function generateInvoicePdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
   pdf.setTextColor(0, 0, 0);
-  const displayName = kundeTitel ? `${kundeTitel} ${invoice.kunde_name}` : (invoice.kunde_name || "–");
+  const displayName = kundeTitel ? `${kundeTitel} ${kundeName}` : kundeName;
   pdf.text(displayName, ml, y + 2);
   y += 6;
-  // Kein "z.Hd." mehr im Empfänger-Block: invoice.ansprechpartner_*
-  // enthält jetzt den BKS-Sachbearbeiter (unser eigener Mitarbeiter),
-  // nicht den Kunden-Kontakt. Der gehört NICHT an den Empfänger, sondern
-  // rechts oben in den Meta-Block ("Ihr Ansprechpartner:").
+  // UID-Nummer NICHT im Anschriftenblock — sie steht rechts oben im
+  // Meta-Block ("Ihre UID"). DIN-konform und sauber.
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
   pdf.setTextColor(0, 0, 0);
   if (invoice.kunde_adresse) { pdf.text(invoice.kunde_adresse, ml, y + 2); y += 5; }
   if (invoice.kunde_plz || invoice.kunde_ort) {
     pdf.text(`${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}`.trim(), ml, y + 2);
-    y += 5;
-  }
-  if (invoice.kunde_uid) {
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text(`UID: ${invoice.kunde_uid}`, ml, y + 2);
     y += 5;
   }
 
@@ -228,7 +232,16 @@ export async function generateInvoicePdf(
     ["Belegdatum", datumFormatted],
   ];
   if (invoice.kunde_uid) metaRows.push(["Ihre UID", invoice.kunde_uid]);
-  if (showLeistungsdatum && invoice.leistungsdatum) metaRows.push(["Leistungsdatum", fmtDate(invoice.leistungsdatum!)]);
+  if (showLeistungsdatum && invoice.leistungsdatum) {
+    const von = fmtDate(invoice.leistungsdatum!);
+    const bisDate = (invoice as any).leistungsdatum_bis as string | null | undefined;
+    const bis = bisDate ? fmtDate(bisDate) : null;
+    if (bis && bis !== von) {
+      metaRows.push(["Leistungszeitraum", `${von} – ${bis}`]);
+    } else {
+      metaRows.push(["Leistungsdatum", von]);
+    }
+  }
   if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
   if (showFaelligAm && invoice.faellig_am) metaRows.push(["Fällig am", fmtDate(invoice.faellig_am!)]);
   if (invoice.gueltig_bis) metaRows.push(["Gültig bis", fmtDate(invoice.gueltig_bis!)]);
@@ -410,6 +423,14 @@ export async function generateInvoicePdf(
   if (showFaelligAm && skontoProzent > 0 && skontoTage > 0) closingH += 24;
   if (showBank) closingH += 40;
   if (!showFaelligAm && !showBank) closingH += 8;
+  // Custom-Closing-Text kann mehrzeilig sein → zusätzliche Höhe einplanen,
+  // damit der Page-Break-Check Bank+QR auf die nächste Seite schiebt, falls
+  // der lange Text nicht mehr passt.
+  const customClosingForHeight = (invoice as any).custom_closing_text as string | undefined;
+  if (customClosingForHeight) {
+    const estLines = pdf.splitTextToSize(customClosingForHeight, contentWidth - 0).length;
+    if (estLines > 1) closingH += (estLines - 1) * 4.2;
+  }
 
   // Dynamic footer height: base + jede Textzeile + ggf. Seitennummer-Zeile
   const footerLines = [L.footer.line1 || "auto", L.footer.show_bank_in_footer ? "bank" : "", L.footer.line2, L.footer.line3].filter(Boolean);
@@ -616,12 +637,19 @@ export async function generateInvoicePdf(
     return txt.replace(/\s{2,}/g, " ").trim();
   })();
 
+  // Hilfs-Funktion: rendert mehrzeiligen Text und schiebt y um die
+  // tatsächliche Höhe weiter (statt fixed 8mm). Sonst überlappen lange
+  // Schluss-Texte den nachfolgenden Bank-/QR-Block.
+  const renderMultilineText = (text: string, lineHeight: number = 4.2) => {
+    const lines = pdf.splitTextToSize(text, contentWidth) as string[];
+    pdf.text(lines, ml, y);
+    y += Math.max(lines.length, 1) * lineHeight + 4;
+  };
+
   if (customClosing) {
-    pdf.text(customClosing, ml, y, { maxWidth: contentWidth });
-    y += 8;
+    renderMultilineText(customClosing);
   } else if (isAngebot) {
-    pdf.text(angebotsClosing, ml, y, { maxWidth: contentWidth });
-    y += 8;
+    renderMultilineText(angebotsClosing);
   } else if (docCfg.isInvoiceLike) {
     let closingText: string;
     const isIndividuell = zahlungsbedingungen.toLowerCase() === "individuell";

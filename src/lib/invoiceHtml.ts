@@ -59,6 +59,7 @@ export interface InvoiceHtmlData {
   datum: string;
   faellig_am?: string | null;
   leistungsdatum?: string | null;
+  leistungsdatum_bis?: string | null;
   gueltig_bis?: string | null;
   zahlungsbedingungen?: string | null;
   notizen?: string | null;
@@ -74,6 +75,7 @@ export interface InvoiceHtmlData {
   skonto_tage?: number;
   kunde_anrede?: string;
   kunde_titel?: string;
+  kunde_kundentyp?: string | null;
   reverse_charge?: boolean;
   betreff?: string | null;
 }
@@ -129,9 +131,16 @@ export function buildInvoiceHtml(
   const faelligFormatted = invoice.faellig_am
     ? new Date(invoice.faellig_am).toLocaleDateString("de-AT")
     : null;
-  const leistungFormatted = invoice.leistungsdatum
+  const leistungVon = invoice.leistungsdatum
     ? new Date(invoice.leistungsdatum).toLocaleDateString("de-AT")
     : null;
+  const leistungBis = invoice.leistungsdatum_bis
+    ? new Date(invoice.leistungsdatum_bis).toLocaleDateString("de-AT")
+    : null;
+  const leistungFormatted = leistungVon
+    ? (leistungBis && leistungBis !== leistungVon ? `${leistungVon} – ${leistungBis}` : leistungVon)
+    : null;
+  const leistungLabel = leistungBis && leistungBis !== leistungVon ? "Leistungszeitraum" : "Leistungsdatum";
   const gueltigBisFormatted = invoice.gueltig_bis
     ? new Date(invoice.gueltig_bis).toLocaleDateString("de-AT")
     : null;
@@ -209,7 +218,7 @@ export function buildInvoiceHtml(
   );
   if (showLeistungsdatum && leistungFormatted)
     metaParts.push(
-      `<div><span class="meta-label">Leistungsdatum</span><span class="meta-value">${leistungFormatted}</span></div>`
+      `<div><span class="meta-label">${leistungLabel}</span><span class="meta-value">${leistungFormatted}</span></div>`
     );
   if (showFaelligAm && faelligFormatted)
     metaParts.push(
@@ -400,12 +409,28 @@ ${mahnBanner}
 <div class="address-row">
   <div class="recipient">
     <div class="sender-line">${L.sender_line || [L.company.name, L.company.address_line1, L.company.address_line2].filter(Boolean).join(" · ")}</div>
-    <div class="recipient-name">${invoice.kunde_name || "–"}</div>
+    ${(() => {
+      // Bei Geschäftskunden ist die Anrede irrelevant (steht implizit im
+      // Firmennamen). Bei Privatkunden zeigen wir Anrede + Titel + Name.
+      const isGeschaeft = (invoice.kunde_kundentyp || "").toLowerCase() === "geschaeftskunde";
+      const anrede = (invoice.kunde_anrede || "").trim();
+      const titel = (invoice.kunde_titel || "").trim();
+      const name = (invoice.kunde_name || "–").trim();
+      // Anrede nicht doppeln, wenn sie als Substring in name steckt
+      // (z. B. anrede="Firma Hobinger GmbH", name="Hobinger GmbH").
+      const anredeRedundant = !!anrede && (
+        anrede.toLowerCase() === "firma" ||
+        name.toLowerCase().includes(anrede.toLowerCase()) ||
+        anrede.toLowerCase().includes(name.toLowerCase())
+      );
+      const showAnrede = !isGeschaeft && anrede && !anredeRedundant;
+      const titleLine = titel ? `${titel} ${name}`.trim() : name;
+      return `${showAnrede ? `<div style="font-size:9pt;color:#555;">${anrede}</div>` : ""}<div class="recipient-name">${titleLine}</div>`;
+    })()}
     <div class="recipient-addr">
       ${invoice.kunde_adresse ? `${invoice.kunde_adresse}<br>` : ""}
       ${invoice.kunde_plz || invoice.kunde_ort ? `${invoice.kunde_plz || ""} ${invoice.kunde_ort || ""}<br>` : ""}
       ${invoice.kunde_land && invoice.kunde_land !== "Österreich" ? `${invoice.kunde_land}<br>` : ""}
-      ${invoice.kunde_uid ? `UID: ${invoice.kunde_uid}` : ""}
     </div>
   </div>
   <div class="doc-meta">
