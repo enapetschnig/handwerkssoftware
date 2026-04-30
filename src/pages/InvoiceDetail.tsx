@@ -1067,7 +1067,7 @@ export default function InvoiceDetail() {
         }
       }
 
-      const invoicePayload = {
+      const invoicePayload: any = {
         status: saveStatus,
         kunde_name: form.kunde_name,
         kunde_adresse: form.kunde_adresse || null,
@@ -1083,7 +1083,6 @@ export default function InvoiceDetail() {
         datum: form.datum,
         faellig_am: form.faellig_am || null,
         leistungsdatum: form.leistungsdatum || null,
-        leistungsdatum_bis: form.leistungsdatum_bis || null,
         zahlungsbedingungen: form.zahlungsbedingungen || null,
         notizen: form.notizen || null,
         betreff: form.betreff || null,
@@ -1110,6 +1109,22 @@ export default function InvoiceDetail() {
         ansprechpartner_email: (form as any).ansprechpartner_email?.trim() || null,
       };
 
+      // leistungsdatum_bis nur mitschicken, wenn der User es befüllt hat —
+      // ältere DB-Stände ohne die Migration 20260503100000 haben die
+      // Spalte nicht und PostgREST würde sonst mit Schema-Cache-Fehler
+      // ablehnen. Bei vorhandener Spalte funktioniert es trotzdem.
+      if (form.leistungsdatum_bis) {
+        invoicePayload.leistungsdatum_bis = form.leistungsdatum_bis;
+      }
+
+      // Defensive Retry: wenn die Spalte (noch) fehlt, einmal ohne sie
+      // erneut speichern, damit der User trotz fehlender Migration weiter
+      // arbeiten kann.
+      const isSchemaCacheMiss = (err: any) =>
+        typeof err?.message === "string" &&
+        /leistungsdatum_bis/.test(err.message) &&
+        /(schema cache|column .* does not exist)/i.test(err.message);
+
       if (isNew || !savedId) {
         const { data: numData, error: numError } = await supabase.rpc("next_document_number" as never, {
           p_typ: form.typ,
@@ -1120,28 +1135,33 @@ export default function InvoiceDetail() {
         const nummer = numData as string;
         const laufnummer = parseInt((nummer.match(/(\d+)$/) || ["", "1"])[1]) || 1;
 
-        const { data: insertData, error: insertError } = await supabase
+        const insertOnce = async (payload: any) => supabase
           .from("invoices")
-          .insert({
-            user_id: user.id,
-            typ: form.typ,
-            nummer,
-            laufnummer,
-            jahr: form.jahr,
-            ...invoicePayload,
-          })
+          .insert({ user_id: user.id, typ: form.typ, nummer, laufnummer, jahr: form.jahr, ...payload })
           .select("id, nummer")
           .single();
 
+        let { data: insertData, error: insertError } = await insertOnce(invoicePayload);
+        if (insertError && isSchemaCacheMiss(insertError)) {
+          const { leistungsdatum_bis: _drop, ...payloadWithoutBis } = invoicePayload;
+          ({ data: insertData, error: insertError } = await insertOnce(payloadWithoutBis));
+        }
+
         if (insertError) throw insertError;
-        savedId = insertData.id;
+        savedId = insertData!.id;
         setInvoiceId(savedId);
-        updateField("nummer", insertData.nummer);
+        updateField("nummer", insertData!.nummer);
       } else {
-        const { error: updateError } = await supabase
+        const updateOnce = async (payload: any) => supabase
           .from("invoices")
-          .update(invoicePayload)
+          .update(payload)
           .eq("id", savedId);
+
+        let { error: updateError } = await updateOnce(invoicePayload);
+        if (updateError && isSchemaCacheMiss(updateError)) {
+          const { leistungsdatum_bis: _drop, ...payloadWithoutBis } = invoicePayload;
+          ({ error: updateError } = await updateOnce(payloadWithoutBis));
+        }
 
         if (updateError) throw updateError;
       }
@@ -1583,7 +1603,10 @@ export default function InvoiceDetail() {
           datum: format(new Date(), "yyyy-MM-dd"),
           faellig_am: null,
           leistungsdatum: form.leistungsdatum || null,
-          leistungsdatum_bis: form.leistungsdatum_bis || null,
+          // leistungsdatum_bis bewusst weggelassen — die Spalte wird erst
+          // mit Migration 20260503100000 angelegt; der Duplikat-Pfad
+          // funktioniert auch ohne sie (Original-Wert wird hier nicht
+          // übernommen, ist bei Duplikaten ohnehin selten relevant).
           zahlungsbedingungen: form.zahlungsbedingungen || null,
           notizen: form.notizen || null,
           netto_summe: nettoSumme,
