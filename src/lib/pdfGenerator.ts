@@ -278,6 +278,21 @@ export async function generateInvoicePdf(
   pdf.line(ml, y, pageWidth - mr, y);
   y += 6;
 
+  // Optionaler Einleitungstext (vom Admin per document_texts editierbar) —
+  // erscheint zwischen Akzent-Linie und Titel "Angebot – Betreff".
+  // Override-Feld custom_intro_text wird vom documentTextsLoader gesetzt.
+  const customIntro = (invoice as any).custom_intro_text as string | undefined;
+  if (customIntro && customIntro.trim()) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(60, 60, 60);
+    const introLines = pdf.splitTextToSize(customIntro.trim(), contentWidth);
+    introLines.forEach((line: string, i: number) => {
+      pdf.text(line, ml, y + i * 4.8);
+    });
+    y += introLines.length * 4.8 + 4;
+  }
+
   // Document title: "Angebot - <betreff>" (ohne Nummer; die steht rechts oben)
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);

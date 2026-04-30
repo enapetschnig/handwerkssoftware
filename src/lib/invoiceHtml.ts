@@ -421,6 +421,9 @@ ${mahnBanner}
   </div>
 </div>
 
+<!-- Optional Einleitungstext (custom_intro_text aus document_texts) -->
+${(invoice as any).custom_intro_text ? `<div style="margin-bottom:14px;font-size:9.5pt;color:#444;white-space:pre-line;">${escapeHtml(((invoice as any).custom_intro_text as string).trim())}</div>` : ""}
+
 <!-- Document Title + Betreff (kept together for page breaks) -->
 <div style="page-break-inside:avoid;">
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>

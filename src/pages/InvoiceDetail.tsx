@@ -1256,8 +1256,9 @@ export default function InvoiceDetail() {
       });
 
       const logoUri = await loadInvoiceLogo();
+      const invoiceForPdf = await buildInvoiceForPdf();
       const pdfBlob = await generateInvoicePdf(
-        form as any,
+        invoiceForPdf,
         items as any,
         bank,
         logoUri,
@@ -1380,6 +1381,28 @@ export default function InvoiceDetail() {
     toast({ title: "Zahlung gelöscht" });
   };
 
+  /**
+   * Baut das Invoice-Objekt für die PDF/HTML-Generierung — mit allen
+   * Override-Texten (custom_intro_text / custom_closing_text /
+   * custom_anzahlung_hinweis) und mit den live-berechneten Summen
+   * (brutto/netto/mwst). Der pure form-State enthält diese Werte
+   * nicht; ohne diesen Helper landet im PDF "0,00 €" als Summe.
+   */
+  const buildInvoiceForPdf = async (): Promise<any> => {
+    const { loadDocumentTexts, applyDocumentTextsToInvoice } = await import("@/lib/documentTextsLoader");
+    const docTexts = await loadDocumentTexts(form.typ);
+    const tageMatch = (form.zahlungsbedingungen || "").match(/\d+/);
+    const enriched: any = {
+      ...form,
+      netto_summe: nettoSumme,
+      mwst_betrag: mwstBetrag,
+      brutto_summe: bruttoSumme,
+    };
+    return applyDocumentTextsToInvoice(enriched, docTexts, {
+      tage: tageMatch ? Number(tageMatch[0]) : 14,
+    });
+  };
+
   /** Erzeugt das Rechnungs-PDF client-side (jsPDF). Lädt Bank+UID+Logo+Layout
    *  aus den Einstellungen. Liefert einen Blob zurück. */
   const buildInvoicePdfBlob = async (): Promise<Blob> => {
@@ -1402,8 +1425,9 @@ export default function InvoiceDetail() {
     });
 
     const logoUri = await loadInvoiceLogo();
+    const invoiceForPdf = await buildInvoiceForPdf();
     return generateInvoicePdf(
-      form as any,
+      invoiceForPdf,
       items as any,
       bank,
       logoUri,
