@@ -639,13 +639,18 @@ export async function generateInvoicePdf(
     return txt.replace(/\s{2,}/g, " ").trim();
   })();
 
-  // Hilfs-Funktion: rendert mehrzeiligen Text und schiebt y um die
-  // tatsächliche Höhe weiter (statt fixed 8mm). Sonst überlappen lange
-  // Schluss-Texte den nachfolgenden Bank-/QR-Block.
-  const renderMultilineText = (text: string, lineHeight: number = 4.2) => {
+  // Hilfs-Funktion: rendert mehrzeiligen Text und schiebt y exakt um
+  // die tatsächliche Render-Höhe weiter, damit nachfolgende Blöcke
+  // (Bank, QR, "Vielen Dank") garantiert untendrunter erscheinen, auch
+  // wenn der Schluss-Text mehrere Zeilen / explizite \n enthält.
+  const renderMultilineText = (text: string, padBelow: number = 4) => {
     const lines = pdf.splitTextToSize(text, contentWidth) as string[];
     pdf.text(lines, ml, y);
-    y += Math.max(lines.length, 1) * lineHeight + 4;
+    // Exakte Höhe via jsPDF getTextDimensions auf der gejointen Zeile —
+    // robuster als fixe Zeilenhöhe, weil es den aktuellen
+    // lineHeightFactor und die Schriftgröße berücksichtigt.
+    const dims = pdf.getTextDimensions(lines.join("\n"));
+    y += Math.max(dims.h, lines.length * 4) + padBelow;
   };
 
   if (customClosing) {
@@ -669,12 +674,11 @@ export async function generateInvoicePdf(
     } else {
       closingText = L.closing_text_invoice.replace("{{tage}}", "14");
     }
-    pdf.text(closingText, ml, y, { maxWidth: contentWidth });
-    y += 5;
+    renderMultilineText(closingText, 1);
     pdf.setFontSize(7.5);
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Bei E-Banking bitte als Zahlungsreferenz ${docCfg.label}snummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, ml, y, { maxWidth: contentWidth });
-    y += 8;
+    renderMultilineText(`Bei E-Banking bitte als Zahlungsreferenz ${docCfg.label}snummer ${invoice.nummer || ""} und Kundennummer ${kundennummer || ""} eingeben.`, 4);
+    pdf.setFontSize(9);
   } else {
     // Lieferschein
     y += 8;
