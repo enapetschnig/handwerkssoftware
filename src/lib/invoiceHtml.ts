@@ -131,8 +131,12 @@ export function buildInvoiceHtml(
   const faelligFormatted = invoice.faellig_am
     ? new Date(invoice.faellig_am).toLocaleDateString("de-AT")
     : null;
-  const leistungVon = invoice.leistungsdatum
-    ? new Date(invoice.leistungsdatum).toLocaleDateString("de-AT")
+  // Leistungszeitraum: wenn nichts gesetzt, fällt "von" automatisch auf
+  // das Rechnungsdatum zurück (§ 11 UStG erfüllt, ohne dass der User
+  // Datum doppelt eingeben muss).
+  const leistungVonRaw = invoice.leistungsdatum || invoice.datum;
+  const leistungVon = leistungVonRaw
+    ? new Date(leistungVonRaw).toLocaleDateString("de-AT")
     : null;
   const leistungBis = invoice.leistungsdatum_bis
     ? new Date(invoice.leistungsdatum_bis).toLocaleDateString("de-AT")
@@ -140,7 +144,7 @@ export function buildInvoiceHtml(
   const leistungFormatted = leistungVon
     ? (leistungBis && leistungBis !== leistungVon ? `${leistungVon} – ${leistungBis}` : leistungVon)
     : null;
-  const leistungLabel = leistungBis && leistungBis !== leistungVon ? "Leistungszeitraum" : "Leistungsdatum";
+  const leistungLabel = "Leistungszeitraum";
   const gueltigBisFormatted = invoice.gueltig_bis
     ? new Date(invoice.gueltig_bis).toLocaleDateString("de-AT")
     : null;

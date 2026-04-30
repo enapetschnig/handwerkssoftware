@@ -979,12 +979,10 @@ export default function InvoiceDetail() {
       }
     }
 
-    // Leistungsdatum ist bei Rechnungen Pflicht (§ 11 UStG)
-    if (form.typ === "rechnung" && !form.leistungsdatum) {
-      toast({ variant: "destructive", title: "Leistungsdatum fehlt", description: "Bei Rechnungen ist das Leistungsdatum/Lieferdatum gesetzlich vorgeschrieben." });
-      setSaving(false);
-      return false;
-    }
+    // § 11 UStG verlangt einen Leistungstag/-zeitraum auf der Rechnung.
+    // Wenn der User nichts eingibt, fällt der Leistungszeitraum-von
+    // automatisch auf das Rechnungsdatum (form.datum) — siehe Renderer.
+    // Daher hier kein harter Pflicht-Check mehr.
 
     // Austrian UID requirements
     if (form.typ === "rechnung" && saveBrutto > 400) {
@@ -2842,7 +2840,7 @@ export default function InvoiceDetail() {
                     <div className="grid grid-cols-2 gap-2">
                       <Input
                         type="date"
-                        value={form.leistungsdatum}
+                        value={form.leistungsdatum || form.datum}
                         onChange={(e) => updateField("leistungsdatum", e.target.value)}
                         placeholder="von"
                       />
@@ -2851,11 +2849,11 @@ export default function InvoiceDetail() {
                         value={(form as any).leistungsdatum_bis || ""}
                         onChange={(e) => updateField("leistungsdatum_bis" as any, e.target.value)}
                         placeholder="bis (optional)"
-                        min={form.leistungsdatum || undefined}
+                        min={form.leistungsdatum || form.datum || undefined}
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Anfangsdatum ist Pflicht (§ 11 UStG). Enddatum nur ausfüllen, wenn die Leistung über mehrere Tage erbracht wurde.
+                      Beginnt automatisch am Rechnungsdatum. Enddatum nur ausfüllen, wenn die Leistung über mehrere Tage erbracht wurde.
                     </p>
                   </div>
                 )}

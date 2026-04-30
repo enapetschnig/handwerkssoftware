@@ -22,7 +22,7 @@ export interface DocConfig {
   hidePrices: boolean;
   /** Zeige Fälligkeits-/Skonto-/Bankdaten. */
   showPaymentSection: boolean;
-  /** Zeige Leistungsdatum. */
+  /** Zeige Leistungszeitraum (Anfangs- + optional Enddatum). */
   showLeistungsdatum: boolean;
   /** Kurzbadge für die Liste. */
   shortLabel: string;
@@ -37,7 +37,7 @@ const ALL_CONFIGS: Record<DocumentTyp, DocConfig> = {
     isAngebotLike: true,
     hidePrices: false,
     showPaymentSection: false,
-    showLeistungsdatum: false,
+    showLeistungsdatum: true,
   },
   auftragsbestaetigung: {
     typ: "auftragsbestaetigung",
@@ -47,7 +47,7 @@ const ALL_CONFIGS: Record<DocumentTyp, DocConfig> = {
     isAngebotLike: true,
     hidePrices: false,
     showPaymentSection: false,
-    showLeistungsdatum: false,
+    showLeistungsdatum: true,
   },
   rechnung: {
     typ: "rechnung",
@@ -67,7 +67,7 @@ const ALL_CONFIGS: Record<DocumentTyp, DocConfig> = {
     isAngebotLike: false,
     hidePrices: false,
     showPaymentSection: true,
-    showLeistungsdatum: false,
+    showLeistungsdatum: true,
   },
   schlussrechnung: {
     typ: "schlussrechnung",

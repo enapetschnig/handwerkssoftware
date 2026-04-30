@@ -232,14 +232,16 @@ export async function generateInvoicePdf(
     ["Belegdatum", datumFormatted],
   ];
   if (invoice.kunde_uid) metaRows.push(["Ihre UID", invoice.kunde_uid]);
-  if (showLeistungsdatum && invoice.leistungsdatum) {
-    const von = fmtDate(invoice.leistungsdatum!);
-    const bisDate = (invoice as any).leistungsdatum_bis as string | null | undefined;
-    const bis = bisDate ? fmtDate(bisDate) : null;
-    if (bis && bis !== von) {
-      metaRows.push(["Leistungszeitraum", `${von} – ${bis}`]);
-    } else {
-      metaRows.push(["Leistungsdatum", von]);
+  if (showLeistungsdatum) {
+    // Fallback: ohne explizit gesetztes Leistungsdatum gilt das
+    // Rechnungsdatum als Beginn des Leistungszeitraums.
+    const vonRaw = invoice.leistungsdatum || invoice.datum;
+    if (vonRaw) {
+      const von = fmtDate(vonRaw);
+      const bisDate = (invoice as any).leistungsdatum_bis as string | null | undefined;
+      const bis = bisDate ? fmtDate(bisDate) : null;
+      const value = bis && bis !== von ? `${von} – ${bis}` : von;
+      metaRows.push(["Leistungszeitraum", value]);
     }
   }
   if (kundennummer) metaRows.push(["Kundennr.", kundennummer]);
