@@ -43,7 +43,7 @@ async function getSetting(key: string, fallback: string): Promise<string> {
 
 // Wochentag in Europe/Vienna (0=Sonntag, 1=Montag, …, 6=Samstag).
 // `new Date().getDay()` gibt UTC, was z. B. Montag 00:30 Vienna als Sonntag
-// auswerten würde (und damit 0 statt 8.5 Std. Tagessoll).
+// auswerten würde (und damit 0 statt 10 Std. Tagessoll).
 function getViennaWeekdayIdx(): number {
   const short = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Vienna",
@@ -55,12 +55,12 @@ function getViennaWeekdayIdx(): number {
   return map[short] ?? new Date().getDay();
 }
 
-// Working hours per day (same as webhook)
+// Tagessoll — kanonische Regel aus src/lib/workingHours.ts und
+// whatsapp-webhook: Mo-Do 10h (07:00-17:30, Pause 12:00-12:30),
+// Fr/Sa/So arbeitsfrei. Vorher war hier fälschlich 8.5h Mo-Do + 5h Fr.
 function getDailyTarget(): number {
   const day = getViennaWeekdayIdx();
-  if (day === 0 || day === 6) return 0;
-  if (day >= 1 && day <= 4) return 8.5;
-  if (day === 5) return 5.0;
+  if (day >= 1 && day <= 4) return 10;
   return 0;
 }
 
