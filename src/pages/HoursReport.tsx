@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, Pencil, Trash2, Save, Plus, UserCog } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Building2, Hammer, ChevronDown, Pencil, Trash2, Save, Plus, UserCog, CalendarOff } from "lucide-react";
+import { AdminAbsenceDialog } from "@/components/AdminAbsenceDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,6 +85,9 @@ export default function HoursReport() {
   const [adminDialog, setAdminDialog] = useState<{ open: boolean; entryId: string | null; datum: string }>({
     open: false, entryId: null, datum: "",
   });
+  // Admin-Abwesenheits-Dialog (Urlaub/Krank/ZA/Feiertag/Weiterbildung
+  // für Datumsbereich nachtragen).
+  const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
   const openAdminEdit = (entry: TimeEntry) => setAdminDialog({ open: true, entryId: entry.id, datum: entry.datum });
   const openAdminCreate = (dateIso: string) => setAdminDialog({ open: true, entryId: null, datum: dateIso });
   const closeAdminDialog = () => setAdminDialog({ open: false, entryId: null, datum: "" });
@@ -663,24 +667,38 @@ export default function HoursReport() {
                   </CardTitle>
                   <CardDescription className="text-xs sm:text-sm">Monatsberichte mit Überstunden exportieren</CardDescription>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button disabled={!selectedUserId} className="h-11">
-                      <Download className="mr-2 h-4 w-4" />
-                      <span className="hidden sm:inline">Excel exportieren</span>
-                      <span className="sm:hidden">Export</span>
-                      <ChevronDown className="ml-2 h-4 w-4" />
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      className="h-11"
+                      disabled={!selectedUserId}
+                      onClick={() => setAbsenceDialogOpen(true)}
+                    >
+                      <CalendarOff className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Abwesenheit nachtragen</span>
+                      <span className="sm:hidden">Abwesenheit</span>
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => exportToExcel(true)}>
-                      Mit Überstunden
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => exportToExcel(false)}>
-                      Ohne Überstunden
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button disabled={!selectedUserId} className="h-11">
+                        <Download className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Excel exportieren</span>
+                        <span className="sm:hidden">Export</span>
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => exportToExcel(true)}>
+                        Mit Überstunden
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportToExcel(false)}>
+                        Ohne Überstunden
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1094,6 +1112,18 @@ export default function HoursReport() {
               ? `${profiles[selectedUserId].vorname} ${profiles[selectedUserId].nachname}`
               : undefined
           }
+        />
+      )}
+
+      {/* Abwesenheits-Nachtrag (Urlaub / Krank / ZA / Feiertag / Weiterbildung
+          über Datumsbereich, schreibt time_entries + leave_request) */}
+      {isAdmin && (
+        <AdminAbsenceDialog
+          open={absenceDialogOpen}
+          onOpenChange={setAbsenceDialogOpen}
+          defaultUserId={selectedUserId}
+          profiles={profiles}
+          onSaved={fetchTimeEntries}
         />
       )}
     </div>

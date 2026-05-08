@@ -1266,8 +1266,8 @@ const TimeTracking = () => {
                             <Select value={block.startTime} onValueChange={(v) => updateBlock(block.id, { startTime: v })}>
                               <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
                               <SelectContent>
-                                {Array.from({ length: 29 }, (_, i) => {
-                                  const h = Math.floor(i / 2) + 6;
+                                {Array.from({ length: 48 }, (_, i) => {
+                                  const h = Math.floor(i / 2);
                                   const m = (i % 2) * 30;
                                   const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
                                   return <SelectItem key={t} value={t}>{t}</SelectItem>;
@@ -1280,8 +1280,8 @@ const TimeTracking = () => {
                             <Select value={block.endTime} onValueChange={(v) => updateBlock(block.id, { endTime: v })}>
                               <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
                               <SelectContent>
-                                {Array.from({ length: 29 }, (_, i) => {
-                                  const h = Math.floor(i / 2) + 6;
+                                {Array.from({ length: 48 }, (_, i) => {
+                                  const h = Math.floor(i / 2);
                                   const m = (i % 2) * 30;
                                   const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
                                   return <SelectItem key={t} value={t}>{t}</SelectItem>;
@@ -1584,7 +1584,7 @@ const TimeTracking = () => {
                       <Select value={absenceData.absenceStartTime} onValueChange={(v) => setAbsenceData({ ...absenceData, absenceStartTime: v })}>
                         <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                          {Array.from({ length: 48 }, (_, i) => { const h = Math.floor(i / 2); const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1593,7 +1593,7 @@ const TimeTracking = () => {
                       <Select value={absenceData.absenceEndTime} onValueChange={(v) => setAbsenceData({ ...absenceData, absenceEndTime: v })}>
                         <SelectTrigger><SelectValue placeholder="Uhrzeit" /></SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 29 }, (_, i) => { const h = Math.floor(i / 2) + 6; const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
+                          {Array.from({ length: 48 }, (_, i) => { const h = Math.floor(i / 2); const m = (i % 2) * 30; const t = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; return <SelectItem key={t} value={t}>{t}</SelectItem>; })}
                         </SelectContent>
                       </Select>
                     </div>
