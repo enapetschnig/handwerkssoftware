@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RefreshCw, Plus, Calendar as CalIcon, Clock, MapPin, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -60,7 +61,7 @@ const emptyFormData: EventFormData = {
   start_time: "08:00",
   end_time: "17:00",
   description: "",
-  calendar_type: "allgemein",
+  calendar_type: "default",
 };
 
 /**
@@ -698,6 +699,31 @@ export default function Calendar() {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="Termin-Bezeichnung"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="event-calendar">Kalender</Label>
+              <Select
+                value={formData.calendar_type}
+                onValueChange={(v) => setFormData({ ...formData, calendar_type: v })}
+              >
+                <SelectTrigger id="event-calendar">
+                  <SelectValue placeholder="Kalender auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="chef">CHEF</SelectItem>
+                  <SelectItem value="montipro">Monti.pro</SelectItem>
+                  <SelectItem value="bks">BKS</SelectItem>
+                  <SelectItem value="gartenmacher">Gartenmacher</SelectItem>
+                  <SelectItem value="fensterwerk">Fensterwerk</SelectItem>
+                  <SelectItem value="ladenbau">Ladenbau</SelectItem>
+                  <SelectItem value="portas">Portas</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Termin wird in den gewählten Google-Kalender geschrieben.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
