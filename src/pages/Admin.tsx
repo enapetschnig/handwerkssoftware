@@ -37,7 +37,7 @@ import { VehicleManager } from "@/components/admin/VehicleManager";
 import { listAllActiveProjects, getEmployeeAccessibleProjectIds, syncEmployeeProjectAccess, loadEmployeeProjectRelations, type ProjectLite, type EmployeeProjectRelation } from "@/lib/projectAccess";
 import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
-import { Cloud, Building, AlertTriangle, Truck, Briefcase, HardHat } from "lucide-react";
+import { Cloud, Building, AlertTriangle, Truck, Briefcase, HardHat, Layers } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -1272,6 +1272,8 @@ export default function Admin() {
             <ConfigOptionsManager kategorie="taetigkeit" title="Tätigkeiten (Zeiterfassung)" description="Auswahlliste für das Tätigkeits-Feld bei Stundenbuchungen" icon={<Clock className="h-5 w-5" />} />
             <ConfigOptionsManager kategorie="firma_intern" title="Firma intern (Ersttermin)" description="Auswahl interner Firmen/Bereiche bei Ersttermin-Protokollen" icon={<Briefcase className="h-5 w-5" />} />
             <ConfigOptionsManager kategorie="firma_extern" title="Firma extern (Ersttermin)" description="Auswahl externer Firmen/Subunternehmer bei Ersttermin-Protokollen" icon={<HardHat className="h-5 w-5" />} />
+            <ConfigOptionsManager kategorie="kunde_herkunft" title="Kunde — Herkunft" description="Über welche Quelle ist der Kunde zu uns gekommen (Empfehlung, Google, Messe …)" icon={<UserPlus className="h-5 w-5" />} />
+            <ConfigOptionsManager kategorie="projekt_bereich" title="Projekt — Bereich" description="Geschäftsbereich-Auswahl bei Projekten (Innenausbau, Garten, Fenster …)" icon={<Layers className="h-5 w-5" />} />
             <VehicleManager />
           </TabsContent>
 

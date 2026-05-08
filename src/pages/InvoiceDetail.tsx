@@ -1444,9 +1444,39 @@ export default function InvoiceDetail() {
       mwst_betrag: mwstBetrag,
       brutto_summe: bruttoSumme,
     };
-    return applyDocumentTextsToInvoice(enriched, docTexts, {
+    const extraVars: Record<string, string | number | null | undefined> = {
       tage: tageMatch ? Number(tageMatch[0]) : 14,
-    });
+    };
+    // Quell-Dokument für AB / Anzahlungs-/Schluss-Rechnung laden — die
+    // Platzhalter {{angebot_nr}} / {{angebot_datum}} (in der AB-Vorlage)
+    // bzw. {{rechnung_nr}} / {{rechnung_datum}} (analog für AR/SR)
+    // sollen auf das parent invoice zeigen, NICHT auf das aktuelle
+    // Dokument. parent_invoice_id wird beim Konvertieren in
+    // setForm(...) gesetzt (siehe oben, fromDoc-Pfad).
+    const parentId = (form as any).parent_invoice_id;
+    if (parentId) {
+      try {
+        const { data: parent } = await supabase
+          .from("invoices")
+          .select("nummer, datum")
+          .eq("id", parentId)
+          .maybeSingle();
+        if (parent) {
+          const parentNr = (parent as any).nummer || "";
+          const parentDatumIso = (parent as any).datum;
+          const parentDatum = parentDatumIso
+            ? new Date(parentDatumIso + "T12:00:00").toLocaleDateString("de-AT")
+            : "";
+          // Sowohl angebot_* als auch rechnung_* setzen — die jeweilige
+          // Vorlage nutzt nur eine Variante, die andere bleibt unbenutzt.
+          extraVars.angebot_nr = parentNr;
+          extraVars.angebot_datum = parentDatum;
+          extraVars.rechnung_nr = parentNr;
+          extraVars.rechnung_datum = parentDatum;
+        }
+      } catch { /* tolerant — Default aus invoice.datum greift dann */ }
+    }
+    return applyDocumentTextsToInvoice(enriched, docTexts, extraVars);
   };
 
   /** Erzeugt das Rechnungs-PDF client-side (jsPDF). Lädt Bank+UID+Logo+Layout

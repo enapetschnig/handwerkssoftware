@@ -34,17 +34,36 @@ export async function loadDocumentTexts(typ: string, sprache = "de"): Promise<Do
  * Gesetzt werden die "custom_*_text"-Felder, die pdfGenerator und invoiceHtml
  * bereits als Override unterstützen (bzw. jetzt unterstützen sollen).
  */
+// ISO-Datum (YYYY-MM-DD) → de-AT-Format (DD.MM.YYYY).
+// Defensiv: leere/ungültige Werte werden zu "" zurückgegeben.
+function formatDateAT(d: unknown): string {
+  if (!d) return "";
+  const s = String(d);
+  try {
+    return new Date(s + "T12:00:00").toLocaleDateString("de-AT");
+  } catch {
+    return s;
+  }
+}
+
 export function applyDocumentTextsToInvoice<T extends object>(
   invoice: T,
   texts: DocumentTexts,
   extraVars: Record<string, string | number | null | undefined> = {},
 ): T {
+  // Default-Werte aus dem Invoice selbst. extraVars überschreibt diese
+  // (z. B. setzt der AB-Convert-Pfad in InvoiceDetail.tsx angebot_nr +
+  // angebot_datum auf die Werte des Quell-Angebots).
+  const eigenesDatum = formatDateAT((invoice as any).datum);
   const vars: Record<string, string | number | null | undefined> = {
     kunde_name: (invoice as any).kunde_name,
     rechnung_nr: (invoice as any).nummer,
+    rechnung_datum: eigenesDatum,
     ab_nr: (invoice as any).nummer,
+    ab_datum: eigenesDatum,
     angebot_nr: (invoice as any).nummer,
-    datum: (invoice as any).datum,
+    angebot_datum: eigenesDatum,
+    datum: eigenesDatum,
     betrag: (invoice as any).brutto_summe,
     prozent: (invoice as any).anzahlung_prozent,
     ...extraVars,
