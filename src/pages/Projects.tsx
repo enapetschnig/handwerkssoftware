@@ -131,14 +131,15 @@ const Projects = () => {
   };
 
   const fetchProjects = async () => {
-    // Zentrales RPC: liefert nur die für den eingeloggten User sichtbaren +
-    // nicht-abgeschlossenen Projekte. Admin/Vorarbeiter sehen alle;
-    // Mitarbeiter nur ihre zugewiesenen. Anschließend volle Daten laden.
+    // Zentrales RPC: liefert die für den eingeloggten User sichtbaren
+    // Projekte. Admin/Vorarbeiter sehen alle; Mitarbeiter nur ihre
+    // zugewiesenen. Auch abgeschlossene werden geladen — der Status-
+    // Toggle in der UI filtert clientseitig und braucht die Daten.
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
     const { data: rpcData, error: rpcErr } = await (supabase.rpc as any)(
       "list_accessible_project_ids_for_user",
-      { p_user_id: user.id, p_only_active: true },
+      { p_user_id: user.id, p_only_active: false },
     );
     if (rpcErr) {
       console.error("list_accessible_project_ids_for_user:", rpcErr);
