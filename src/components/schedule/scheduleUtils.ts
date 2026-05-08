@@ -1,5 +1,6 @@
 import { isSameDay, isWithinInterval, parseISO, isWeekend, getISOWeek } from "date-fns";
 import type { Assignment, Einsatz, LeaveRequest, CompanyHoliday, EmployeeColor, TeamMember, Profile } from "./scheduleTypes";
+import { metaFor } from "@/lib/calendarCategories";
 
 export const EMPLOYEE_COLORS = [
   { bg: "bg-blue-200",    text: "text-blue-900",    border: "border-blue-300"    },
@@ -58,6 +59,27 @@ export function getProjectColorIndex(projectId: string): number {
 
 export function getProjectColor(projectId: string) {
   return PROJECT_COLORS[getProjectColorIndex(projectId)];
+}
+
+/**
+ * Bestimmt die Bar-Farbe für einen Plantafel-Einsatz. Reihenfolge:
+ *   1. Manueller board_projects.board_color (Power-User-Override)
+ *   2. KATEGORIE_META[project.kategorie] — gleiche Farbe wie der
+ *      Google-Kalender, in dem der Termin landet
+ *   3. Hash-basierter PROJECT_COLORS-Fallback (für Projekte ohne
+ *      Kategorie, z. B. Altdaten)
+ *
+ * `metaFor` ist defensiv und liefert bei unbekannten Kategorien den
+ * Default-Stil zurück.
+ */
+export function getEinsatzColor(
+  project: { kategorie?: string | null } | undefined,
+  boardColor: string | null | undefined,
+  projectId: string,
+): string {
+  if (boardColor && boardColor.trim()) return boardColor;
+  if (project?.kategorie) return metaFor(project.kategorie).fill;
+  return getProjectColor(projectId).fill;
 }
 
 export function getProjectColorClass(projectId: string): string {

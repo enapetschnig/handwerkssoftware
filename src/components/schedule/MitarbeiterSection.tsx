@@ -8,7 +8,7 @@ import {
   isOnLeave,
   isCompanyHoliday,
   isWeekendDay,
-  getProjectColor,
+  getEinsatzColor,
 } from "./scheduleUtils";
 import { getDefaultEmployeeColor } from "./employeeColorDefaults";
 import type {
@@ -35,6 +35,14 @@ interface Props {
   onManageClick: () => void;
   onCellClick?: (userId: string, startDate: string, endDate: string) => void;
   onEinsatzClick: (einsatz: Einsatz) => void;
+  /** Drag-&-Drop: Einsatz-Bars greifbar (nur für Admin/Vorarbeiter). */
+  draggableEinsaetze?: boolean;
+  onEinsatzDragStart?: (einsatzId: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  /** Wenn drag aktiv: ID des gerade gezogenen Einsatzes (für Opacity-Hint). */
+  dragEinsatzId?: string | null;
+  /** Live-Drop-Target während drag — für Zell-Highlight. */
+  dropUserId?: string | null;
+  dropDay?: string | null;
 }
 
 export function MitarbeiterSection({
@@ -49,6 +57,11 @@ export function MitarbeiterSection({
   onManageClick,
   onCellClick,
   onEinsatzClick,
+  draggableEinsaetze = false,
+  onEinsatzDragStart,
+  dragEinsatzId = null,
+  dropUserId = null,
+  dropDay = null,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   // Drag state
@@ -60,9 +73,11 @@ export function MitarbeiterSection({
   const boardColorMap = new Map(boardProjects.map((bp) => [bp.project_id, bp]));
 
   function getBarColor(projectId: string): string {
-    const bp = boardColorMap.get(projectId);
-    if (bp?.board_color) return bp.board_color;
-    return getProjectColor(projectId).fill;
+    return getEinsatzColor(
+      projectMap.get(projectId),
+      boardColorMap.get(projectId)?.board_color,
+      projectId,
+    );
   }
 
   // Mouse up handler for drag selection
@@ -129,15 +144,20 @@ export function MitarbeiterSection({
               let cellStyle: React.CSSProperties = {};
               if (weekend && !holiday && !leave) cellStyle.background = WEEKEND_BG;
 
+              const isDropTarget = dropUserId === profile.id && dropDay === dateStr;
               return (
                 <div
                   key={dateStr}
+                  data-cell-user={profile.id}
+                  data-cell-day={dateStr}
                   className={`border-r border-gray-100 ${
                     holiday ? "bg-gray-50" : leave ? "bg-orange-50" : ""
                   } ${isDragSelected ? "bg-blue-100" : ""} ${
+                    isDropTarget ? "bg-blue-200 ring-1 ring-blue-400" : ""
+                  } ${
                     !holiday && !leave && onCellClick ? "cursor-crosshair" : ""
                   }`}
-                  style={!isDragSelected ? cellStyle : undefined}
+                  style={!isDragSelected && !isDropTarget ? cellStyle : undefined}
                   onMouseDown={() => {
                     if (!holiday && !leave && onCellClick) {
                       setDragUserId(profile.id);
@@ -170,6 +190,9 @@ export function MitarbeiterSection({
                 endCol={cols.endCol}
                 totalDays={days.length}
                 onClick={() => onEinsatzClick(einsatz)}
+                draggable={draggableEinsaetze}
+                onDragStart={onEinsatzDragStart}
+                isDragging={dragEinsatzId === einsatz.id}
               />
             );
           })}

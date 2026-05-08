@@ -294,6 +294,82 @@ export default function ScheduleBoard() {
     setEinsatzDialogOpen(true);
   };
 
+  // ─── Drag & Drop: bestehenden Einsatz verschieben ─────────
+  // Pointer-Events-basierte Lösung — keine externe Library. Drop-
+  // Target-Detection via document.elementFromPoint, das nach
+  // data-cell-user/data-cell-day-Attributen sucht (auf den Tageszellen
+  // in MitarbeiterSection / TeamSection).
+  type DragState = {
+    einsatzId: string;
+    origUserId: string;
+    origStart: string;
+    origEnd: string;
+    durationDays: number;
+    dropUserId: string | null;
+    dropStart: string | null;
+  };
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  const handleDragStart = (einsatzId: string, e: React.PointerEvent<HTMLDivElement>) => {
+    if (!canEdit) return;
+    const ein = einsaetze.find((x) => x.id === einsatzId);
+    if (!ein) return;
+    const start = new Date(ein.start_date + "T12:00:00");
+    const end = new Date(ein.end_date + "T12:00:00");
+    const duration = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86_400_000));
+    // Pointer ab jetzt auf das Element capturen, damit alle Bewegungen
+    // garantiert von uns konsumiert werden (auch wenn die Maus die
+    // Bar verlässt).
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* tolerant */ }
+    setDrag({
+      einsatzId,
+      origUserId: ein.user_id,
+      origStart: ein.start_date,
+      origEnd: ein.end_date,
+      durationDays: duration,
+      dropUserId: null,
+      dropStart: null,
+    });
+  };
+
+  const handleDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag) return;
+    const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest<HTMLElement>("[data-cell-user][data-cell-day]");
+    if (!cell) return;
+    const cellUser = cell.dataset.cellUser || null;
+    const cellDay = cell.dataset.cellDay || null;
+    if (cellUser !== drag.dropUserId || cellDay !== drag.dropStart) {
+      setDrag((prev) => prev ? { ...prev, dropUserId: cellUser, dropStart: cellDay } : prev);
+    }
+  };
+
+  const handleDragEnd = async () => {
+    if (!drag) return;
+    const { einsatzId, origUserId, origStart, durationDays, dropUserId, dropStart } = drag;
+    setDrag(null);
+    if (!dropUserId || !dropStart) return;
+    if (dropUserId === origUserId && dropStart === origStart) return;
+    const newStart = new Date(dropStart + "T12:00:00");
+    const newEnd = format(addDays(newStart, durationDays), "yyyy-MM-dd");
+    // Optimistic Update — Bar springt sofort um
+    setEinsaetze((prev) => prev.map((e) =>
+      e.id === einsatzId
+        ? { ...e, user_id: dropUserId, start_date: dropStart, end_date: newEnd }
+        : e,
+    ));
+    const { error } = await (supabase.from("einsaetze" as never) as any)
+      .update({ user_id: dropUserId, start_date: dropStart, end_date: newEnd })
+      .eq("id", einsatzId);
+    if (error) {
+      toast({ variant: "destructive", title: "Verschieben fehlgeschlagen", description: error.message });
+      // Rollback durch reload
+      fetchData(weekStart, weekEnd, mode);
+    }
+    // DB-Trigger synct den Google-Termin automatisch — kein expliziter Aufruf nötig.
+  };
+
   if (loading || permLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -333,7 +409,12 @@ export default function ScheduleBoard() {
         />
 
         {mode !== "year" ? (
-          <div className="border rounded-lg overflow-x-auto bg-white mt-3">
+          <div
+            className="border rounded-lg overflow-x-auto bg-white mt-3"
+            onPointerMove={drag ? handleDragMove : undefined}
+            onPointerUp={drag ? handleDragEnd : undefined}
+            onPointerCancel={drag ? () => setDrag(null) : undefined}
+          >
             {/* Timeline Header */}
             <TimelineHeader days={weekDays} holidays={companyHolidays} />
 
@@ -363,6 +444,11 @@ export default function ScheduleBoard() {
               onCellClick={canEdit ? handleCellClick : undefined}
               onMultiUserCellClick={canEdit ? handleMultiUserCellClick : undefined}
               onEinsatzClick={handleEinsatzClick}
+              draggableEinsaetze={canEdit}
+              onEinsatzDragStart={handleDragStart}
+              dragEinsatzId={drag?.einsatzId ?? null}
+              dropUserId={drag?.dropUserId ?? null}
+              dropDay={drag?.dropStart ?? null}
             />
 
             {/* Mitarbeiter Section */}
@@ -378,6 +464,11 @@ export default function ScheduleBoard() {
               onManageClick={() => {}}
               onCellClick={canEdit ? handleCellClick : undefined}
               onEinsatzClick={handleEinsatzClick}
+              draggableEinsaetze={canEdit}
+              onEinsatzDragStart={handleDragStart}
+              dragEinsatzId={drag?.einsatzId ?? null}
+              dropUserId={drag?.dropUserId ?? null}
+              dropDay={drag?.dropStart ?? null}
             />
           </div>
         ) : (

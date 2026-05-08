@@ -5,6 +5,9 @@ export type Project = {
   status?: string;
   geplanter_start?: string | null;
   geplantes_ende?: string | null;
+  /** Geschäftsbereich (montipro/bks/…/chef) — bestimmt Bar-Farbe und
+   *  Google-Kalender. Siehe src/lib/calendarCategories.ts. */
+  kategorie?: string | null;
 };
 
 // Legacy — kept for migration period

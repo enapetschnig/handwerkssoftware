@@ -10,7 +10,7 @@ import {
   isOnLeave,
   isCompanyHoliday,
   isWeekendDay,
-  getProjectColor,
+  getEinsatzColor,
 } from "./scheduleUtils";
 import type {
   Team,
@@ -42,11 +42,17 @@ interface Props {
   onCellClick?: (userId: string, startDate: string, endDate: string) => void;
   onMultiUserCellClick?: (userIds: string[], startDate: string, endDate: string) => void;
   onEinsatzClick: (einsatz: Einsatz) => void;
+  draggableEinsaetze?: boolean;
+  onEinsatzDragStart?: (einsatzId: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  dragEinsatzId?: string | null;
+  dropUserId?: string | null;
+  dropDay?: string | null;
 }
 
 export function TeamSection({
   teams, teamMembers, profiles, einsaetze, boardProjects, projects, days,
   leaveRequests, holidays, employeeColors, onAddTeam, onEditTeam, onCellClick, onMultiUserCellClick, onEinsatzClick,
+  draggableEinsaetze = false, onEinsatzDragStart, dragEinsatzId = null, dropUserId = null, dropDay = null,
 }: Props) {
   const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
@@ -70,9 +76,11 @@ export function TeamSection({
   }
 
   function getBarColor(projectId: string): string {
-    const bp = boardColorMap.get(projectId);
-    if (bp?.board_color) return bp.board_color;
-    return getProjectColor(projectId).fill;
+    return getEinsatzColor(
+      projectMap.get(projectId),
+      boardColorMap.get(projectId)?.board_color,
+      projectId,
+    );
   }
 
   // Mouse up for drag selection (supports multi-row within a team)
@@ -165,15 +173,20 @@ export function TeamSection({
               let cellStyle: React.CSSProperties = {};
               if (weekend && !holiday && !leave) cellStyle.background = WEEKEND_BG;
 
+              const isDropTarget = dropUserId === profile.id && dropDay === dateStr;
               return (
                 <div
                   key={dateStr}
+                  data-cell-user={profile.id}
+                  data-cell-day={dateStr}
                   className={`border-r border-gray-100 ${
                     holiday ? "bg-gray-50" : leave ? "bg-orange-50" : ""
                   } ${isDragSelected ? "bg-blue-100" : ""} ${
+                    isDropTarget ? "bg-blue-200 ring-1 ring-blue-400" : ""
+                  } ${
                     !holiday && !leave && onCellClick ? "cursor-crosshair" : ""
                   }`}
-                  style={!isDragSelected ? cellStyle : undefined}
+                  style={!isDragSelected && !isDropTarget ? cellStyle : undefined}
                   onMouseDown={() => {
                     if (!holiday && !leave && onCellClick) {
                       setDragUserId(profile.id);
@@ -209,6 +222,9 @@ export function TeamSection({
                 endCol={cols.endCol}
                 totalDays={days.length}
                 onClick={() => onEinsatzClick(einsatz)}
+                draggable={draggableEinsaetze}
+                onDragStart={onEinsatzDragStart}
+                isDragging={dragEinsatzId === einsatz.id}
               />
             );
           })}

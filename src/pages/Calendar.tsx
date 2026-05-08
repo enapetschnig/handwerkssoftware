@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { metaFor } from "@/lib/calendarCategories";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RefreshCw, Plus, Calendar as CalIcon, Clock, MapPin, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -65,27 +66,12 @@ const emptyFormData: EventFormData = {
 };
 
 /**
- * Meta-Info pro Kalender-Kategorie: UI-Label, Stilfarbe.
- * Wird verwendet für Badges, Farb-Streifen und Filter-Chips.
- * Die Keys entsprechen `calendar_type` aus DB/Edge Function.
+ * Meta-Info pro Kalender-Kategorie kommt aus der geteilten Lib
+ * (gleiches Mapping wie Plantafel und Edge-Function-Routing).
+ * Legacy-calendar_type-Werte ("allgemein"/"kleinigkeiten"/"baustellen")
+ * werden durch metaFor automatisch auf den Default-Stil gemappt.
  */
-const KATEGORIE_META: Record<string, { label: string; badgeClass: string; barClass: string }> = {
-  montipro:     { label: "Monti.pro",     badgeClass: "bg-green-100 text-green-800",  barClass: "bg-green-500" },
-  bks:          { label: "BKS",           badgeClass: "bg-blue-100 text-blue-800",    barClass: "bg-blue-500" },
-  gartenmacher: { label: "Gartenmacher",  badgeClass: "bg-lime-100 text-lime-800",    barClass: "bg-lime-500" },
-  fensterwerk:  { label: "Fensterwerk",   badgeClass: "bg-cyan-100 text-cyan-800",    barClass: "bg-cyan-500" },
-  ladenbau:     { label: "Ladenbau",      badgeClass: "bg-amber-100 text-amber-800",  barClass: "bg-amber-500" },
-  portas:       { label: "Portas",        badgeClass: "bg-orange-100 text-orange-800",barClass: "bg-orange-500" },
-  chef:         { label: "CHEF",          badgeClass: "bg-purple-100 text-purple-800",barClass: "bg-purple-500" },
-  default:      { label: "Default",       badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
-  // Legacy-Keys (falls Events mit alten Typen noch in der DB sind)
-  allgemein:    { label: "Allgemein",     badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
-  kleinigkeiten:{ label: "Kleinigkeiten", badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
-  baustellen:   { label: "Baustellen",    badgeClass: "bg-slate-100 text-slate-700",  barClass: "bg-slate-400" },
-};
-
-const katMeta = (type: string | null | undefined) =>
-  KATEGORIE_META[type || "default"] || KATEGORIE_META.default;
+const katMeta = (type: string | null | undefined) => metaFor(type);
 
 export default function Calendar() {
   const { toast } = useToast();

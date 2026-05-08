@@ -82,10 +82,10 @@ export function useScheduleData() {
           .order("nachname"),
         // Projekte: nur die für diesen User sichtbaren
         accessibleProjectIds === null
-          ? supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende").order("name")
+          ? supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende, kategorie").order("name")
           : accessibleProjectIds.length === 0
             ? Promise.resolve({ data: [] } as any)
-            : supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende").in("id", accessibleProjectIds).order("name"),
+            : supabase.from("projects").select("id, name, status, geplanter_start, geplantes_ende, kategorie").in("id", accessibleProjectIds).order("name"),
         // Einsaetze that overlap with the visible date range
         // Im Year-Modus werden Einsätze nicht dargestellt → nicht laden (Performance)
         mode === "year"
