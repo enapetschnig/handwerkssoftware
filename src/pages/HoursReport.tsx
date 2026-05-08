@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getNormalWorkingHours } from "@/lib/workingHours";
+import { aggregateByDay, totalAutoSaldo, formatSaldo, type DayBalance } from "@/lib/hoursAccounting";
 
 interface TimeEntry {
   id: string;
@@ -249,10 +250,21 @@ export default function HoursReport() {
     return days;
   };
 
-  const calculateOvertime = (date: Date, totalHours: number): number => {
-    const normalHours = getNormalWorkingHours(date);
-    return Math.max(0, totalHours - normalHours);
-  };
+  // Tages-Saldo aus dem zentralen Helper — pro Tag aggregiert,
+  // Sonderzeiten neutral, Minusstunden möglich.
+  const dayBalances = useMemo(() => aggregateByDay(timeEntries as any), [timeEntries]);
+  const dayBalanceMap = useMemo(() => new Map(dayBalances.map(d => [d.datum, d])), [dayBalances]);
+  // Erste Eintrags-ID pro Tag — damit "Überstunden" und Soll nur in
+  // der ersten Zeile pro Tag gezeigt werden (vermeidet Doppelzählung).
+  const firstEntryIdPerDay = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of timeEntries) {
+      if (!map.has(e.datum)) map.set(e.datum, e.id);
+    }
+    return map;
+  }, [timeEntries]);
+  const getDayBal = (datum: string): DayBalance | undefined => dayBalanceMap.get(datum);
+  const isFirstEntryOfDay = (entry: TimeEntry) => firstEntryIdPerDay.get(entry.datum) === entry.id;
 
   const calculateLunchBreak = (entry: TimeEntry) => {
     // Prioritize new pause_start/pause_end fields if available
@@ -277,11 +289,32 @@ export default function HoursReport() {
   };
 
   const monthDays = generateMonthDays();
-  const totalHours = timeEntries.reduce((sum, entry) => sum + entry.stunden, 0);
-  const totalOvertime = timeEntries.reduce((sum, entry) => {
-    const entryDate = parseISO(entry.datum);
-    return sum + calculateOvertime(entryDate, entry.stunden);
-  }, 0);
+  // Per-Tag-Aggregation aus dem Helper — Multi-Project-Tage fließen
+  // korrekt zusammen, Minusstunden bleiben erhalten.
+  const totalHours = dayBalances.reduce((s, d) => s + d.ist, 0);
+  const totalSaldo = dayBalances.reduce((s, d) => s + d.saldo, 0);
+  const totalSoll = dayBalances.reduce((s, d) => s + d.soll, 0);
+  // Stundenkonto-Status aus time_accounts (manuelle Buchungen) +
+  // Live-Auto-Saldo über ALLE time_entries des Mitarbeiters (nicht
+  // nur des aktuellen Monats). Wird im Header-Block angezeigt.
+  const [manualBalance, setManualBalance] = useState<number>(0);
+  const [autoBalanceAll, setAutoBalanceAll] = useState<number>(0);
+  useEffect(() => {
+    if (!selectedUserId) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: acc }, { data: allEntries }] = await Promise.all([
+        (supabase.from("time_accounts" as never) as any)
+          .select("balance_hours").eq("user_id", selectedUserId).maybeSingle(),
+        supabase.from("time_entries")
+          .select("datum, stunden, taetigkeit").eq("user_id", selectedUserId),
+      ]);
+      if (cancelled) return;
+      setManualBalance(Number((acc as any)?.balance_hours) || 0);
+      setAutoBalanceAll(totalAutoSaldo((allEntries as any[]) || []));
+    })();
+    return () => { cancelled = true; };
+  }, [selectedUserId]);
 
   const addBordersToCell = (cell: any, thick: boolean = false, centered: boolean = false) => {
     const borderStyle = thick ? "medium" : "thin";
@@ -381,12 +414,15 @@ export default function HoursReport() {
             // Export MIT Überstunden: Tatsächliche Zeiten verwenden
             const actualMorningEnd = lunchBreak?.start || "";
             const actualAfternoonStart = lunchBreak?.end || "";
-            const actualPauseText = entry.pause_minutes && entry.pause_minutes > 0 && lunchBreak 
-              ? `${lunchBreak.start} - ${lunchBreak.end}` 
+            const actualPauseText = entry.pause_minutes && entry.pause_minutes > 0 && lunchBreak
+              ? `${lunchBreak.start} - ${lunchBreak.end}`
               : "";
-            
-            const overtime = calculateOvertime(dayDate, entry.stunden);
-            const overtimeText = overtime > 0 ? overtime.toFixed(2) : "";
+            // Saldo PRO TAG (positiv oder negativ) — nur in der ersten
+            // Eintragszeile anzeigen, sonst leer (sonst doppelt gezählt).
+            const dayBal = getDayBal(entry.datum);
+            const overtimeText = (entryIndex === 0 && dayBal && Math.abs(dayBal.saldo) >= 0.005)
+              ? formatSaldo(dayBal.saldo)
+              : "";
 
             worksheetData.push([
               displayDay,
@@ -432,36 +468,39 @@ export default function HoursReport() {
           }
         });
 
-        // Tagessumme wenn mehrere Einträge am Tag
+        // Tagessumme wenn mehrere Einträge am Tag — Saldo aus dem
+        // Helper, NICHT mehr per-Entry summieren.
         if (dayEntries.length > 1) {
-          const dayTotalHours = dayEntries.reduce((sum, e) => sum + e.stunden, 0);
-          const dayTotalOvertime = dayEntries.reduce((sum, e) => sum + calculateOvertime(dayDate, e.stunden), 0);
+          const datumStr = dayDate.toISOString().slice(0, 10);
+          const dayBal = getDayBal(datumStr);
+          const dayTotalHours = dayBal?.ist ?? dayEntries.reduce((sum, e) => sum + e.stunden, 0);
           if (includeOvertime) {
-            worksheetData.push(["", "", "", "", "", "Tagessumme:", dayTotalHours.toFixed(2), dayTotalOvertime > 0 ? dayTotalOvertime.toFixed(2) : "", "", "", "", ""]);
+            const saldoText = (dayBal && Math.abs(dayBal.saldo) >= 0.005) ? formatSaldo(dayBal.saldo) : "";
+            worksheetData.push(["", "", "", "", "", "Tagessumme:", dayTotalHours.toFixed(2), saldoText, "", "", "", ""]);
           } else {
             const regelarbeitszeitTag = getNormalWorkingHours(dayDate);
-            worksheetData.push(["", "", "", "", "", "Tagessumme:", (regelarbeitszeitTag * dayEntries.length).toFixed(2), "", "", "", "", ""]);
+            // Tagessoll erscheint genau EINMAL pro Tag (vorher ×Anzahl-Einträge — Bug).
+            worksheetData.push(["", "", "", "", "", "Tagessumme:", regelarbeitszeitTag.toFixed(2), "", "", "", "", ""]);
           }
         }
       }
     }
 
-    // Regelarbeitszeit-Summe berechnen für Export ohne Überstunden
+    // Regelarbeitszeit-Summe für Export ohne Überstunden — pro Tag,
+    // NICHT pro Entry. Summe aller Tagessoll der Tage mit Buchungen.
     const calculateRegelarbeitszeitSumme = () => {
       let summe = 0;
       for (let day = 1; day <= daysInMonth; day++) {
         const dayDate = new Date(year, month - 1, day);
-        const dayEntries = timeEntries.filter((e) => isSameDay(parseISO(e.datum), dayDate));
-        if (dayEntries.length > 0) {
-          summe += getNormalWorkingHours(dayDate) * dayEntries.length;
-        }
+        const hasEntries = timeEntries.some((e) => isSameDay(parseISO(e.datum), dayDate));
+        if (hasEntries) summe += getNormalWorkingHours(dayDate);
       }
       return summe;
     };
 
-    // Summenzeile mit oder ohne Überstunden
+    // Summenzeile — Saldo statt Math.max(0,…), Vorzeichen sichtbar.
     if (includeOvertime) {
-      worksheetData.push(["", "", "", "", "", "SUMME", totalHours.toFixed(2), totalOvertime.toFixed(2), "", "", "", "", timeEntries.reduce((s, e) => s + (e.wetterschicht_stunden || 0), 0).toFixed(2)]);
+      worksheetData.push(["", "", "", "", "", "SUMME", totalHours.toFixed(2), formatSaldo(totalSaldo), "", "", "", "", timeEntries.reduce((s, e) => s + (e.wetterschicht_stunden || 0), 0).toFixed(2)]);
     } else {
       const regelarbeitszeitSumme = calculateRegelarbeitszeitSumme();
       worksheetData.push(["", "", "", "", "", "SUMME", regelarbeitszeitSumme.toFixed(2), "", "", "", "", ""]);
@@ -474,7 +513,7 @@ export default function HoursReport() {
     if (includeOvertime) {
       worksheetData.push(["", "Hiermit bestätige ich die Richtigkeit der von mir angegebenen Überstunden.", "", "", "", "", "", "", "", "", "", ""]);
       worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]); // Leer
-      worksheetData.push(["", `Derzeitiger offener Überstundenstand: ${totalOvertime.toFixed(2)}`, "", "", "", "", "", "", "", "", "", ""]);
+      worksheetData.push(["", `Derzeitiger offener Überstundenstand: ${formatSaldo(totalSaldo)}`, "", "", "", "", "", "", "", "", "", ""]);
       worksheetData.push(["", "Restliche Überstunden wurden zur Gänze abgegolten.", "", "", "", "", "", "", "", "", "", ""]);
     } else {
       worksheetData.push(["", "", "", "", "", "", "", "", "", "", "", ""]); // Leer statt Überstunden-Text
@@ -689,15 +728,29 @@ export default function HoursReport() {
 
               {selectedUserId && (
                 <>
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-muted/50 p-4 rounded-lg space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Gesamtstunden</p>
                         <p className="text-2xl font-bold">{totalHours.toFixed(2)} h</p>
+                        <p className="text-[10px] text-muted-foreground">Soll: {totalSoll.toFixed(2)} h</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Überstunden</p>
-                        <p className="text-2xl font-bold">{totalOvertime.toFixed(2)} h</p>
+                        <p className="text-sm text-muted-foreground">Saldo Monat</p>
+                        <p className={`text-2xl font-bold ${totalSaldo > 0.005 ? "text-green-600" : totalSaldo < -0.005 ? "text-red-600" : ""}`}>
+                          {formatSaldo(totalSaldo)} h
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">+ Überstunden / − Minusstunden</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Stundenkonto effektiv</p>
+                        <p className={`text-2xl font-bold ${(autoBalanceAll + manualBalance) > 0.005 ? "text-green-600" : (autoBalanceAll + manualBalance) < -0.005 ? "text-red-600" : ""}`}>
+                          {formatSaldo(autoBalanceAll + manualBalance)} h
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Auto {formatSaldo(autoBalanceAll)} h
+                          {Math.abs(manualBalance) >= 0.005 ? ` · Manuell ${formatSaldo(manualBalance)} h` : ""}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -782,7 +835,8 @@ export default function HoursReport() {
 
                             return dayEntries.map((entry, entryIndex) => {
                               const lunchBreak = calculateLunchBreak(entry);
-                              const overtime = calculateOvertime(day.date, entry.stunden);
+                              // Tagessaldo aus Helper — pro-Tag, nur in 1. Zeile anzeigen.
+                              const dayBal = getDayBal(entry.datum);
                               const project = projects[entry.project_id];
                               const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏢" : "";
                               const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Firma" : "";
@@ -822,9 +876,12 @@ export default function HoursReport() {
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    {overtime > 0 && (
-                                      <span className="text-orange-600 font-medium">
-                                        +{overtime.toFixed(2)} h
+                                    {isFirstEntry && dayBal && Math.abs(dayBal.saldo) >= 0.005 && (
+                                      <span className={cn(
+                                        "font-medium",
+                                        dayBal.saldo > 0 ? "text-orange-600" : "text-red-600"
+                                      )}>
+                                        {formatSaldo(dayBal.saldo)} h
                                       </span>
                                     )}
                                   </TableCell>
@@ -923,8 +980,11 @@ export default function HoursReport() {
                           <TableCell className="text-right font-bold">
                             {totalHours.toFixed(2)} h
                           </TableCell>
-                          <TableCell className="text-right font-bold text-orange-600">
-                            {totalOvertime.toFixed(2)} h
+                          <TableCell className={cn(
+                            "text-right font-bold",
+                            totalSaldo > 0.005 ? "text-orange-600" : totalSaldo < -0.005 ? "text-red-600" : ""
+                          )}>
+                            {formatSaldo(totalSaldo)} h
                           </TableCell>
                           <TableCell className="text-right font-bold text-blue-600">
                             {timeEntries.reduce((s, e) => s + (e.wetterschicht_stunden || 0), 0).toFixed(2)}

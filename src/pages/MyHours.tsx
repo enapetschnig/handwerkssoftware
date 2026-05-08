@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2, TrendingUp, Wallet } from "lucide-react";
 import { getTotalWorkingHours } from "@/lib/workingHours";
+import { aggregateByDay, totalAutoSaldo, formatSaldo } from "@/lib/hoursAccounting";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -42,10 +43,40 @@ const MyHours = () => {
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  // Stundenkonto-Saldo: live aus ALLEN time_entries des Mitarbeiters
+  // berechnet (kein Stichtag), plus manuelle Korrekturen aus
+  // time_accounts.balance_hours.
+  const [autoSaldoAll, setAutoSaldoAll] = useState<number>(0);
+  const [manualSaldo, setManualSaldo] = useState<number>(0);
 
   useEffect(() => {
     fetchEntries();
   }, [selectedMonth]);
+
+  // Stundenkonto einmalig laden (nicht abhängig vom angezeigten Monat —
+  // der Saldo läuft über alle Daten, der Monat ist nur Anzeige-Filter).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [{ data: acc }, { data: allEntries }] = await Promise.all([
+        (supabase.from("time_accounts" as never) as any)
+          .select("balance_hours").eq("user_id", user.id).maybeSingle(),
+        supabase.from("time_entries")
+          .select("datum, stunden, taetigkeit").eq("user_id", user.id),
+      ]);
+      if (cancelled) return;
+      setManualSaldo(Number((acc as any)?.balance_hours) || 0);
+      setAutoSaldoAll(totalAutoSaldo((allEntries as any[]) || []));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Tages-Aggregation des aktuell angezeigten Monats (für Tagessaldo-Spalte).
+  const dayBalances = useMemo(() => aggregateByDay(entries as any), [entries]);
+  const dayBalanceMap = useMemo(() => new Map(dayBalances.map(d => [d.datum, d])), [dayBalances]);
+  const effektiv = autoSaldoAll + manualSaldo;
 
   const fetchEntries = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -163,7 +194,41 @@ const MyHours = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-7xl">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-7xl space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wallet className="h-5 w-5" />
+              Stundenkonto
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Auto (aus Buchungen)</p>
+                <p className={`text-xl font-bold ${autoSaldoAll > 0.005 ? "text-green-600" : autoSaldoAll < -0.005 ? "text-red-600" : ""}`}>
+                  {formatSaldo(autoSaldoAll)} h
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Manuelle Korrektur</p>
+                <p className={`text-xl font-bold ${manualSaldo > 0.005 ? "text-green-600" : manualSaldo < -0.005 ? "text-red-600" : ""}`}>
+                  {formatSaldo(manualSaldo)} h
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Effektiver Saldo</p>
+                <p className={`text-2xl font-extrabold ${effektiv > 0.005 ? "text-green-600" : effektiv < -0.005 ? "text-red-600" : ""}`}>
+                  {formatSaldo(effektiv)} h
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Plus = Überstunden-Guthaben · Minus = Nachzuholende Stunden. Urlaub, Krankenstand, Feiertag und Zeitausgleich werden neutral gerechnet.
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -238,6 +303,7 @@ const MyHours = () => {
                       <TableHead className="text-center">Bis</TableHead>
                       <TableHead className="text-center">Pause</TableHead>
                       <TableHead className="text-right">Stunden</TableHead>
+                      <TableHead className="text-right">Saldo</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -252,10 +318,9 @@ const MyHours = () => {
                       });
                       const rows: React.ReactNode[] = [];
                       grouped.forEach((dayEntries, datum) => {
-                        const dayTotal = dayEntries.reduce((s, e) => s + e.stunden, 0);
                         const dateObj = new Date(datum + "T12:00:00");
-                        const sollH = getTotalWorkingHours(dateObj);
-                        const dayDiff = dayTotal - sollH;
+                        // Tagessaldo aus dem zentralen Helper — Sonderzeiten neutral.
+                        const dayBal = dayBalanceMap.get(datum);
                         dayEntries.forEach((entry, idx) => {
                           rows.push(
                             <TableRow key={entry.id} className={idx > 0 ? "border-t-0" : ""}>
@@ -282,6 +347,13 @@ const MyHours = () => {
                               <TableCell className="text-center text-sm">{entry.end_time?.substring(0, 5) || '-'}</TableCell>
                               <TableCell className="text-center text-sm">{entry.pause_minutes ? `${entry.pause_minutes} Min` : '-'}</TableCell>
                               <TableCell className="text-right font-semibold">{entry.stunden.toFixed(2)} h</TableCell>
+                              <TableCell className="text-right">
+                                {idx === 0 && dayBal && Math.abs(dayBal.saldo) >= 0.005 ? (
+                                  <span className={`font-medium ${dayBal.saldo > 0 ? "text-green-600" : "text-red-600"}`}>
+                                    {formatSaldo(dayBal.saldo)} h
+                                  </span>
+                                ) : null}
+                              </TableCell>
                               <TableCell>
                                 <Button size="sm" variant="ghost" onClick={() => { setEditingEntry(entry); setShowEditDialog(true); }} disabled={!isCurrentMonth(entry.datum)} className="h-7 w-7 p-0">
                                   <Pencil className="h-3.5 w-3.5" />

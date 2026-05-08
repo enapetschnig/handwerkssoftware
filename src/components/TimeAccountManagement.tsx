@@ -12,6 +12,7 @@ import { Clock, Plus, History, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { totalAutoSaldo, formatSaldo, type TimeEntryLite } from "@/lib/hoursAccounting";
 
 type Profile = {
   id: string;
@@ -54,19 +55,41 @@ export default function TimeAccountManagement({ profiles }: TimeAccountManagemen
   const [adjustReason, setAdjustReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Auto-Saldo (live aus time_entries) pro user_id — Map für die UI.
+  const [autoSaldoByUser, setAutoSaldoByUser] = useState<Record<string, number>>({});
+
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: accData }, { data: txData }] = await Promise.all([
+    const [{ data: accData }, { data: txData }, { data: entriesData }] = await Promise.all([
       supabase.from("time_accounts").select("*"),
       supabase
         .from("time_account_transactions")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100),
+      // Alle time_entries aller Mitarbeiter — pro User gruppieren und
+      // den Auto-Saldo via aggregateByDay rechnen. Bei einem normalen
+      // Mitarbeiterbestand (~10-30 User × 250 Tage/Jahr) bleibt die
+      // Datenmenge harmlos; falls das später zu groß wird, kann hier
+      // ein Stichtag rein.
+      supabase.from("time_entries").select("user_id, datum, stunden, taetigkeit"),
     ]);
 
     if (accData) setAccounts(accData as TimeAccount[]);
     if (txData) setTransactions(txData as Transaction[]);
+
+    if (entriesData) {
+      const byUser: Record<string, TimeEntryLite[]> = {};
+      for (const e of entriesData as Array<TimeEntryLite & { user_id: string }>) {
+        if (!byUser[e.user_id]) byUser[e.user_id] = [];
+        byUser[e.user_id].push(e);
+      }
+      const saldoMap: Record<string, number> = {};
+      for (const [uid, list] of Object.entries(byUser)) {
+        saldoMap[uid] = totalAutoSaldo(list);
+      }
+      setAutoSaldoByUser(saldoMap);
+    }
     setLoading(false);
   };
 
@@ -189,6 +212,13 @@ export default function TimeAccountManagement({ profiles }: TimeAccountManagemen
               .filter((p) => p.vorname && p.nachname)
               .map((profile) => {
                 const account = accounts.find((a) => a.user_id === profile.id);
+                const manual = Number(account?.balance_hours) || 0;
+                const auto = autoSaldoByUser[profile.id] || 0;
+                const effektiv = manual + auto;
+                const colorClass = (n: number) =>
+                  n > 0.005 ? "text-green-600 font-semibold"
+                  : n < -0.005 ? "text-destructive font-semibold"
+                  : "text-muted-foreground font-semibold";
 
                 return (
                   <div
@@ -199,25 +229,17 @@ export default function TimeAccountManagement({ profiles }: TimeAccountManagemen
                       <p className="font-medium">
                         {profile.vorname} {profile.nachname}
                       </p>
-                      {account ? (
-                        <p className="text-sm">
-                          Saldo:{" "}
-                          <span
-                            className={
-                              account.balance_hours >= 0
-                                ? "text-green-600 font-semibold"
-                                : "text-destructive font-semibold"
-                            }
-                          >
-                            {account.balance_hours >= 0 ? "+" : ""}
-                            {Number(account.balance_hours).toFixed(2)} h
-                          </span>
-                        </p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          Noch kein Zeitkonto
-                        </p>
-                      )}
+                      <p className="text-sm flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>
+                          Auto: <span className={colorClass(auto)}>{formatSaldo(auto)} h</span>
+                        </span>
+                        <span>
+                          Manuell: <span className={colorClass(manual)}>{formatSaldo(manual)} h</span>
+                        </span>
+                        <span className="font-medium">
+                          Effektiv: <span className={colorClass(effektiv) + " text-base"}>{formatSaldo(effektiv)} h</span>
+                        </span>
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       {account ? (
