@@ -348,7 +348,11 @@ export async function generateInvoicePdf(
       const aaTotalH = aaHeaderH + rowHeights.reduce((s, h) => s + h, 0);
       // Page-Break-Check: wenn der Block plus Mindestplatz (40mm für
       // Items-Tabelle-Anlauf) nicht mehr passt → neue Seite.
-      if (y + aaTotalH + 40 > pageHeight - footerH) {
+      // Konservativer Footer-Höhen-Schätzwert (echtes footerH wird
+      // erst weiter unten in der Funktion berechnet — Reihenfolge
+      // beibehalten, um TDZ-Fehler zu vermeiden).
+      const approxFooterH = 30;
+      if (y + aaTotalH + 40 > pageHeight - approxFooterH) {
         pdf.addPage();
         y = 20;
       }
