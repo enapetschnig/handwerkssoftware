@@ -17,28 +17,17 @@ export interface ExecutingCompany {
   adressLines: string[]; // mehrzeilige Adresse für PDF/HTML
 }
 
+// Alle vier Firmen sitzen am gleichen Standort — gemeinsame Adresse.
+const SHARED_ADDRESS_LINES = [
+  "Wiener Neustädter Straße 1",
+  "2542 Kottingbrunn",
+];
+
 export const EXECUTING_COMPANIES: ExecutingCompany[] = [
-  {
-    id: "montipro",
-    name: "Monti.pro",
-    // TODO: Adresse vom User bestätigen lassen.
-    adressLines: ["Adresse Monti.pro (bitte ergänzen)"],
-  },
-  {
-    id: "fensterwerk",
-    name: "Fensterwerk",
-    adressLines: ["Adresse Fensterwerk (bitte ergänzen)"],
-  },
-  {
-    id: "gartenmacher",
-    name: "Gartenmacher",
-    adressLines: ["Adresse Gartenmacher (bitte ergänzen)"],
-  },
-  {
-    id: "bks",
-    name: "BKS-BauKomplettService",
-    adressLines: ["Adresse BKS-BauKomplettService (bitte ergänzen)"],
-  },
+  { id: "montipro",     name: "Monti.pro",             adressLines: SHARED_ADDRESS_LINES },
+  { id: "fensterwerk",  name: "Fensterwerk",           adressLines: SHARED_ADDRESS_LINES },
+  { id: "gartenmacher", name: "Gartenmacher",          adressLines: SHARED_ADDRESS_LINES },
+  { id: "bks",          name: "BKS-BauKomplettService", adressLines: SHARED_ADDRESS_LINES },
 ];
 
 export function findExecutingCompany(id: string | null | undefined): ExecutingCompany | undefined {
