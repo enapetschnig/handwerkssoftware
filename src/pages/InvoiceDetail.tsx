@@ -3852,6 +3852,15 @@ export default function InvoiceDetail() {
             ansprechpartner_email: (form as any).ansprechpartner_email || "",
             anzahlung_prozent: (form as any).anzahlung_prozent ?? null,
             anzahlung_betrag: (form as any).anzahlung_betrag ?? null,
+            // Allgemeine Angaben (Angebot + AB) — Toggle + Felder müssen
+            // an die Vorschau durchgereicht werden, sonst rendert die
+            // Tabelle dort nicht (Renderer prüft auf allgemeine_angaben_aktiv).
+            allgemeine_angaben_aktiv: !!(form as any).allgemeine_angaben_aktiv,
+            leistungsbeschreibung: (form as any).leistungsbeschreibung || "",
+            ausfuehrungsort: (form as any).ausfuehrungsort || "",
+            ausfuehrungs_kw: (form as any).ausfuehrungs_kw || "",
+            ausfuehrende_firma: (form as any).ausfuehrende_firma || "",
+            ausfuehrende_firma_freitext: (form as any).ausfuehrende_firma_freitext || "",
           } as any}
           items={items.map((item, idx) => ({
             position: idx + 1,
