@@ -80,6 +80,7 @@ export interface InvoiceHtmlData {
   reverse_charge?: boolean;
   betreff?: string | null;
   // Allgemeine Angaben (Angebot + AB) — werden via buildAllgemeineAngabenRows verarbeitet
+  allgemeine_angaben_aktiv?: boolean;
   leistungsbeschreibung?: string | null;
   ausfuehrungsort?: string | null;
   ausfuehrungs_kw?: string | null;
@@ -467,9 +468,11 @@ ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:p
 </div>
 
 ${(() => {
-  // Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung,
-  // nur wenn min. 1 Feld einen Wert hat.
+  // Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung, nur
+  // wenn der User den Toggle aktiviert hat UND min. 1 Feld einen Wert
+  // hat (Sicherheitsnetz gegen leeren Block).
   if (!isAngebot) return "";
+  if (!(invoice as any).allgemeine_angaben_aktiv) return "";
   const aaRows = buildAllgemeineAngabenRows(invoice as any);
   if (aaRows.length === 0) return "";
   // Akzent-Light für Header (10% gegen weiß) — analog PDF-Variante.

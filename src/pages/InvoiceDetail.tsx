@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -98,7 +99,11 @@ interface InvoiceData {
   faellig_am: string;
   leistungsdatum: string;
   leistungsdatum_bis: string;
-  // Allgemeine Angaben (Angebot + AB) — siehe src/lib/allgemeineAngaben.ts
+  // Allgemeine Angaben (Angebot + AB) — siehe src/lib/allgemeineAngaben.ts.
+  // Der Toggle steuert, ob die Tabelle im PDF/HTML überhaupt erscheint.
+  // Felder werden auch bei aktiv=false weiter gespeichert, damit beim
+  // erneuten Aktivieren die Werte noch da sind.
+  allgemeine_angaben_aktiv: boolean;
   leistungsbeschreibung: string;
   ausfuehrungsort: string;
   ausfuehrungs_kw: string;
@@ -280,6 +285,7 @@ export default function InvoiceDetail() {
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
     leistungsdatum_bis: "",
+    allgemeine_angaben_aktiv: false,
     leistungsbeschreibung: "",
     ausfuehrungsort: "",
     ausfuehrungs_kw: "",
@@ -387,6 +393,7 @@ export default function InvoiceDetail() {
             // Allgemeine Angaben — beim Convert (Angebot → AB)
             // mitkopieren, damit der User nicht alles neu eintippen
             // muss. Bei manueller Neu-Anlage sind die Felder eh leer.
+            allgemeine_angaben_aktiv: !!(data as any).allgemeine_angaben_aktiv,
             leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
             ausfuehrungsort: (data as any).ausfuehrungsort || "",
             ausfuehrungs_kw: (data as any).ausfuehrungs_kw || "",
@@ -634,6 +641,7 @@ export default function InvoiceDetail() {
       faellig_am: data.faellig_am || "",
       leistungsdatum: data.leistungsdatum || "",
       leistungsdatum_bis: (data as any).leistungsdatum_bis || "",
+      allgemeine_angaben_aktiv: !!(data as any).allgemeine_angaben_aktiv,
       leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
       ausfuehrungsort: (data as any).ausfuehrungsort || "",
       ausfuehrungs_kw: (data as any).ausfuehrungs_kw || "",
@@ -1168,12 +1176,17 @@ export default function InvoiceDetail() {
         const v = (form as any)[f];
         if (v && String(v).trim()) (invoicePayload as any)[f] = String(v).trim();
       }
+      // Toggle (Migration 20260509200000) — boolean immer mitschicken
+      // (auch false), damit beim Toggeln-und-Speichern der State
+      // korrekt persistiert wird.
+      (invoicePayload as any).allgemeine_angaben_aktiv = !!form.allgemeine_angaben_aktiv;
 
       // Defensive Retry: wenn eine der neuen Spalten (noch) fehlt,
       // einmal ohne sie erneut speichern, damit der User trotz
       // fehlender Migration weiter arbeiten kann. Erfasst sowohl
-      // leistungsdatum_bis als auch die Allgemeine-Angaben-Felder.
-      const allTolerantCols = ["leistungsdatum_bis", ...aaFields];
+      // leistungsdatum_bis als auch die Allgemeine-Angaben-Felder
+      // und den allgemeine_angaben_aktiv-Toggle.
+      const allTolerantCols = ["leistungsdatum_bis", "allgemeine_angaben_aktiv", ...aaFields];
       const isSchemaCacheMiss = (err: any) =>
         typeof err?.message === "string" &&
         allTolerantCols.some((col) => err.message.includes(col)) &&
@@ -3143,8 +3156,9 @@ export default function InvoiceDetail() {
           </Card>
 
           {/* Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung.
-              Erscheint im PDF/Preview als zweispaltige Tabelle zwischen
-              Betreff und Positionen. Leere Felder werden nicht gerendert. */}
+              Toggle steuert, ob die Tabelle im PDF/HTML überhaupt
+              erscheint. Felder bleiben in der DB persistiert auch wenn
+              Toggle off — beim Wieder-Aktivieren sind die Werte da. */}
           {getDocConfig(form.typ).isAngebotLike && (
             <Card className={isLocked ? "opacity-80" : ""}>
               <fieldset disabled={isLocked}>
@@ -3152,94 +3166,112 @@ export default function InvoiceDetail() {
                 <CardTitle className="text-base">Allgemeine Angaben</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div>
-                  <Label>Leistungsbeschreibung</Label>
-                  <Textarea
-                    rows={2}
-                    value={form.leistungsbeschreibung}
-                    onChange={(e) => updateField("leistungsbeschreibung", e.target.value)}
-                    placeholder="z. B. Stiegenrenovierung lt. Besprechung"
-                    className="resize-none"
+                <div className="flex items-start gap-3">
+                  <Switch
+                    id="allgemeine-angaben-aktiv"
+                    checked={form.allgemeine_angaben_aktiv}
+                    onCheckedChange={(v) => updateField("allgemeine_angaben_aktiv", v)}
                   />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="allgemeine-angaben-aktiv" className="cursor-pointer">
+                      Allgemeine Angaben auf PDF anzeigen
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Wenn aktiv, erscheint zwischen Betreff und Positionen eine Tabelle
+                      mit Leistungsbeschreibung, Ausführungsort, Ausführungszeitraum und
+                      ausführender Firma.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label>Ausführungsort</Label>
-                  <Textarea
-                    rows={2}
-                    value={form.ausfuehrungsort}
-                    onChange={(e) => updateField("ausfuehrungsort", e.target.value)}
-                    placeholder="Wird automatisch vom Projekt vorbefüllt — bei Bedarf editieren"
-                    className="resize-none"
-                  />
-                </div>
-                <div>
-                  <Label>Ausführungszeitraum</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                {form.allgemeine_angaben_aktiv && (
+                  <div className="space-y-3 pt-3 border-t">
                     <div>
-                      <p className="text-[10px] text-muted-foreground mb-1">Datumsbereich (von – bis)</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          type="date"
-                          value={form.leistungsdatum}
-                          onChange={(e) => {
-                            updateField("leistungsdatum", e.target.value);
-                            // Datum-Modus aktiv → KW löschen
-                            if (e.target.value) updateField("ausfuehrungs_kw", "");
-                          }}
-                          placeholder="von"
-                          disabled={!!form.ausfuehrungs_kw}
-                        />
-                        <Input
-                          type="date"
-                          value={form.leistungsdatum_bis || ""}
-                          onChange={(e) => updateField("leistungsdatum_bis", e.target.value)}
-                          placeholder="bis (optional)"
-                          min={form.leistungsdatum || undefined}
-                          disabled={!!form.ausfuehrungs_kw}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground mb-1">oder Kalenderwoche</p>
-                      <Input
-                        value={form.ausfuehrungs_kw}
-                        onChange={(e) => {
-                          updateField("ausfuehrungs_kw", e.target.value);
-                          // KW aktiv → Datum-Felder werden ignoriert (haben aber Vorrang im Render falls KW leer)
-                        }}
-                        placeholder="z. B. KW 19/2026"
+                      <Label>Leistungsbeschreibung</Label>
+                      <Textarea
+                        rows={2}
+                        value={form.leistungsbeschreibung}
+                        onChange={(e) => updateField("leistungsbeschreibung", e.target.value)}
+                        placeholder="z. B. Stiegenrenovierung lt. Besprechung"
+                        className="resize-none"
                       />
                     </div>
+                    <div>
+                      <Label>Ausführungsort</Label>
+                      <Textarea
+                        rows={2}
+                        value={form.ausfuehrungsort}
+                        onChange={(e) => updateField("ausfuehrungsort", e.target.value)}
+                        placeholder="Wird automatisch vom Projekt vorbefüllt — bei Bedarf editieren"
+                        className="resize-none"
+                      />
+                    </div>
+                    <div>
+                      <Label>Ausführungszeitraum</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-1">Datumsbereich (von – bis)</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="date"
+                              value={form.leistungsdatum}
+                              onChange={(e) => {
+                                updateField("leistungsdatum", e.target.value);
+                                if (e.target.value) updateField("ausfuehrungs_kw", "");
+                              }}
+                              placeholder="von"
+                              disabled={!!form.ausfuehrungs_kw}
+                            />
+                            <Input
+                              type="date"
+                              value={form.leistungsdatum_bis || ""}
+                              onChange={(e) => updateField("leistungsdatum_bis", e.target.value)}
+                              placeholder="bis (optional)"
+                              min={form.leistungsdatum || undefined}
+                              disabled={!!form.ausfuehrungs_kw}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-1">oder Kalenderwoche</p>
+                          <Input
+                            value={form.ausfuehrungs_kw}
+                            onChange={(e) => updateField("ausfuehrungs_kw", e.target.value)}
+                            placeholder="z. B. KW 19/2026"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Kalenderwoche hat Vorrang im PDF, sobald sie befüllt ist.
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Ausführende Firma</Label>
+                      <Select
+                        value={form.ausfuehrende_firma || "_none"}
+                        onValueChange={(v) => updateField("ausfuehrende_firma", v === "_none" ? "" : v)}
+                      >
+                        <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— keine Angabe —</SelectItem>
+                          {EXECUTING_COMPANIES.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                          <SelectItem value="freitext">Andere Firma (Freitext)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {form.ausfuehrende_firma === "freitext" && (
+                        <Textarea
+                          rows={3}
+                          className="mt-2 resize-none"
+                          value={form.ausfuehrende_firma_freitext}
+                          onChange={(e) => updateField("ausfuehrende_firma_freitext", e.target.value)}
+                          placeholder="Firmenname und Adresse mehrzeilig"
+                        />
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Kalenderwoche hat Vorrang im PDF, sobald sie befüllt ist.
-                  </p>
-                </div>
-                <div>
-                  <Label>Ausführende Firma</Label>
-                  <Select
-                    value={form.ausfuehrende_firma || "_none"}
-                    onValueChange={(v) => updateField("ausfuehrende_firma", v === "_none" ? "" : v)}
-                  >
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">— keine Angabe —</SelectItem>
-                      {EXECUTING_COMPANIES.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                      <SelectItem value="freitext">Andere Firma (Freitext)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {form.ausfuehrende_firma === "freitext" && (
-                    <Textarea
-                      rows={3}
-                      className="mt-2 resize-none"
-                      value={form.ausfuehrende_firma_freitext}
-                      onChange={(e) => updateField("ausfuehrende_firma_freitext", e.target.value)}
-                      placeholder="Firmenname und Adresse mehrzeilig"
-                    />
-                  )}
-                </div>
+                )}
               </CardContent>
               </fieldset>
             </Card>

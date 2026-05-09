@@ -325,10 +325,12 @@ export async function generateInvoicePdf(
   y += 4;
 
   // ======= ALLGEMEINE ANGABEN (nur Angebot + Auftragsbestätigung) =======
-  // Zweispaltige Tabelle mit Akzent-Header. Nur gerendert, wenn min. 1
-  // Feld einen Wert hat. Höhe wird vorab via getTextDimensions genau
-  // bestimmt, damit der nachfolgende autoTable-Call ordentlich aufsetzt.
-  if (isAngebot) {
+  // Zweispaltige Tabelle mit Akzent-Header. Nur gerendert, wenn der
+  // User die Tabelle per Toggle aktiviert hat UND min. 1 Feld einen
+  // Wert hat (Sicherheitsnetz gegen leeren Block). Höhe wird vorab
+  // via getTextDimensions genau bestimmt, damit der nachfolgende
+  // autoTable-Call ordentlich aufsetzt.
+  if (isAngebot && (invoice as any).allgemeine_angaben_aktiv) {
     const aaRows = buildAllgemeineAngabenRows(invoice as any);
     if (aaRows.length > 0) {
       const aaLabelW = 50;                              // mm — fixe Label-Spalte
