@@ -5,6 +5,7 @@ import { type InvoiceLayoutSettings, DEFAULT_LAYOUT, hexToRgb } from "./invoiceL
 import { drawLetterhead, drawFooter, LETTERHEAD_MARGIN } from "./pdfLetterhead";
 import { DEFAULT_MAHNUNG_SETTINGS, renderMahnungText, type MahnungSettings } from "./mahnungSettings";
 import { getDocConfig } from "./documentTypes";
+import { buildAllgemeineAngabenRows } from "./allgemeineAngaben";
 
 const DEFAULT_BANK: BankData = {
   kontoinhaber: "",
@@ -322,6 +323,79 @@ export async function generateInvoicePdf(
   });
   y += titleLines.length * 5.5;
   y += 4;
+
+  // ======= ALLGEMEINE ANGABEN (nur Angebot + Auftragsbestätigung) =======
+  // Zweispaltige Tabelle mit Akzent-Header. Nur gerendert, wenn min. 1
+  // Feld einen Wert hat. Höhe wird vorab via getTextDimensions genau
+  // bestimmt, damit der nachfolgende autoTable-Call ordentlich aufsetzt.
+  if (isAngebot) {
+    const aaRows = buildAllgemeineAngabenRows(invoice as any);
+    if (aaRows.length > 0) {
+      const aaLabelW = 50;                              // mm — fixe Label-Spalte
+      const aaPaddingX = 3;                              // Innenabstand
+      const aaPaddingY = 2.5;
+      const aaValueMaxW = contentWidth - aaLabelW - aaPaddingX * 2;
+      const aaHeaderH = 7;                               // Header-Zeilenhöhe
+      pdf.setFontSize(9);
+      // Höhe pro Zeile vorausberechnen
+      const rowHeights = aaRows.map((r) => {
+        const lines = pdf.splitTextToSize(r.value, aaValueMaxW) as string[];
+        const dims = pdf.getTextDimensions(lines.join("\n"));
+        return Math.max(dims.h, lines.length * 4) + aaPaddingY * 2;
+      });
+      const aaTotalH = aaHeaderH + rowHeights.reduce((s, h) => s + h, 0);
+      // Page-Break-Check: wenn der Block plus Mindestplatz (40mm für
+      // Items-Tabelle-Anlauf) nicht mehr passt → neue Seite.
+      if (y + aaTotalH + 40 > pageHeight - footerH) {
+        pdf.addPage();
+        y = 20;
+      }
+      // Header-Zeile mit Akzent-Tint
+      pdf.setFillColor(acR, acG, acB);
+      pdf.setDrawColor(acR, acG, acB);
+      // 18% Opacity-Effekt via lighten — pragmatisch: setFillColor bekommt
+      // nur RGB, also rechnen wir manuell auf 18% gegen weiß auf.
+      const lighten = (v: number) => Math.round(255 - (255 - v) * 0.18);
+      pdf.setFillColor(lighten(acR), lighten(acG), lighten(acB));
+      pdf.rect(ml, y, contentWidth, aaHeaderH, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text("Allgemeine Angaben", ml + aaPaddingX, y + aaHeaderH - aaPaddingY);
+      y += aaHeaderH;
+      // Body-Zeilen
+      pdf.setLineWidth(0.2);
+      pdf.setDrawColor(220, 220, 220);
+      aaRows.forEach((row, idx) => {
+        const rowH = rowHeights[idx];
+        const rowTop = y;
+        const rowBottom = y + rowH;
+        // Trennlinie zwischen Header und erster Zeile sowie zwischen Zeilen
+        pdf.line(ml, rowTop, ml + contentWidth, rowTop);
+        // Label
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(row.label, ml + aaPaddingX, rowTop + aaPaddingY + 3.2);
+        // Wert (mehrzeilig)
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(0, 0, 0);
+        const lines = pdf.splitTextToSize(row.value, aaValueMaxW) as string[];
+        lines.forEach((line: string, i: number) => {
+          pdf.text(line, ml + aaLabelW + aaPaddingX, rowTop + aaPaddingY + 3.2 + i * 4);
+        });
+        y = rowBottom;
+      });
+      // Untere Außenlinie
+      pdf.line(ml, y, ml + contentWidth, y);
+      // Vertikale Trennung Label/Wert
+      pdf.line(ml + aaLabelW, y - aaTotalH + aaHeaderH, ml + aaLabelW, y);
+      // Außenrahmen-Vertikalen
+      pdf.line(ml, y - aaTotalH, ml, y);
+      pdf.line(ml + contentWidth, y - aaTotalH, ml + contentWidth, y);
+      y += 6;
+    }
+  }
 
   // ======= ITEMS TABLE =======
   // Lieferschein: ohne Preisspalten

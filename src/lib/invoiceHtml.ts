@@ -4,6 +4,7 @@
 import QRCode from "qrcode";
 import { type InvoiceLayoutSettings, DEFAULT_LAYOUT } from "./invoiceLayoutTypes";
 import { getDocConfig } from "./documentTypes";
+import { buildAllgemeineAngabenRows } from "./allgemeineAngaben";
 
 // Generate EPC QR-Code (GiroCode) for SEPA bank transfer
 export async function generateEpcQrCode(
@@ -78,6 +79,12 @@ export interface InvoiceHtmlData {
   kunde_kundentyp?: string | null;
   reverse_charge?: boolean;
   betreff?: string | null;
+  // Allgemeine Angaben (Angebot + AB) — werden via buildAllgemeineAngabenRows verarbeitet
+  leistungsbeschreibung?: string | null;
+  ausfuehrungsort?: string | null;
+  ausfuehrungs_kw?: string | null;
+  ausfuehrende_firma?: string | null;
+  ausfuehrende_firma_freitext?: string | null;
 }
 
 export interface InvoiceHtmlItem {
@@ -458,6 +465,30 @@ ${(invoice as any).custom_intro_text ? `<div style="margin-bottom:14px;font-size
 <div class="doc-title">${typLabel}${invoice.nummer ? ` Nr.: ${invoice.nummer}` : ""}</div>
 ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:pre-line;">${invoice.betreff.replace(/</g, "&lt;")}</div>` : ""}
 </div>
+
+${(() => {
+  // Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung,
+  // nur wenn min. 1 Feld einen Wert hat.
+  if (!isAngebot) return "";
+  const aaRows = buildAllgemeineAngabenRows(invoice as any);
+  if (aaRows.length === 0) return "";
+  // Akzent-Light für Header (10% gegen weiß) — analog PDF-Variante.
+  const accentLight = (() => {
+    const c = accent.replace("#", "");
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const lighten = (v: number) => Math.round(255 - (255 - v) * 0.18);
+    return `rgb(${lighten(r)},${lighten(g)},${lighten(b)})`;
+  })();
+  const rows = aaRows.map(r =>
+    `<tr><td style="width:35%;padding:6px 10px;border-top:1px solid #e5e5e5;font-weight:600;color:#444;vertical-align:top;">${escapeHtml(r.label)}</td><td style="padding:6px 10px;border-top:1px solid #e5e5e5;white-space:pre-line;color:#1a1a1a;">${escapeHtml(r.value)}</td></tr>`
+  ).join("");
+  return `<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:9.5pt;border:1px solid #e5e5e5;page-break-inside:avoid;">
+  <thead><tr><th colspan="2" style="background:${accentLight};padding:6px 10px;text-align:left;font-weight:700;border-bottom:1px solid #e5e5e5;">Allgemeine Angaben</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>`;
+})()}
 
 <table class="items">
   <thead>

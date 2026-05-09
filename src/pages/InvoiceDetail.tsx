@@ -52,6 +52,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getDocConfig } from "@/lib/documentTypes";
+import { EXECUTING_COMPANIES } from "@/lib/executingCompanies";
 
 interface InvoiceItem {
   id?: string;
@@ -97,6 +98,12 @@ interface InvoiceData {
   faellig_am: string;
   leistungsdatum: string;
   leistungsdatum_bis: string;
+  // Allgemeine Angaben (Angebot + AB) — siehe src/lib/allgemeineAngaben.ts
+  leistungsbeschreibung: string;
+  ausfuehrungsort: string;
+  ausfuehrungs_kw: string;
+  ausfuehrende_firma: string;
+  ausfuehrende_firma_freitext: string;
   zahlungsbedingungen: string;
   notizen: string;
   betreff: string;
@@ -273,6 +280,11 @@ export default function InvoiceDetail() {
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
     leistungsdatum_bis: "",
+    leistungsbeschreibung: "",
+    ausfuehrungsort: "",
+    ausfuehrungs_kw: "",
+    ausfuehrende_firma: "",
+    ausfuehrende_firma_freitext: "",
     zahlungsbedingungen: "14 Tage",
     notizen: "",
     betreff: "",
@@ -372,6 +384,14 @@ export default function InvoiceDetail() {
             project_id: data.project_id || null,
             leistungsdatum: data.leistungsdatum || "",
             leistungsdatum_bis: data.leistungsdatum_bis || "",
+            // Allgemeine Angaben — beim Convert (Angebot → AB)
+            // mitkopieren, damit der User nicht alles neu eintippen
+            // muss. Bei manueller Neu-Anlage sind die Felder eh leer.
+            leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
+            ausfuehrungsort: (data as any).ausfuehrungsort || "",
+            ausfuehrungs_kw: (data as any).ausfuehrungs_kw || "",
+            ausfuehrende_firma: (data as any).ausfuehrende_firma || "",
+            ausfuehrende_firma_freitext: (data as any).ausfuehrende_firma_freitext || "",
             zahlungsbedingungen: data.zahlungsbedingungen || "",
             notizen: data.notizen || "",
             betreff: data.betreff || "",
@@ -480,10 +500,23 @@ export default function InvoiceDetail() {
       (async () => {
         try {
           const { data: projFull } = await (supabase.from("projects" as never) as any)
-            .select("customer_id")
+            .select("customer_id, adresse, plz, ort")
             .eq("id", defaultProjectId)
             .maybeSingle();
           if (cancelled) return;
+          // Ausführungsort vorbefüllen aus der Projekt-Adresse — nur
+          // wenn der User noch nichts eingetragen hat (überschreibt nichts).
+          if (projFull) {
+            const projAdresse = [
+              (projFull as any).adresse,
+              [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
+            ].filter(Boolean).join("\n");
+            if (projAdresse) {
+              setForm(prev => prev.ausfuehrungsort
+                ? prev
+                : ({ ...prev, ausfuehrungsort: projAdresse } as any));
+            }
+          }
           if (!projFull?.customer_id) return;
           // Kundendaten laden
           const { data: cust } = await supabase
@@ -601,6 +634,11 @@ export default function InvoiceDetail() {
       faellig_am: data.faellig_am || "",
       leistungsdatum: data.leistungsdatum || "",
       leistungsdatum_bis: (data as any).leistungsdatum_bis || "",
+      leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
+      ausfuehrungsort: (data as any).ausfuehrungsort || "",
+      ausfuehrungs_kw: (data as any).ausfuehrungs_kw || "",
+      ausfuehrende_firma: (data as any).ausfuehrende_firma || "",
+      ausfuehrende_firma_freitext: (data as any).ausfuehrende_firma_freitext || "",
       // Altdaten auf die neuen Dropdown-Werte mappen. Sofort/prompt und
       // die Standard-Tage bleiben erhalten; alles andere (Freitext,
       // ungültige Werte, krumme Tage wie "20 Tage") landet auf
@@ -1116,14 +1154,35 @@ export default function InvoiceDetail() {
       if (form.leistungsdatum_bis) {
         invoicePayload.leistungsdatum_bis = form.leistungsdatum_bis;
       }
+      // Allgemeine Angaben (Migration 20260509100000) — gleiche Retry-
+      // Logik. Nur befüllte Felder mitschicken, damit ältere DB-Stände
+      // ohne die Spalten weiter funktionieren.
+      const aaFields: Array<keyof InvoiceData> = [
+        "leistungsbeschreibung",
+        "ausfuehrungsort",
+        "ausfuehrungs_kw",
+        "ausfuehrende_firma",
+        "ausfuehrende_firma_freitext",
+      ];
+      for (const f of aaFields) {
+        const v = (form as any)[f];
+        if (v && String(v).trim()) (invoicePayload as any)[f] = String(v).trim();
+      }
 
-      // Defensive Retry: wenn die Spalte (noch) fehlt, einmal ohne sie
-      // erneut speichern, damit der User trotz fehlender Migration weiter
-      // arbeiten kann.
+      // Defensive Retry: wenn eine der neuen Spalten (noch) fehlt,
+      // einmal ohne sie erneut speichern, damit der User trotz
+      // fehlender Migration weiter arbeiten kann. Erfasst sowohl
+      // leistungsdatum_bis als auch die Allgemeine-Angaben-Felder.
+      const allTolerantCols = ["leistungsdatum_bis", ...aaFields];
       const isSchemaCacheMiss = (err: any) =>
         typeof err?.message === "string" &&
-        /leistungsdatum_bis/.test(err.message) &&
+        allTolerantCols.some((col) => err.message.includes(col)) &&
         /(schema cache|column .* does not exist)/i.test(err.message);
+      const stripTolerantCols = (payload: any) => {
+        const next: any = { ...payload };
+        for (const col of allTolerantCols) delete next[col];
+        return next;
+      };
 
       if (isNew || !savedId) {
         const { data: numData, error: numError } = await supabase.rpc("next_document_number" as never, {
@@ -1143,8 +1202,7 @@ export default function InvoiceDetail() {
 
         let { data: insertData, error: insertError } = await insertOnce(invoicePayload);
         if (insertError && isSchemaCacheMiss(insertError)) {
-          const { leistungsdatum_bis: _drop, ...payloadWithoutBis } = invoicePayload;
-          ({ data: insertData, error: insertError } = await insertOnce(payloadWithoutBis));
+          ({ data: insertData, error: insertError } = await insertOnce(stripTolerantCols(invoicePayload)));
         }
 
         if (insertError) throw insertError;
@@ -1159,8 +1217,7 @@ export default function InvoiceDetail() {
 
         let { error: updateError } = await updateOnce(invoicePayload);
         if (updateError && isSchemaCacheMiss(updateError)) {
-          const { leistungsdatum_bis: _drop, ...payloadWithoutBis } = invoicePayload;
-          ({ error: updateError } = await updateOnce(payloadWithoutBis));
+          ({ error: updateError } = await updateOnce(stripTolerantCols(invoicePayload)));
         }
 
         if (updateError) throw updateError;
@@ -3084,6 +3141,109 @@ export default function InvoiceDetail() {
             </CardContent>
             </fieldset>
           </Card>
+
+          {/* Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung.
+              Erscheint im PDF/Preview als zweispaltige Tabelle zwischen
+              Betreff und Positionen. Leere Felder werden nicht gerendert. */}
+          {getDocConfig(form.typ).isAngebotLike && (
+            <Card className={isLocked ? "opacity-80" : ""}>
+              <fieldset disabled={isLocked}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Allgemeine Angaben</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label>Leistungsbeschreibung</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.leistungsbeschreibung}
+                    onChange={(e) => updateField("leistungsbeschreibung", e.target.value)}
+                    placeholder="z. B. Stiegenrenovierung lt. Besprechung"
+                    className="resize-none"
+                  />
+                </div>
+                <div>
+                  <Label>Ausführungsort</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.ausfuehrungsort}
+                    onChange={(e) => updateField("ausfuehrungsort", e.target.value)}
+                    placeholder="Wird automatisch vom Projekt vorbefüllt — bei Bedarf editieren"
+                    className="resize-none"
+                  />
+                </div>
+                <div>
+                  <Label>Ausführungszeitraum</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">Datumsbereich (von – bis)</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="date"
+                          value={form.leistungsdatum}
+                          onChange={(e) => {
+                            updateField("leistungsdatum", e.target.value);
+                            // Datum-Modus aktiv → KW löschen
+                            if (e.target.value) updateField("ausfuehrungs_kw", "");
+                          }}
+                          placeholder="von"
+                          disabled={!!form.ausfuehrungs_kw}
+                        />
+                        <Input
+                          type="date"
+                          value={form.leistungsdatum_bis || ""}
+                          onChange={(e) => updateField("leistungsdatum_bis", e.target.value)}
+                          placeholder="bis (optional)"
+                          min={form.leistungsdatum || undefined}
+                          disabled={!!form.ausfuehrungs_kw}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">oder Kalenderwoche</p>
+                      <Input
+                        value={form.ausfuehrungs_kw}
+                        onChange={(e) => {
+                          updateField("ausfuehrungs_kw", e.target.value);
+                          // KW aktiv → Datum-Felder werden ignoriert (haben aber Vorrang im Render falls KW leer)
+                        }}
+                        placeholder="z. B. KW 19/2026"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Kalenderwoche hat Vorrang im PDF, sobald sie befüllt ist.
+                  </p>
+                </div>
+                <div>
+                  <Label>Ausführende Firma</Label>
+                  <Select
+                    value={form.ausfuehrende_firma || "_none"}
+                    onValueChange={(v) => updateField("ausfuehrende_firma", v === "_none" ? "" : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— keine Angabe —</SelectItem>
+                      {EXECUTING_COMPANIES.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                      <SelectItem value="freitext">Andere Firma (Freitext)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {form.ausfuehrende_firma === "freitext" && (
+                    <Textarea
+                      rows={3}
+                      className="mt-2 resize-none"
+                      value={form.ausfuehrende_firma_freitext}
+                      onChange={(e) => updateField("ausfuehrende_firma_freitext", e.target.value)}
+                      placeholder="Firmenname und Adresse mehrzeilig"
+                    />
+                  )}
+                </div>
+              </CardContent>
+              </fieldset>
+            </Card>
+          )}
 
           {/* Positionen */}
           <Card className={isLocked ? "opacity-80" : ""}>
