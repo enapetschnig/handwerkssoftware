@@ -481,6 +481,20 @@ ${invoice.betreff ? `<div style="margin-bottom:12px;font-size:10pt;white-space:p
 </div>
 
 ${(() => {
+  // Bezugs-Block bei Gutschrift mit verknüpfter Rechnung — analog
+  // zum PDF-Renderer. _parent_nummer / _parent_datum werden in
+  // buildInvoiceForPdf aus parent_invoice_id geladen.
+  if (docCfg.typ !== "gutschrift") return "";
+  const parentNr = (invoice as any)._parent_nummer as string | undefined;
+  const parentDatum = (invoice as any)._parent_datum as string | undefined;
+  if (!parentNr) return "";
+  const txt = parentDatum
+    ? `Bezug: Rechnung ${parentNr} vom ${parentDatum}`
+    : `Bezug: Rechnung ${parentNr}`;
+  return `<div style="margin-bottom:12px;font-size:9.5pt;color:#444;">${escapeHtml(txt)}</div>`;
+})()}
+
+${(() => {
   // Allgemeine Angaben — nur bei Angebot + Auftragsbestätigung, nur
   // wenn der User den Toggle aktiviert hat UND min. 1 Feld einen Wert
   // hat (Sicherheitsnetz gegen leeren Block).

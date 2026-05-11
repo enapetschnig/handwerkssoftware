@@ -233,6 +233,14 @@ export default function InvoiceDetail() {
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
   const [customerEditOpen, setCustomerEditOpen] = useState(false);
+  // Bezugs-Picker bei Standalone-Gutschrift: Liste der bestehenden
+  // Rechnungen für die Vorlagen-Auswahl. Lazy-loaded nur bei
+  // isNew + typ=gutschrift, um den Initial-Fetch nicht zu verteuern.
+  const [projectRechnungen, setProjectRechnungen] = useState<Array<{ id: string; nummer: string; kunde_name: string; datum: string }>>([]);
+  // Bezugs-Info zur parent invoice — für PDF/Preview-Render der
+  // Zeile "Bezug: Rechnung RE_2026_005 vom 27.04.2026". Wird bei
+  // parent_invoice_id-Wechsel async nachgeladen.
+  const [parentRefInfo, setParentRefInfo] = useState<{ nummer: string; datum: string } | null>(null);
   // Gutschrift-Verrechnungs-Dialog (Phase 1+4)
   const [verrechnungDialogOpen, setVerrechnungDialogOpen] = useState(false);
   const [verrechnungDate, setVerrechnungDate] = useState<string>("");
@@ -333,6 +341,58 @@ export default function InvoiceDetail() {
   // Angebot→Rechnung Vergleichs-Dialog
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertItems, setConvertItems] = useState<{ beschreibung: string; kurztext: string; langtext: string; einheit: string; einzelpreis: number; angebotMenge: number; verbrauchtMenge: number; rechnungMenge: number; selected: boolean; isExtra: boolean }[]>([]);
+
+  // Parent-Rechnung-Lookup für Bezugs-Block im PDF/Preview. Wird bei
+  // jeder parent_invoice_id-Änderung getriggert. Speichert nummer+datum
+  // (formatiert) im State, damit das InvoicePdfPreview-formData
+  // synchron mit der Vorschau ist (sonst sähe die Vorschau den Bezug
+  // nicht, weil sie nur den form-State spreaded).
+  useEffect(() => {
+    const pid = form.parent_invoice_id;
+    if (!pid) {
+      setParentRefInfo(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("invoices").select("nummer, datum").eq("id", pid).maybeSingle();
+      if (cancelled) return;
+      if (data) {
+        const datum = (data as any).datum
+          ? new Date((data as any).datum + "T12:00:00").toLocaleDateString("de-AT")
+          : "";
+        setParentRefInfo({ nummer: (data as any).nummer || "", datum });
+      } else {
+        setParentRefInfo(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.parent_invoice_id]);
+
+  // Lazy-Load der Rechnungen für den Bezugs-Picker — nur bei neuer
+  // Standalone-Gutschrift. Bei Convert (form.parent_invoice_id gesetzt)
+  // brauchen wir die Liste nicht.
+  useEffect(() => {
+    if (!isNew || form.typ !== "gutschrift" || form.parent_invoice_id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("invoices")
+        .select("id, nummer, kunde_name, datum")
+        .in("typ", ["rechnung", "anzahlungsrechnung", "schlussrechnung"])
+        .neq("status", "storniert")
+        .order("datum", { ascending: false })
+        .limit(100);
+      if (cancelled) return;
+      setProjectRechnungen(((data as any[]) || []).map(d => ({
+        id: d.id,
+        nummer: d.nummer || "",
+        kunde_name: d.kunde_name || "",
+        datum: d.datum || "",
+      })));
+    })();
+    return () => { cancelled = true; };
+  }, [isNew, form.typ, form.parent_invoice_id]);
 
   useEffect(() => {
     fetchProjects();
@@ -1571,6 +1631,12 @@ export default function InvoiceDetail() {
           extraVars.angebot_datum = parentDatum;
           extraVars.rechnung_nr = parentNr;
           extraVars.rechnung_datum = parentDatum;
+          // Werte zusätzlich am enriched-Objekt anhängen, damit der
+          // PDF-/HTML-Renderer einen sichtbaren Bezugs-Block für
+          // Gutschriften rendern kann (ohne dass der User den
+          // Platzhalter manuell in den Closing-Text packen muss).
+          enriched._parent_nummer = parentNr;
+          enriched._parent_datum = parentDatum;
         }
       } catch { /* tolerant — Default aus invoice.datum greift dann */ }
     }
@@ -1848,7 +1914,10 @@ export default function InvoiceDetail() {
   // außerdem den bezahlt_betrag der Ziel-Rechnung entsprechend erhöhen.
   const openVerrechnungDialog = async () => {
     setVerrechnungDate(new Date().toISOString().slice(0, 10));
-    setVerrechnungZielInvoice("_none");
+    // Vorauswahl: wenn die Gutschrift schon mit einer Rechnung verknüpft
+    // ist (über Convert oder Picker), diese als Default im Dropdown.
+    // Sonst "_none" (= Auszahlung).
+    setVerrechnungZielInvoice(form.parent_invoice_id || "_none");
     setVerrechnungZielOptions([]);
     if (form.customer_id) {
       const { data } = await supabase
@@ -1858,15 +1927,33 @@ export default function InvoiceDetail() {
         .in("typ", ["rechnung", "anzahlungsrechnung", "schlussrechnung"])
         .in("status", ["offen", "teilbezahlt"])
         .order("datum", { ascending: false });
-      if (data) {
-        setVerrechnungZielOptions((data as any[]).map(d => ({
-          id: d.id,
-          nummer: d.nummer || "",
-          brutto_summe: Number(d.brutto_summe) || 0,
-          bezahlt_betrag: Number(d.bezahlt_betrag) || 0,
-          status: d.status,
-        })));
+      let options = ((data as any[]) || []).map(d => ({
+        id: d.id,
+        nummer: d.nummer || "",
+        brutto_summe: Number(d.brutto_summe) || 0,
+        bezahlt_betrag: Number(d.bezahlt_betrag) || 0,
+        status: d.status,
+      }));
+      // Wenn parent_invoice_id existiert aber nicht in der offenen Liste
+      // ist (z. B. weil schon bezahlt), trotzdem hinzufügen, damit die
+      // Vorauswahl sichtbar bleibt.
+      if (form.parent_invoice_id && !options.some(o => o.id === form.parent_invoice_id)) {
+        const { data: parent } = await supabase
+          .from("invoices")
+          .select("id, nummer, brutto_summe, bezahlt_betrag, status")
+          .eq("id", form.parent_invoice_id)
+          .maybeSingle();
+        if (parent) {
+          options = [{
+            id: (parent as any).id,
+            nummer: (parent as any).nummer || "",
+            brutto_summe: Number((parent as any).brutto_summe) || 0,
+            bezahlt_betrag: Number((parent as any).bezahlt_betrag) || 0,
+            status: (parent as any).status || "",
+          }, ...options];
+        }
       }
+      setVerrechnungZielOptions(options);
     }
     setVerrechnungDialogOpen(true);
   };
@@ -2269,6 +2356,10 @@ export default function InvoiceDetail() {
                         rechnung: t === "angebot" || t === "auftragsbestaetigung",
                         anzahlungsrechnung: t === "angebot" || t === "auftragsbestaetigung",
                         schlussrechnung: t === "angebot" || t === "auftragsbestaetigung" || t === "anzahlungsrechnung",
+                        // Gutschrift kann zu jeder rechnungs-artigen Doku angelegt
+                        // werden — Kunde + Items + parent_invoice_id werden via
+                        // bestehendem from_doc-Pfad automatisch übernommen.
+                        gutschrift: t === "rechnung" || t === "anzahlungsrechnung" || t === "schlussrechnung",
                       };
                       if (!Object.values(allow).some(Boolean)) return null;
                       return (
@@ -2386,6 +2477,12 @@ export default function InvoiceDetail() {
                                 handleConvertTo("schlussrechnung", { abzug_ids: ids, from_doc_id: rootId });
                               }}>
                                 Schlussrechnung
+                              </DropdownMenuItem>
+                            )}
+                            {allow.gutschrift && (
+                              <DropdownMenuItem onClick={() => handleConvertTo("gutschrift")}>
+                                <Undo2 className="w-4 h-4 mr-2" />
+                                Gutschrift zu dieser Rechnung
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -2759,6 +2856,53 @@ export default function InvoiceDetail() {
               </div>
             ) : null;
           })()}
+
+          {/* Gutschrift: optionaler Bezug auf bestehende Rechnung — nur bei
+              neuer Standalone-Gutschrift sichtbar. Bei Convert-Pfad
+              (from_doc) ist parent_invoice_id schon gesetzt und der
+              Bezugs-Block versteckt sich. */}
+          {isNew && form.typ === "gutschrift" && !form.parent_invoice_id && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Bezug auf Rechnung (optional)</CardTitle>
+                <CardDescription>
+                  Wählen Sie eine bestehende Rechnung, deren Daten als Vorlage
+                  übernommen werden. Kundendaten und Positionen werden vorbefüllt;
+                  Sie können danach Positionen löschen oder Mengen anpassen.
+                  Wenn Sie nichts wählen, legen Sie eine eigenständige Gutschrift an.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  onValueChange={(id) => {
+                    if (id && id !== "_none") {
+                      // Bestehender from_doc-Pfad übernimmt automatisch
+                      // Kunde + Positionen + parent_invoice_id. Navigation
+                      // ersetzt die aktuelle Route (replace=true) damit
+                      // "Zurück" sauber funktioniert.
+                      navigate(`/invoices/new?typ=gutschrift&from_doc=${id}`, { replace: true });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Rechnung wählen oder leer lassen für Standalone-Gutschrift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectRechnungen.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.nummer} · {r.kunde_name} · {new Date(r.datum + "T12:00:00").toLocaleDateString("de-AT")}
+                      </SelectItem>
+                    ))}
+                    {projectRechnungen.length === 0 && (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Lädt verfügbare Rechnungen…
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Kundendaten — locked nach Speichern nur bei Rechnungen, bei Angeboten editierbar */}
           <Card className={isKundeLocked ? "opacity-80" : ""}>
@@ -3977,6 +4121,11 @@ export default function InvoiceDetail() {
             ausfuehrungs_kw: (form as any).ausfuehrungs_kw || "",
             ausfuehrende_firma: (form as any).ausfuehrende_firma || "",
             ausfuehrende_firma_freitext: (form as any).ausfuehrende_firma_freitext || "",
+            // Bezugs-Block bei verknüpften Gutschriften — wird sonst
+            // in der Vorschau nicht gerendert (Renderer prüft auf
+            // _parent_nummer/_parent_datum).
+            _parent_nummer: parentRefInfo?.nummer || "",
+            _parent_datum: parentRefInfo?.datum || "",
           } as any}
           items={items.map((item, idx) => ({
             position: idx + 1,

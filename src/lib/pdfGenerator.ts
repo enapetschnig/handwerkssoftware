@@ -334,6 +334,26 @@ export async function generateInvoicePdf(
   y += titleLines.length * 5.5;
   y += 4;
 
+  // ======= BEZUGS-BLOCK (nur Gutschrift mit Verknüpfung) =======
+  // Wenn eine Gutschrift via Convert oder Picker an eine Rechnung
+  // gebunden ist, rendert der Renderer hier sichtbar den Bezug.
+  // _parent_nummer / _parent_datum werden in buildInvoiceForPdf aus
+  // der parent_invoice_id geladen und am invoice-Objekt angehängt.
+  if (docCfg.typ === "gutschrift") {
+    const parentNr = (invoice as any)._parent_nummer as string | undefined;
+    const parentDatum = (invoice as any)._parent_datum as string | undefined;
+    if (parentNr) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(60, 60, 60);
+      const txt = parentDatum
+        ? `Bezug: Rechnung ${parentNr} vom ${parentDatum}`
+        : `Bezug: Rechnung ${parentNr}`;
+      pdf.text(txt, ml, y);
+      y += 6;
+    }
+  }
+
   // ======= ALLGEMEINE ANGABEN (nur Angebot + Auftragsbestätigung) =======
   // Zweispaltige Tabelle mit Akzent-Header. Nur gerendert, wenn der
   // User die Tabelle per Toggle aktiviert hat UND min. 1 Feld einen
