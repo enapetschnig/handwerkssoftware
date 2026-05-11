@@ -525,12 +525,19 @@ export default function Invoices() {
 
   const totalRechnungen = invoices.filter(i => INVOICE_LIKE_TYPES.has(i.typ) && i.status !== "storniert").length;
   const totalAngebote = invoices.filter(i => ANGEBOT_LIKE_TYPES.has(i.typ) && i.status !== "storniert").length;
+  // Offen: nur echte Forderungen (keine Gutschriften — die sind aus
+  // unserer Sicht "wir schulden dem Kunden", also negative Forderung).
   const offeneSumme = invoices
-    .filter(i => INVOICE_LIKE_TYPES.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt"))
+    .filter(i => PAYABLE_INVOICE_TYPES.has(i.typ) && (i.status === "offen" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + Number(i.brutto_summe) - i.bezahlt_betrag, 0);
-  const bezahlteSumme = invoices
-    .filter(i => INVOICE_LIKE_TYPES.has(i.typ) && (i.status === "bezahlt" || i.status === "teilbezahlt"))
+  // Bezahlt = vereinnahmt minus an Kunden zurückerstattete Gutschriften.
+  const bezahltEingenommen = invoices
+    .filter(i => PAYABLE_INVOICE_TYPES.has(i.typ) && (i.status === "bezahlt" || i.status === "teilbezahlt"))
     .reduce((sum, i) => sum + i.bezahlt_betrag, 0);
+  const verrechnete_gutschriften = invoices
+    .filter(i => i.typ === "gutschrift" && i.status === "verrechnet")
+    .reduce((sum, i) => sum + Number(i.brutto_summe), 0);
+  const bezahlteSumme = bezahltEingenommen - verrechnete_gutschriften;
 
   // Status options for the filter depend on selected typ
   const statusFilterOptions = filterTyp === "rechnung"

@@ -373,13 +373,18 @@ export default function Customers() {
   // Customer detail view
   if (selectedCustomer) {
     // Alle zahlbaren Rechnungstypen (auch Anzahlungs-/Schlussrechnung) zählen zum Umsatz.
-    // Gutschrift geht in die andere Richtung und wird (aktuell) nicht abgezogen.
+    // Gutschriften (typ=gutschrift, status=verrechnet) werden abgezogen,
+    // damit der Umsatz buchhalterisch sauber den Netto-Effekt zeigt.
     const _payableInvoiceTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung"]);
     const _invoiceLikeTypes = new Set(["rechnung", "anzahlungsrechnung", "schlussrechnung", "gutschrift"]);
     const _angebotLikeTypes = new Set(["angebot", "auftragsbestaetigung"]);
-    const umsatz = customerInvoices
+    const umsatzPositiv = customerInvoices
       .filter(i => _payableInvoiceTypes.has(i.typ) && i.status === "bezahlt")
       .reduce((sum, i) => sum + Number(i.brutto_summe), 0);
+    const umsatzGutschriften = customerInvoices
+      .filter(i => i.typ === "gutschrift" && i.status === "verrechnet")
+      .reduce((sum, i) => sum + Number(i.brutto_summe), 0);
+    const umsatz = umsatzPositiv - umsatzGutschriften;
 
     return (
       <div className="min-h-screen bg-background">

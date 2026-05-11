@@ -747,6 +747,15 @@ export async function generateInvoicePdf(
     renderMultilineText(customClosing);
   } else if (isAngebot) {
     renderMultilineText(angebotsClosing);
+  } else if (docCfg.typ === "gutschrift") {
+    // Gutschrift = Auszahlung an den Kunden; nicht der Rechnungs-Closing-
+    // Text. Der document_texts.gutschrift.closing-Default wird über
+    // customClosing gerendert (greift bei vorhandenem Eintrag); dieser
+    // Fallback hier sichert ab, falls der Admin den Text geleert hat.
+    renderMultilineText(
+      "Hiermit schreiben wir Ihnen den oben angeführten Betrag gut. Die Auszahlung erfolgt innerhalb von 14 Tagen auf Ihr bekanntes Bankkonto bzw. wird mit einer offenen Rechnung verrechnet.",
+      4,
+    );
   } else if (docCfg.isInvoiceLike) {
     let closingText: string;
     const isIndividuell = zahlungsbedingungen.toLowerCase() === "individuell";

@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil, Undo2 } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
@@ -99,6 +99,9 @@ interface InvoiceData {
   faellig_am: string;
   leistungsdatum: string;
   leistungsdatum_bis: string;
+  // Gutschrift-Verrechnung (Migration 20260511000000)
+  verrechnet_mit_invoice_id: string | null;
+  verrechnet_am: string;
   // Allgemeine Angaben (Angebot + AB) — siehe src/lib/allgemeineAngaben.ts.
   // Der Toggle steuert, ob die Tabelle im PDF/HTML überhaupt erscheint.
   // Felder werden auch bei aktiv=false weiter gespeichert, damit beim
@@ -229,6 +232,12 @@ export default function InvoiceDetail() {
   const [importDisturbanceOpen, setImportDisturbanceOpen] = useState(false);
   const [importRegieOpen, setImportRegieOpen] = useState(false);
   const [customerEditOpen, setCustomerEditOpen] = useState(false);
+  // Gutschrift-Verrechnungs-Dialog (Phase 1+4)
+  const [verrechnungDialogOpen, setVerrechnungDialogOpen] = useState(false);
+  const [verrechnungDate, setVerrechnungDate] = useState<string>("");
+  const [verrechnungZielInvoice, setVerrechnungZielInvoice] = useState<string>("_none");
+  const [verrechnungZielOptions, setVerrechnungZielOptions] = useState<Array<{ id: string; nummer: string; brutto_summe: number; bezahlt_betrag: number; status: string }>>([]);
+  const [verrechnungSaving, setVerrechnungSaving] = useState(false);
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
@@ -285,6 +294,8 @@ export default function InvoiceDetail() {
     faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
     leistungsdatum_bis: "",
+    verrechnet_mit_invoice_id: null,
+    verrechnet_am: "",
     allgemeine_angaben_aktiv: false,
     leistungsbeschreibung: "",
     ausfuehrungsort: "",
@@ -641,6 +652,8 @@ export default function InvoiceDetail() {
       faellig_am: data.faellig_am || "",
       leistungsdatum: data.leistungsdatum || "",
       leistungsdatum_bis: (data as any).leistungsdatum_bis || "",
+      verrechnet_mit_invoice_id: (data as any).verrechnet_mit_invoice_id || null,
+      verrechnet_am: (data as any).verrechnet_am || "",
       allgemeine_angaben_aktiv: !!(data as any).allgemeine_angaben_aktiv,
       leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
       ausfuehrungsort: (data as any).ausfuehrungsort || "",
@@ -1181,12 +1194,26 @@ export default function InvoiceDetail() {
       // korrekt persistiert wird.
       (invoicePayload as any).allgemeine_angaben_aktiv = !!form.allgemeine_angaben_aktiv;
 
+      // Gutschrift-Verrechnung (Migration 20260511000000) — nur
+      // mitschicken, wenn überhaupt gesetzt.
+      if (form.verrechnet_mit_invoice_id) {
+        (invoicePayload as any).verrechnet_mit_invoice_id = form.verrechnet_mit_invoice_id;
+      }
+      if (form.verrechnet_am) {
+        (invoicePayload as any).verrechnet_am = form.verrechnet_am;
+      }
+
       // Defensive Retry: wenn eine der neuen Spalten (noch) fehlt,
       // einmal ohne sie erneut speichern, damit der User trotz
       // fehlender Migration weiter arbeiten kann. Erfasst sowohl
-      // leistungsdatum_bis als auch die Allgemeine-Angaben-Felder
-      // und den allgemeine_angaben_aktiv-Toggle.
-      const allTolerantCols = ["leistungsdatum_bis", "allgemeine_angaben_aktiv", ...aaFields];
+      // leistungsdatum_bis als auch die Allgemeine-Angaben-Felder,
+      // den allgemeine_angaben_aktiv-Toggle und die Gutschrift-
+      // Verrechnungs-Felder.
+      const allTolerantCols = [
+        "leistungsdatum_bis", "allgemeine_angaben_aktiv",
+        "verrechnet_mit_invoice_id", "verrechnet_am",
+        ...aaFields,
+      ];
       const isSchemaCacheMiss = (err: any) =>
         typeof err?.message === "string" &&
         allTolerantCols.some((col) => err.message.includes(col)) &&
@@ -1813,6 +1840,87 @@ export default function InvoiceDetail() {
     }
   };
 
+  // Gutschrift-Verrechnung: öffnet den Dialog, lädt vorab alle offenen
+  // Rechnungen desselben Kunden, damit der User wählen kann, gegen
+  // welche Rechnung verrechnet wird (optional). Bei Save Status auf
+  // "verrechnet" + verrechnet_am + (optional) verrechnet_mit_invoice_id;
+  // außerdem den bezahlt_betrag der Ziel-Rechnung entsprechend erhöhen.
+  const openVerrechnungDialog = async () => {
+    setVerrechnungDate(new Date().toISOString().slice(0, 10));
+    setVerrechnungZielInvoice("_none");
+    setVerrechnungZielOptions([]);
+    if (form.customer_id) {
+      const { data } = await supabase
+        .from("invoices")
+        .select("id, nummer, brutto_summe, bezahlt_betrag, status")
+        .eq("customer_id", form.customer_id)
+        .in("typ", ["rechnung", "anzahlungsrechnung", "schlussrechnung"])
+        .in("status", ["offen", "teilbezahlt"])
+        .order("datum", { ascending: false });
+      if (data) {
+        setVerrechnungZielOptions((data as any[]).map(d => ({
+          id: d.id,
+          nummer: d.nummer || "",
+          brutto_summe: Number(d.brutto_summe) || 0,
+          bezahlt_betrag: Number(d.bezahlt_betrag) || 0,
+          status: d.status,
+        })));
+      }
+    }
+    setVerrechnungDialogOpen(true);
+  };
+
+  const handleVerrechnungSave = async () => {
+    if (!invoiceId) return;
+    setVerrechnungSaving(true);
+    try {
+      const zielId = verrechnungZielInvoice !== "_none" ? verrechnungZielInvoice : null;
+      // Gutschrift selbst aktualisieren
+      const { error: gErr } = await supabase
+        .from("invoices")
+        .update({
+          status: "verrechnet",
+          verrechnet_am: verrechnungDate || new Date().toISOString().slice(0, 10),
+          verrechnet_mit_invoice_id: zielId,
+        } as any)
+        .eq("id", invoiceId);
+      if (gErr) throw gErr;
+
+      // Wenn eine Ziel-Rechnung gewählt wurde: bezahlt_betrag um Gutschrift-
+      // Brutto erhöhen (capped auf brutto_summe der Rechnung).
+      if (zielId) {
+        const ziel = verrechnungZielOptions.find(o => o.id === zielId);
+        if (ziel) {
+          const gutschriftBrutto = Math.abs(Number(bruttoSumme) || Number(form.brutto_summe) || 0);
+          const restRechnung = Math.max(0, ziel.brutto_summe - ziel.bezahlt_betrag);
+          const angerechnet = Math.min(gutschriftBrutto, restRechnung);
+          const neuerBezahlt = Math.round((ziel.bezahlt_betrag + angerechnet) * 100) / 100;
+          const neuerStatus = neuerBezahlt >= Math.round(ziel.brutto_summe * 100) / 100
+            ? "bezahlt"
+            : neuerBezahlt > 0 ? "teilbezahlt" : "offen";
+          await supabase
+            .from("invoices")
+            .update({ bezahlt_betrag: neuerBezahlt, status: neuerStatus })
+            .eq("id", zielId);
+        }
+      }
+
+      // Lokalen State aktualisieren, damit UI sofort den neuen Stand zeigt
+      setForm(prev => ({
+        ...prev,
+        status: "verrechnet",
+        verrechnet_am: verrechnungDate || new Date().toISOString().slice(0, 10),
+        verrechnet_mit_invoice_id: zielId,
+      } as any));
+      setVerrechnungDialogOpen(false);
+      toast({ title: "Gutschrift verrechnet", description: zielId ? "Mit Rechnung verknüpft." : "Auszahlung verbucht." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Fehler", description: err.message });
+    } finally {
+      setVerrechnungSaving(false);
+    }
+  };
+
   // Storno-Helper: generisch für Rechnung, Anzahlungsrechnung, Schlussrechnung,
   // Gutschrift UND Auftragsbestätigung. Grund + PDF-Label sind parametrierbar;
   // Defaults erhalten die bisherige Rechnungs-Semantik.
@@ -2287,6 +2395,13 @@ export default function InvoiceDetail() {
                       <Copy className="w-4 h-4" />
                       Duplizieren
                     </Button>
+                    {/* Gutschrift: nur wenn noch nicht verrechnet/storniert */}
+                    {!isNew && form.typ === "gutschrift" && form.status !== "verrechnet" && form.status !== "storniert" && (
+                      <Button onClick={openVerrechnungDialog} variant="default" size="sm" className="gap-1.5">
+                        <Undo2 className="w-4 h-4" />
+                        Als verrechnet markieren
+                      </Button>
+                    )}
                     {canCancel && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -3874,6 +3989,67 @@ export default function InvoiceDetail() {
             mwst_exempt: !!(item as any).mwst_exempt,
           }))}
         />
+
+        {/* Gutschrift-Verrechnungs-Dialog: setzt Status auf "verrechnet"
+            und verknüpft optional mit einer offenen Rechnung. */}
+        <Dialog open={verrechnungDialogOpen} onOpenChange={setVerrechnungDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Gutschrift als verrechnet markieren</DialogTitle>
+              <DialogDescription>
+                Bestätigt, dass die Gutschrift {form.nummer} ausgezahlt oder mit einer Rechnung verrechnet wurde.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="verrechnung-datum">Verrechnungs-Datum</Label>
+                <Input
+                  id="verrechnung-datum"
+                  type="date"
+                  value={verrechnungDate}
+                  onChange={(e) => setVerrechnungDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="verrechnung-ziel">Mit Rechnung verrechnen (optional)</Label>
+                <Select value={verrechnungZielInvoice} onValueChange={setVerrechnungZielInvoice}>
+                  <SelectTrigger id="verrechnung-ziel">
+                    <SelectValue placeholder="Auszahlung ohne Verknüpfung" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Auszahlung (keine Rechnungs-Verknüpfung) —</SelectItem>
+                    {verrechnungZielOptions.map((o) => {
+                      const rest = Math.max(0, o.brutto_summe - o.bezahlt_betrag);
+                      return (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.nummer} — offen: €&nbsp;{rest.toFixed(2)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {verrechnungZielInvoice !== "_none" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Der Gutschrift-Betrag wird automatisch dem bezahlten Betrag der Rechnung gutgeschrieben (gedeckelt auf den Restbetrag).
+                  </p>
+                )}
+                {form.customer_id && verrechnungZielOptions.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Keine offenen Rechnungen für diesen Kunden — wähle „Auszahlung" oder lasse das Feld leer.
+                  </p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setVerrechnungDialogOpen(false)} disabled={verrechnungSaving}>
+                Abbrechen
+              </Button>
+              <Button onClick={handleVerrechnungSave} disabled={verrechnungSaving || !verrechnungDate}>
+                {verrechnungSaving ? "Speichert..." : "Verrechnen"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Import Materials Dialog */}
         <ImportMaterialsDialog

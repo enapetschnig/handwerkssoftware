@@ -311,11 +311,16 @@ export function buildInvoiceHtml(
     if (isIndividuell && faelligFmt) return `Zahlbar bis ${faelligFmt} ohne Abzug.`;
     return `Wir bedanken uns für Ihren Auftrag und bitten um Überweisung des Rechnungsbetrages innerhalb von ${zahlungsTage} Tagen.`;
   };
+  const renderGutschriftClosing = () =>
+    "Hiermit schreiben wir Ihnen den oben angeführten Betrag gut. Die Auszahlung erfolgt innerhalb von 14 Tagen auf Ihr bekanntes Bankkonto bzw. wird mit einer offenen Rechnung verrechnet.";
+  const isGutschrift = docCfg.typ === "gutschrift";
   const closingText = customClosing
     ? `<div class="closing-text">${escapeHtml(customClosing)}</div>`
     : isAngebot
       ? `<div class="closing-text">${escapeHtml(renderAngebotClosing())}</div>`
-      : `<div class="closing-text">${escapeHtml(renderRechnungClosing())}</div>`;
+      : isGutschrift
+        ? `<div class="closing-text">${escapeHtml(renderGutschriftClosing())}</div>`
+        : `<div class="closing-text">${escapeHtml(renderRechnungClosing())}</div>`;
 
   // Anzahlungs-Hinweis aus document_texts — nur bei Anzahlungsrechnung gerendert.
   const anzahlungHinweis = (invoice as any).custom_anzahlung_hinweis as string | undefined;
