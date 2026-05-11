@@ -483,6 +483,12 @@ export default function InvoiceDetail() {
             kunde_titel: data.kunde_titel || "",
             reverse_charge: !!data.reverse_charge,
             kundennummer: data.kundennummer || "",
+            // BKS-Sachbearbeiter (Ansprechpartner) auch beim Convert
+            // übernehmen — sonst muss der User ihn neu wählen.
+            ansprechpartner_employee_id: (data as any).ansprechpartner_employee_id || null,
+            ansprechpartner_name: (data as any).ansprechpartner_name || "",
+            ansprechpartner_telefon: (data as any).ansprechpartner_telefon || "",
+            ansprechpartner_email: (data as any).ansprechpartner_email || "",
             anzahlung_prozent: anzahlungProzentParam ? Number(anzahlungProzentParam) : null,
             anzahlung_betrag: anzahlungBetragParam ? Number(anzahlungBetragParam) : null,
             parent_invoice_id: fromDocId,
@@ -2019,6 +2025,47 @@ export default function InvoiceDetail() {
     try {
       const stornoNummer = `S-${form.nummer || invoiceId.substring(0, 8)}`;
       const stornoDatum = new Date().toISOString().split("T")[0];
+
+      // Wenn die zu stornierende Doku eine VERRECHNETE GUTSCHRIFT ist,
+      // muss der bei der Verrechnung gebuchte Betrag auf der Ziel-
+      // Rechnung wieder zurückgerollt werden — sonst zeigt die Rechnung
+      // weiterhin den verrechneten Betrag als "bezahlt" obwohl die
+      // Gutschrift weg ist (Branchenstandard: sevDesk/Lexoffice machen
+      // den Rollback automatisch).
+      if (form.typ === "gutschrift" && form.status === "verrechnet" && form.verrechnet_mit_invoice_id) {
+        try {
+          const { data: targetInv } = await supabase
+            .from("invoices")
+            .select("brutto_summe, bezahlt_betrag, status")
+            .eq("id", form.verrechnet_mit_invoice_id)
+            .maybeSingle();
+          if (targetInv) {
+            const gutschriftBrutto = Math.abs(Number(bruttoSumme) || 0);
+            const altBezahlt = Number((targetInv as any).bezahlt_betrag) || 0;
+            const neuBezahlt = Math.max(0, Math.round((altBezahlt - gutschriftBrutto) * 100) / 100);
+            const targetBrutto = Number((targetInv as any).brutto_summe) || 0;
+            const altStatus = (targetInv as any).status;
+            // Status nur neu berechnen wenn nicht storniert
+            const neuStatus = altStatus === "storniert"
+              ? "storniert"
+              : neuBezahlt <= 0
+                ? "offen"
+                : neuBezahlt >= Math.round(targetBrutto * 100) / 100
+                  ? "bezahlt"
+                  : "teilbezahlt";
+            await supabase
+              .from("invoices")
+              .update({ bezahlt_betrag: neuBezahlt, status: neuStatus })
+              .eq("id", form.verrechnet_mit_invoice_id);
+          }
+        } catch (rollbackErr: any) {
+          // Rollback-Fehler nicht fatal — der Storno der Gutschrift soll
+          // trotzdem laufen. User wird informiert.
+          console.error("Rollback der Gutschrift-Verrechnung fehlgeschlagen:", rollbackErr);
+          toast({ variant: "destructive", title: "Rollback-Warnung", description: "Verrechnung auf der Quell-Rechnung konnte nicht zurückgesetzt werden — bitte manuell prüfen." });
+        }
+      }
+
       // bezahlt_betrag beim Storno auf 0 — sonst bleibt der Teilzahlungs-
       // Wert stehen und verzerrt Umsatz-/Offen-Statistiken.
       const { error } = await supabase.from("invoices").update({
