@@ -2826,8 +2826,10 @@ export default function InvoiceDetail() {
             </Card>
           )}
 
-          {/* Projekt-Auswahl (nur bei neuen Rechnungen, vor den Kundendaten) */}
-          {!isLocked && form.typ === "rechnung" && (
+          {/* Projekt-Auswahl: bei Rechnung + Angebot/AB, vor den Kundendaten.
+              Bei Angebot/AB nötig, damit der "Aus Projekt übernehmen"-Button
+              in den Allgemeinen Angaben den Ausführungsort ziehen kann. */}
+          {!isLocked && (form.typ === "rechnung" || getDocConfig(form.typ).isAngebotLike) && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Projekt (optional)</CardTitle>
