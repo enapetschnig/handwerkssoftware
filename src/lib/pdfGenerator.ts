@@ -437,7 +437,7 @@ export async function generateInvoicePdf(
   // Lieferschein: ohne Preisspalten
   const tableHead = hidePrices
     ? [["Pos.", "Menge", "Einheit", "Beschreibung"]]
-    : [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Gesamt (netto)"]];
+    : [["Pos.", "Menge", "Einheit", "Beschreibung", "Preis (netto)", "Rabatt", "Gesamt (netto)"]];
 
   // Angebots-/Rechnungs-Positionen nach gängigem Layout (z.B. sevDesk,
   // Lexoffice): enge Row-Höhe, Trennlinie direkt unter dem letzten
@@ -481,7 +481,9 @@ export async function generateInvoicePdf(
       kurztext,
     ];
     if (!hidePrices) {
+      const itemRabattProz = Number((item as any).rabatt_prozent) || 0;
       row.push(fmtCurrency(Number(item.einzelpreis)));
+      row.push(itemRabattProz > 0 ? `${itemRabattProz}%` : "—");
       row.push(fmtCurrency(Number(item.gesamtpreis)));
     }
     tableBody.push(row);
@@ -494,33 +496,55 @@ export async function generateInvoicePdf(
   const rabattProzent = Number(invoice.rabatt_prozent) || 0;
   const rabattBetrag = Number(invoice.rabatt_betrag) || 0;
   const exemptBrutto = items.filter(it => (it as any).mwst_exempt).reduce((s, it) => s + Number(it.gesamtpreis), 0);
+  // positionenNetto = Summe der gesamtpreise NACH Item-Rabatt (mwst_exempt
+  // ausgenommen). Item-Rabatt-Total = Differenz zwischen "Menge × Einzelpreis"
+  // (Listenpreis) und gesamtpreis pro Position — wird im Footer als
+  // Aufschlüsselung "Zwischensumme → Rabatt Positionen → Netto" gezeigt.
   const positionenNetto = items.filter(it => !(it as any).mwst_exempt).reduce((s, it) => s + Number(it.gesamtpreis), 0);
+  const itemRabattTotal = items.filter(it => !(it as any).mwst_exempt).reduce((s, it) => {
+    const rabProz = Number((it as any).rabatt_prozent) || 0;
+    if (rabProz <= 0) return s;
+    const original = Number(it.menge) * Number(it.einzelpreis);
+    return s + (original - Number(it.gesamtpreis));
+  }, 0);
+  const positionenBrutto = positionenNetto + itemRabattTotal; // = sum(menge * einzelpreis)
   const rabattWert = rabattProzent > 0 ? positionenNetto * (rabattProzent / 100) : rabattBetrag;
   const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
 
+  // Footer-Zeile: der manuelle Renderer weiter unten liest row[3] (Label)
+  // und row[5] (Wert) — unabhängig von der Spaltenzahl der Items-Tabelle.
+  const footRow = (label: string, value: string): string[] =>
+    ["", "", "", label, "", value];
+
   const tableFoot: string[][] = [];
   const isReverseCharge = (invoice as any).reverse_charge === true;
   if (!hidePrices) {
+    // Block 1: Item-Rabatt-Aufschlüsselung (nur falls Item-Rabatte vorhanden)
+    if (itemRabattTotal > 0) {
+      tableFoot.push(footRow("Zwischensumme", fmtCurrency(positionenBrutto)));
+      tableFoot.push(footRow("Rabatt Positionen", `- ${fmtCurrency(itemRabattTotal)}`));
+    }
+    // Block 2: Globaler Rabatt
     if (rabattWert > 0) {
-      tableFoot.push(["", "", "", "Zwischensumme", "", fmtCurrency(positionenNetto)]);
-      tableFoot.push(["", "", "", `Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, "", `- ${fmtCurrency(rabattWert)}`]);
+      tableFoot.push(footRow("Zwischensumme", fmtCurrency(positionenNetto)));
+      tableFoot.push(footRow(`Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, `- ${fmtCurrency(rabattWert)}`));
     }
     if (isReverseCharge) {
-      tableFoot.push(["", "", "", "Rechnungsbetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
+      tableFoot.push(footRow("Rechnungsbetrag", fmtCurrency(Number(invoice.netto_summe))));
     } else if (exemptBrutto !== 0) {
       // Schlussrechnung mit Anzahlungs-Abzug: expliziter Block
       // Netto → USt → Zwischensumme brutto → Abzug → Verbleibend
       const bruttoVorAbzug = Number(invoice.netto_summe) + Number(invoice.mwst_betrag || 0);
-      tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-      tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
-      tableFoot.push(["", "", "", "Zwischensumme brutto", "", fmtCurrency(bruttoVorAbzug)]);
-      tableFoot.push(["", "", "", "Anzahlungs-Abzug (brutto)", "", fmtCurrency(exemptBrutto)]);
-      tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+      tableFoot.push(footRow("Nettobetrag", fmtCurrency(Number(invoice.netto_summe))));
+      tableFoot.push(footRow(`USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, fmtCurrency(Number(invoice.mwst_betrag) || 0)));
+      tableFoot.push(footRow("Zwischensumme brutto", fmtCurrency(bruttoVorAbzug)));
+      tableFoot.push(footRow("Anzahlungs-Abzug (brutto)", fmtCurrency(exemptBrutto)));
+      tableFoot.push(footRow("Bruttobetrag", fmtCurrency(Number(invoice.brutto_summe))));
     } else {
-      tableFoot.push(["", "", "", "Nettobetrag", "", fmtCurrency(Number(invoice.netto_summe))]);
-      tableFoot.push(["", "", "", `USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, "", fmtCurrency(Number(invoice.mwst_betrag) || 0)]);
-      tableFoot.push(["", "", "", "Bruttobetrag", "", fmtCurrency(Number(invoice.brutto_summe))]);
+      tableFoot.push(footRow("Nettobetrag", fmtCurrency(Number(invoice.netto_summe))));
+      tableFoot.push(footRow(`USt. ${(Number(invoice.mwst_satz) || 20).toFixed(0)}%`, fmtCurrency(Number(invoice.mwst_betrag) || 0)));
+      tableFoot.push(footRow("Bruttobetrag", fmtCurrency(Number(invoice.brutto_summe))));
     }
   }
 
@@ -549,7 +573,7 @@ export async function generateInvoicePdf(
   const footerH = 8 + footerLines.length * 4 + (L.footer.show_page_numbers ? 4 : 0);
 
   // Spaltenbreite für Beschreibungsspalte berechnen (für Höhen-Schätzung).
-  const fixedWidths = hidePrices ? 12 + 18 + 18 : 12 + 18 + 18 + 24 + 26;
+  const fixedWidths = hidePrices ? 12 + 18 + 18 : 12 + 18 + 18 + 22 + 14 + 24;
   const descWidth = contentWidth - fixedWidths - 4; // grob; Padding/Border
   // autoTable rendert den Body. WICHTIG: margin.bottom reserviert nur den
   // Footer + einen kleinen Puffer – nicht den kompletten Closing-Bereich.
@@ -588,8 +612,9 @@ export async function generateInvoicePdf(
       1: { halign: "right", cellWidth: 18 },
       2: { halign: "center", cellWidth: 18, textColor: [0, 0, 0] },
       3: { halign: "left" },
-      4: { halign: "right", cellWidth: 24 },
-      5: { halign: "right", cellWidth: 26, fontStyle: "bold" },
+      4: { halign: "right", cellWidth: 22 },
+      5: { halign: "right", cellWidth: 14 },
+      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
       // minCellHeight für die komplette Row setzen, wenn Langtext

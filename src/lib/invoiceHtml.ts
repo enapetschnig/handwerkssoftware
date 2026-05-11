@@ -170,11 +170,20 @@ export function buildInvoiceHtml(
     (sum, it) => sum + Number(it.gesamtpreis),
     0
   );
+  // Item-Rabatt-Total: Differenz "Menge × Einzelpreis" vs. gesamtpreis pro Position.
+  const itemRabattTotal = (items || []).filter(it => !(it as any).mwst_exempt).reduce((s, it) => {
+    const rabProz = Number((it as any).rabatt_prozent) || 0;
+    if (rabProz <= 0) return s;
+    const original = Number(it.menge) * Number(it.einzelpreis);
+    return s + (original - Number(it.gesamtpreis));
+  }, 0);
+  const positionenBrutto = positionenNetto + itemRabattTotal;
   const rabattWert =
     rabattProzent > 0
       ? positionenNetto * (rabattProzent / 100)
       : rabattBetrag;
   const hasRabatt = rabattWert > 0;
+  const hasItemRabatt = itemRabattTotal > 0;
   const hasExempt = exemptBrutto !== 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
   const showPaymentInfo = showFaelligAm && bezahltBetrag > 0;
@@ -203,6 +212,10 @@ export function buildInvoiceHtml(
     .join("");
 
   let totalsHtml = "";
+  if (hasItemRabatt) {
+    totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Zwischensumme</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(positionenBrutto)}</td></tr>`;
+    totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">Rabatt Positionen</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">- ${fmtCurrency(itemRabattTotal)}</td></tr>`;
+  }
   if (hasRabatt) {
     totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Zwischensumme</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(positionenNetto)}</td></tr>`;
     totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">- ${fmtCurrency(rabattWert)}</td></tr>`;
@@ -527,19 +540,24 @@ ${(() => {
       <th style="width:55px;text-align:right;">Menge</th>
       <th style="width:45px;text-align:center;">Einh.</th>
       <th style="text-align:left;">Beschreibung</th>
-      ${hidePrices ? "" : `<th style="width:80px;text-align:right;">Preis</th>
-      <th style="width:90px;text-align:right;">Gesamt</th>`}
+      ${hidePrices ? "" : `<th style="width:75px;text-align:right;">Preis</th>
+      <th style="width:50px;text-align:right;">Rabatt</th>
+      <th style="width:85px;text-align:right;">Gesamt</th>`}
     </tr>
   </thead>
   <tbody>
-    ${(items || []).map((item) => `<tr>
+    ${(items || []).map((item) => {
+      const itemRabattProz = Number((item as any).rabatt_prozent) || 0;
+      return `<tr>
       <td style="text-align:center;color:#888;">${String(item.position).padStart(2, "0")}</td>
       <td style="text-align:right;">${fmt(Number(item.menge))}</td>
       <td style="text-align:center;color:#888;">${item.einheit || "Stk."}</td>
       <td>${item.beschreibung}</td>
       ${hidePrices ? "" : `<td style="text-align:right;">${fmtCurrency(Number(item.einzelpreis))}</td>
+      <td style="text-align:right;color:${itemRabattProz > 0 ? accent : "#bbb"};">${itemRabattProz > 0 ? `${itemRabattProz}%` : "—"}</td>
       <td style="text-align:right;font-weight:600;">${fmtCurrency(Number(item.gesamtpreis))}</td>`}
-    </tr>`).join("")}
+    </tr>`;
+    }).join("")}
   </tbody>
 </table>
 ${hidePrices ? "" : `<div class="totals-section">
