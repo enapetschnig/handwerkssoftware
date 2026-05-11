@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil, Undo2 } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil, Undo2, MapPin } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
@@ -3516,12 +3516,48 @@ export default function InvoiceDetail() {
                       />
                     </div>
                     <div>
-                      <Label>Ausführungsort</Label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <Label>Ausführungsort</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!form.project_id}
+                          title={form.project_id
+                            ? "Adresse aus zugeordnetem Projekt einfügen (überschreibt aktuellen Wert)"
+                            : "Kein Projekt zugeordnet"}
+                          onClick={async () => {
+                            if (!form.project_id) return;
+                            const { data: projFull } = await (supabase.from("projects" as never) as any)
+                              .select("adresse, plz, ort")
+                              .eq("id", form.project_id)
+                              .maybeSingle();
+                            if (!projFull) {
+                              toast({ variant: "destructive", title: "Projekt nicht gefunden" });
+                              return;
+                            }
+                            const projAdresse = [
+                              (projFull as any).adresse,
+                              [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
+                            ].filter(Boolean).join("\n");
+                            if (!projAdresse.trim()) {
+                              toast({ title: "Projekt hat keine Adresse hinterlegt" });
+                              return;
+                            }
+                            updateField("ausfuehrungsort", projAdresse);
+                            toast({ title: "Adresse aus Projekt übernommen" });
+                          }}
+                        >
+                          <MapPin className="h-3 w-3 mr-1" />
+                          Aus Projekt übernehmen
+                        </Button>
+                      </div>
                       <Textarea
                         rows={2}
                         value={form.ausfuehrungsort}
                         onChange={(e) => updateField("ausfuehrungsort", e.target.value)}
-                        placeholder="Wird automatisch vom Projekt vorbefüllt — bei Bedarf editieren"
+                        placeholder="Adresse aus Projekt übernehmen oder manuell eintragen"
                         className="resize-none"
                       />
                     </div>
