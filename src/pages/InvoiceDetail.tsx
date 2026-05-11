@@ -369,6 +369,149 @@ export default function InvoiceDetail() {
     return () => { cancelled = true; };
   }, [form.parent_invoice_id]);
 
+  // Quelldokument (Rechnung/Angebot/AB) in den Form-State laden —
+  // wird sowohl vom URL-`from_doc`-Pfad (useEffect bei Mount) als auch
+  // vom Gutschrift-Bezugs-Picker aufgerufen. Single Source of Truth,
+  // damit Kunde + Positionen + Bezug in BEIDEN Pfaden identisch
+  // vorbefüllt werden. Anzahlungs-/Schlussrechnung-Spezialfälle nur
+  // beim URL-Pfad (per opts) — beim Gutschrift-Picker nicht relevant.
+  const loadFromSourceDoc = async (
+    fromDocId: string,
+    targetTyp: string,
+    opts?: {
+      anzahlungProzent?: number | null;
+      anzahlungBetrag?: number | null;
+      abzugIds?: string[];
+    },
+  ): Promise<boolean> => {
+    try {
+      const [invRes, itemsRes] = await Promise.all([
+        supabase.from("invoices").select("*").eq("id", fromDocId).maybeSingle(),
+        supabase.from("invoice_items").select("*").eq("invoice_id", fromDocId).order("position"),
+      ]);
+      const data: any = invRes.data;
+      if (!data) return false;
+      setForm(prev => ({
+        ...prev,
+        typ: targetTyp,
+        kunde_name: data.kunde_name || "",
+        kunde_adresse: data.kunde_adresse || "",
+        kunde_plz: data.kunde_plz || "",
+        kunde_ort: data.kunde_ort || "",
+        kunde_land: data.kunde_land || "Österreich",
+        kunde_email: data.kunde_email || "",
+        kunde_telefon: data.kunde_telefon || "",
+        kunde_uid: data.kunde_uid || "",
+        customer_id: data.customer_id || null,
+        project_id: data.project_id || null,
+        leistungsdatum: data.leistungsdatum || "",
+        leistungsdatum_bis: data.leistungsdatum_bis || "",
+        allgemeine_angaben_aktiv: !!data.allgemeine_angaben_aktiv,
+        leistungsbeschreibung: data.leistungsbeschreibung || "",
+        ausfuehrungsort: data.ausfuehrungsort || "",
+        ausfuehrungs_kw: data.ausfuehrungs_kw || "",
+        ausfuehrende_firma: data.ausfuehrende_firma || "",
+        ausfuehrende_firma_freitext: data.ausfuehrende_firma_freitext || "",
+        zahlungsbedingungen: data.zahlungsbedingungen || "",
+        notizen: data.notizen || "",
+        betreff: data.betreff || "",
+        mwst_satz: Number(data.mwst_satz) || 20,
+        rabatt_prozent: Number(data.rabatt_prozent) || 0,
+        rabatt_betrag: Number(data.rabatt_betrag) || 0,
+        skonto_prozent: Number(data.skonto_prozent) || 0,
+        skonto_tage: Number(data.skonto_tage) || 0,
+        kunde_anrede: data.kunde_anrede || "",
+        kunde_titel: data.kunde_titel || "",
+        reverse_charge: !!data.reverse_charge,
+        kundennummer: data.kundennummer || "",
+        ansprechpartner_employee_id: data.ansprechpartner_employee_id || null,
+        ansprechpartner_name: data.ansprechpartner_name || "",
+        ansprechpartner_telefon: data.ansprechpartner_telefon || "",
+        ansprechpartner_email: data.ansprechpartner_email || "",
+        anzahlung_prozent: opts?.anzahlungProzent ?? null,
+        anzahlung_betrag: opts?.anzahlungBetrag ?? null,
+        parent_invoice_id: fromDocId,
+      } as any));
+
+      const srcItems = (itemsRes.data || []) as any[];
+      let nextItems: InvoiceItem[] = srcItems.map((it, idx) => ({
+        position: idx + 1,
+        beschreibung: it.beschreibung || "",
+        kurztext: it.kurztext || it.beschreibung || "",
+        langtext: it.langtext || "",
+        menge: Number(it.menge) || 1,
+        einheit: it.einheit || "Stk.",
+        einzelpreis: Number(it.einzelpreis) || 0,
+        rabatt_prozent: Number(it.rabatt_prozent) || 0,
+        gesamtpreis: Number(it.gesamtpreis) || 0,
+        set_template_id: it.set_template_id || null,
+        set_snapshot: it.set_snapshot || null,
+      }));
+
+      // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag.
+      if (targetTyp === "anzahlungsrechnung" && (opts?.anzahlungBetrag || opts?.anzahlungProzent)) {
+        const gesamtNetto = nextItems.reduce((s, it) => s + it.gesamtpreis, 0);
+        const quellNummer = data.nummer || "Auftragsbestätigung";
+        let anzBetrag: number;
+        let labelKurz: string;
+        let labelLang: string;
+        if (opts?.anzahlungBetrag) {
+          anzBetrag = Number(opts.anzahlungBetrag);
+          labelKurz = "Anzahlung";
+          labelLang = `Anzahlung gemäß ${quellNummer}`;
+        } else {
+          const prozent = Number(opts?.anzahlungProzent);
+          anzBetrag = gesamtNetto * (prozent / 100);
+          labelKurz = `Anzahlung ${prozent}%`;
+          labelLang = `Anzahlung ${prozent}% gemäß ${quellNummer}`;
+        }
+        anzBetrag = Math.round(anzBetrag * 100) / 100;
+        nextItems = [{
+          position: 1,
+          beschreibung: labelLang,
+          kurztext: labelKurz,
+          langtext: "",
+          menge: 1,
+          einheit: "pausch.",
+          einzelpreis: anzBetrag,
+          rabatt_prozent: 0,
+          gesamtpreis: anzBetrag,
+        }];
+      }
+
+      // Schlussrechnung: Anzahlungen als negative BRUTTO-Zeilen anhängen.
+      if (targetTyp === "schlussrechnung" && opts?.abzugIds && opts.abzugIds.length > 0) {
+        const { data: abzugInvs } = await supabase
+          .from("invoices")
+          .select("id, nummer, netto_summe, brutto_summe, datum")
+          .in("id", opts.abzugIds);
+        ((abzugInvs as any[]) || []).forEach((abz) => {
+          const brutto = Number(abz.brutto_summe) || 0;
+          nextItems.push({
+            position: nextItems.length + 1,
+            beschreibung: `Abzug Anzahlung ${abz.nummer} vom ${abz.datum} (brutto, MwSt-frei)`,
+            kurztext: `Abzug ${abz.nummer}`,
+            langtext: "",
+            menge: 1,
+            einheit: "pausch.",
+            einzelpreis: -brutto,
+            rabatt_prozent: 0,
+            gesamtpreis: -brutto,
+            mwst_exempt: true,
+          });
+        });
+      }
+
+      if (nextItems.length > 0) setItems(nextItems);
+      setFromAngebotId(fromDocId);
+      return true;
+    } catch (err) {
+      console.error("Konversion fehlgeschlagen:", err);
+      toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Quelldokument konnte nicht geladen werden" });
+      return false;
+    }
+  };
+
   // Lazy-Load der Rechnungen für den Bezugs-Picker — nur bei neuer
   // Standalone-Gutschrift. Bei Convert (form.parent_invoice_id gesetzt)
   // brauchen wir die Liste nicht.
@@ -439,145 +582,12 @@ export default function InvoiceDetail() {
     let cancelled = false;
     if (isNew && fromDocId && fromDocId !== "true") {
       (async () => {
-        try {
-          const [invRes, itemsRes] = await Promise.all([
-            supabase.from("invoices").select("*").eq("id", fromDocId).maybeSingle(),
-            supabase.from("invoice_items").select("*").eq("invoice_id", fromDocId).order("position"),
-          ]);
-          if (cancelled) return;
-          const data: any = invRes.data;
-          if (!data) return;
-          setForm(prev => ({
-            ...prev,
-            typ: targetTyp, // wichtig: Ziel-Typ setzen (nicht den des Quelldokuments)
-            kunde_name: data.kunde_name || "",
-            kunde_adresse: data.kunde_adresse || "",
-            kunde_plz: data.kunde_plz || "",
-            kunde_ort: data.kunde_ort || "",
-            kunde_land: data.kunde_land || "Österreich",
-            kunde_email: data.kunde_email || "",
-            kunde_telefon: data.kunde_telefon || "",
-            kunde_uid: data.kunde_uid || "",
-            customer_id: data.customer_id || null,
-            project_id: data.project_id || null,
-            leistungsdatum: data.leistungsdatum || "",
-            leistungsdatum_bis: data.leistungsdatum_bis || "",
-            // Allgemeine Angaben — beim Convert (Angebot → AB)
-            // mitkopieren, damit der User nicht alles neu eintippen
-            // muss. Bei manueller Neu-Anlage sind die Felder eh leer.
-            allgemeine_angaben_aktiv: !!(data as any).allgemeine_angaben_aktiv,
-            leistungsbeschreibung: (data as any).leistungsbeschreibung || "",
-            ausfuehrungsort: (data as any).ausfuehrungsort || "",
-            ausfuehrungs_kw: (data as any).ausfuehrungs_kw || "",
-            ausfuehrende_firma: (data as any).ausfuehrende_firma || "",
-            ausfuehrende_firma_freitext: (data as any).ausfuehrende_firma_freitext || "",
-            zahlungsbedingungen: data.zahlungsbedingungen || "",
-            notizen: data.notizen || "",
-            betreff: data.betreff || "",
-            mwst_satz: Number(data.mwst_satz) || 20,
-            rabatt_prozent: Number(data.rabatt_prozent) || 0,
-            rabatt_betrag: Number(data.rabatt_betrag) || 0,
-            skonto_prozent: Number(data.skonto_prozent) || 0,
-            skonto_tage: Number(data.skonto_tage) || 0,
-            kunde_anrede: data.kunde_anrede || "",
-            kunde_titel: data.kunde_titel || "",
-            reverse_charge: !!data.reverse_charge,
-            kundennummer: data.kundennummer || "",
-            // BKS-Sachbearbeiter (Ansprechpartner) auch beim Convert
-            // übernehmen — sonst muss der User ihn neu wählen.
-            ansprechpartner_employee_id: (data as any).ansprechpartner_employee_id || null,
-            ansprechpartner_name: (data as any).ansprechpartner_name || "",
-            ansprechpartner_telefon: (data as any).ansprechpartner_telefon || "",
-            ansprechpartner_email: (data as any).ansprechpartner_email || "",
-            anzahlung_prozent: anzahlungProzentParam ? Number(anzahlungProzentParam) : null,
-            anzahlung_betrag: anzahlungBetragParam ? Number(anzahlungBetragParam) : null,
-            parent_invoice_id: fromDocId,
-          } as any));
-          const srcItems = (itemsRes.data || []) as any[];
-          let nextItems: InvoiceItem[] = srcItems.map((it, idx) => ({
-            position: idx + 1,
-            beschreibung: it.beschreibung || "",
-            kurztext: it.kurztext || it.beschreibung || "",
-            langtext: it.langtext || "",
-            menge: Number(it.menge) || 1,
-            einheit: it.einheit || "Stk.",
-            einzelpreis: Number(it.einzelpreis) || 0,
-            rabatt_prozent: Number(it.rabatt_prozent) || 0,
-            gesamtpreis: Number(it.gesamtpreis) || 0,
-            set_template_id: it.set_template_id || null,
-            set_snapshot: it.set_snapshot || null,
-          }));
-
-          // Anzahlungsrechnung: nur eine Zeile mit dem Anzahlungsbetrag.
-          // Betrag hat Vorrang vor Prozent, falls beide gesetzt sind.
-          if (targetTyp === "anzahlungsrechnung" && (anzahlungBetragParam || anzahlungProzentParam)) {
-            const gesamtNetto = nextItems.reduce((s, it) => s + it.gesamtpreis, 0);
-            const quellNummer = data.nummer || "Auftragsbestätigung";
-            let anzBetrag: number;
-            let labelKurz: string;
-            let labelLang: string;
-            if (anzahlungBetragParam) {
-              anzBetrag = Number(anzahlungBetragParam);
-              labelKurz = "Anzahlung";
-              labelLang = `Anzahlung gemäß ${quellNummer}`;
-            } else {
-              const prozent = Number(anzahlungProzentParam);
-              anzBetrag = gesamtNetto * (prozent / 100);
-              labelKurz = `Anzahlung ${prozent}%`;
-              labelLang = `Anzahlung ${prozent}% gemäß ${quellNummer}`;
-            }
-            anzBetrag = Math.round(anzBetrag * 100) / 100;
-            nextItems = [{
-              position: 1,
-              beschreibung: labelLang,
-              kurztext: labelKurz,
-              langtext: "",
-              menge: 1,
-              einheit: "pausch.",
-              einzelpreis: anzBetrag,
-              rabatt_prozent: 0,
-              gesamtpreis: anzBetrag,
-            }];
-          }
-
-          // Schlussrechnung: Anzahlungen als negative BRUTTO-Zeilen anhängen.
-          // Brutto (nicht netto!), weil die MwSt der Anzahlung bereits ausgewiesen
-          // wurde und nicht nochmal mit dem aktuellen MwSt-Satz verrechnet werden
-          // darf (AT-Rechnungsrecht). mwst_exempt=true sorgt dafür, dass die
-          // Kalkulation diese Zeilen aus der MwSt-Berechnung ausnimmt.
-          if (targetTyp === "schlussrechnung" && abzugIdsParam) {
-            const ids = abzugIdsParam.split(",").filter(Boolean);
-            if (ids.length > 0) {
-              const { data: abzugInvs } = await supabase
-                .from("invoices")
-                .select("id, nummer, netto_summe, brutto_summe, datum")
-                .in("id", ids);
-              ((abzugInvs as any[]) || []).forEach((abz) => {
-                const brutto = Number(abz.brutto_summe) || 0;
-                nextItems.push({
-                  position: nextItems.length + 1,
-                  beschreibung: `Abzug Anzahlung ${abz.nummer} vom ${abz.datum} (brutto, MwSt-frei)`,
-                  kurztext: `Abzug ${abz.nummer}`,
-                  langtext: "",
-                  menge: 1,
-                  einheit: "pausch.",
-                  einzelpreis: -brutto,
-                  rabatt_prozent: 0,
-                  gesamtpreis: -brutto,
-                  mwst_exempt: true,
-                });
-              });
-            }
-          }
-
-          if (cancelled) return;
-          if (nextItems.length > 0) setItems(nextItems);
-          setFromAngebotId(fromDocId);
-        } catch (err) {
-          if (cancelled) return;
-          console.error("Konversion fehlgeschlagen:", err);
-          toast({ variant: "destructive", title: "Konversion fehlgeschlagen", description: "Quelldokument konnte nicht geladen werden" });
-        }
+        if (cancelled) return;
+        await loadFromSourceDoc(fromDocId, targetTyp, {
+          anzahlungProzent: anzahlungProzentParam ? Number(anzahlungProzentParam) : null,
+          anzahlungBetrag: anzahlungBetragParam ? Number(anzahlungBetragParam) : null,
+          abzugIds: abzugIdsParam ? abzugIdsParam.split(",").filter(Boolean) : undefined,
+        });
       })();
     } else if (isNew && defaultProjectId) {
       // Kein from_doc, aber ?project=... → Projekt + Kunden
@@ -2921,13 +2931,15 @@ export default function InvoiceDetail() {
               </CardHeader>
               <CardContent>
                 <Select
-                  onValueChange={(id) => {
+                  onValueChange={async (id) => {
                     if (id && id !== "_none") {
-                      // Bestehender from_doc-Pfad übernimmt automatisch
-                      // Kunde + Positionen + parent_invoice_id. Navigation
-                      // ersetzt die aktuelle Route (replace=true) damit
-                      // "Zurück" sauber funktioniert.
-                      navigate(`/invoices/new?typ=gutschrift&from_doc=${id}`, { replace: true });
+                      // Direkt in den Form-State laden — Kunde +
+                      // Positionen + parent_invoice_id werden sofort
+                      // gesetzt, ohne Navigation. Vorteil gegenüber
+                      // navigate(...) mit ?from_doc=: das useEffect bei
+                      // Mount feuert nicht erneut, weil sich `id`
+                      // (Route-Param) nicht ändert.
+                      await loadFromSourceDoc(id, "gutschrift");
                     }
                   }}
                 >
