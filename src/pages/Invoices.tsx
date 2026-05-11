@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal, ChevronDown, Undo2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { matchesSearch } from "@/lib/searchUtils";
 import { loadInvoiceLogo } from "@/lib/logoLoader";
 import { formatDateShort } from "@/lib/dateFormat";
@@ -636,14 +636,60 @@ export default function Invoices() {
               </div>
               <div className="flex gap-2">
                 {filterTyp !== "storno" && (
-                  <Button
-                    onClick={() => navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")}
-                    variant="default"
-                    className="gap-2"
-                  >
-                    {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                    {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
-                  </Button>
+                  <DropdownMenu>
+                    <div className="flex">
+                      {/* Haupt-Button: Default-Aktion je nach aktuellem Tab */}
+                      <Button
+                        onClick={() =>
+                          navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")
+                        }
+                        variant="default"
+                        className="gap-2 rounded-r-none"
+                      >
+                        {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
+                        {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
+                      </Button>
+                      {/* Chevron: öffnet Dropdown mit allen weiteren Belegtypen */}
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="default"
+                          className="rounded-l-none border-l border-primary-foreground/20 px-2"
+                          title="Weitere Belegart wählen"
+                          aria-label="Weitere Belegart wählen"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </div>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {filterTyp === "angebot" ? (
+                        <>
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=angebot")}>
+                            <FileText className="w-4 h-4 mr-2" /> Neues Angebot
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=auftragsbestaetigung")}>
+                            <FileText className="w-4 h-4 mr-2" /> Neue Auftragsbestätigung
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=rechnung")}>
+                            <Receipt className="w-4 h-4 mr-2" /> Neue Rechnung
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=anzahlungsrechnung")}>
+                            <Receipt className="w-4 h-4 mr-2" /> Neue Anzahlungsrechnung
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=schlussrechnung")}>
+                            <Receipt className="w-4 h-4 mr-2" /> Neue Schlussrechnung
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => navigate("/invoices/new?typ=gutschrift")}>
+                            <Undo2 className="w-4 h-4 mr-2" /> Neue Gutschrift
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="gap-2">
                   <FileDown className="w-4 h-4" />
