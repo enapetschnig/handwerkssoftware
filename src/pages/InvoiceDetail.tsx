@@ -2827,7 +2827,7 @@ export default function InvoiceDetail() {
           )}
 
           {/* Projekt-Auswahl (nur bei neuen Rechnungen, vor den Kundendaten) */}
-          {!isLocked && (form.typ === "rechnung" || getDocConfig(form.typ).isAngebotLike) && (
+          {!isLocked && form.typ === "rechnung" && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Projekt (optional)</CardTitle>
@@ -2837,26 +2837,11 @@ export default function InvoiceDetail() {
                   const projectId = v === "none" ? null : v;
                   updateField("project_id", projectId);
                   if (projectId) {
-                    // Projekt-Details laden (customer_id für Kundendaten,
-                    // adresse/plz/ort für die "Allgemeine Angaben"-Tabelle).
+                    // Projekt-Details laden (nur für customer_id).
                     const { data: projFull } = await (supabase.from("projects" as never) as any)
-                      .select("customer_id, adresse, plz, ort")
+                      .select("customer_id")
                       .eq("id", projectId)
                       .maybeSingle();
-                    // Ausführungsort aus der Projekt-Adresse vorbefüllen —
-                    // nur wenn der User noch nichts eingetragen hat (überschreibt
-                    // keine manuell editierten Adressen).
-                    if (projFull) {
-                      const projAdresse = [
-                        (projFull as any).adresse,
-                        [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
-                      ].filter(Boolean).join("\n");
-                      if (projAdresse) {
-                        setForm(prev => prev.ausfuehrungsort
-                          ? prev
-                          : ({ ...prev, ausfuehrungsort: projAdresse } as any));
-                      }
-                    }
                     const custId = projFull?.customer_id || (projects.find(p => p.id === projectId) as any)?.customer_id;
                     if (custId) {
                       const { data: cust } = await supabase
