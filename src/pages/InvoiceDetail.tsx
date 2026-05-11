@@ -3489,30 +3489,7 @@ export default function InvoiceDetail() {
                   <Switch
                     id="allgemeine-angaben-aktiv"
                     checked={form.allgemeine_angaben_aktiv}
-                    onCheckedChange={async (v) => {
-                      updateField("allgemeine_angaben_aktiv", v);
-                      // Beim Aktivieren: Ausführungsort aus dem zugeordneten
-                      // Projekt vorbefüllen, falls noch leer. So muss der User
-                      // die Adresse nicht abtippen, nachdem er die Tabelle
-                      // sichtbar geschaltet hat.
-                      if (v && !form.ausfuehrungsort && form.project_id) {
-                        const { data: projFull } = await (supabase.from("projects" as never) as any)
-                          .select("adresse, plz, ort")
-                          .eq("id", form.project_id)
-                          .maybeSingle();
-                        if (projFull) {
-                          const projAdresse = [
-                            (projFull as any).adresse,
-                            [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
-                          ].filter(Boolean).join("\n");
-                          if (projAdresse) {
-                            setForm(prev => prev.ausfuehrungsort
-                              ? prev
-                              : ({ ...prev, ausfuehrungsort: projAdresse } as any));
-                          }
-                        }
-                      }
-                    }}
+                    onCheckedChange={(v) => updateField("allgemeine_angaben_aktiv", v)}
                   />
                   <div className="space-y-0.5">
                     <Label htmlFor="allgemeine-angaben-aktiv" className="cursor-pointer">
