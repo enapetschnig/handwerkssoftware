@@ -203,10 +203,20 @@ export async function generateInvoicePdf(
     pdf.text(kundeAnrede, ml, y + 2);
     y += 5;
   }
+  // Titel-Feld nur bei Privatkunden anzeigen (Mag./Dr./Ing. etc.) und
+  // nur wenn es nicht redundant zum Namen ist. Bei Geschäftskunden
+  // wurde "titel" historisch gelegentlich mit dem Firmennamen befüllt
+  // → der käme sonst doppelt im PDF (z. B. "Portas in Hirtenberg
+  // PORTAS in Hirtenberg").
+  const titelRedundant = !!kundeTitel && (
+    kundeName.toLowerCase().includes(kundeTitel.toLowerCase()) ||
+    kundeTitel.toLowerCase().includes(kundeName.toLowerCase())
+  );
+  const showTitel = !isGeschaeft && !!kundeTitel && !titelRedundant;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
   pdf.setTextColor(0, 0, 0);
-  const displayName = kundeTitel ? `${kundeTitel} ${kundeName}` : kundeName;
+  const displayName = showTitel ? `${kundeTitel} ${kundeName}` : kundeName;
   pdf.text(displayName, ml, y + 2);
   y += 6;
   // UID-Nummer NICHT im Anschriftenblock — sie steht rechts oben im

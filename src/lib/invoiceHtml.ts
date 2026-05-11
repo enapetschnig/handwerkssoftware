@@ -436,7 +436,15 @@ ${mahnBanner}
         anrede.toLowerCase().includes(name.toLowerCase())
       );
       const showAnrede = !isGeschaeft && anrede && !anredeRedundant;
-      const titleLine = titel ? `${titel} ${name}`.trim() : name;
+      // Titel-Feld nur bei Privatkunden zeigen und nur wenn es nicht
+      // redundant zum Namen ist (Geschäftskunden hatten gelegentlich
+      // den Firmennamen im titel-Feld → Doppelung im PDF).
+      const titelRedundant = !!titel && (
+        name.toLowerCase().includes(titel.toLowerCase()) ||
+        titel.toLowerCase().includes(name.toLowerCase())
+      );
+      const showTitel = !isGeschaeft && !!titel && !titelRedundant;
+      const titleLine = showTitel ? `${titel} ${name}`.trim() : name;
       return `${showAnrede ? `<div style="font-size:9pt;color:#555;">${anrede}</div>` : ""}<div class="recipient-name">${titleLine}</div>`;
     })()}
     <div class="recipient-addr">
