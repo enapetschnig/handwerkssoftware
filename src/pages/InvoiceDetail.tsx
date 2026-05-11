@@ -2827,7 +2827,7 @@ export default function InvoiceDetail() {
           )}
 
           {/* Projekt-Auswahl (nur bei neuen Rechnungen, vor den Kundendaten) */}
-          {!isLocked && form.typ === "rechnung" && (
+          {!isLocked && (form.typ === "rechnung" || getDocConfig(form.typ).isAngebotLike) && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Projekt (optional)</CardTitle>
@@ -2837,11 +2837,26 @@ export default function InvoiceDetail() {
                   const projectId = v === "none" ? null : v;
                   updateField("project_id", projectId);
                   if (projectId) {
-                    // Projekt-Details laden (nur für customer_id).
+                    // Projekt-Details laden (customer_id für Kundendaten,
+                    // adresse/plz/ort für die "Allgemeine Angaben"-Tabelle).
                     const { data: projFull } = await (supabase.from("projects" as never) as any)
-                      .select("customer_id")
+                      .select("customer_id, adresse, plz, ort")
                       .eq("id", projectId)
                       .maybeSingle();
+                    // Ausführungsort aus der Projekt-Adresse vorbefüllen —
+                    // nur wenn der User noch nichts eingetragen hat (überschreibt
+                    // keine manuell editierten Adressen).
+                    if (projFull) {
+                      const projAdresse = [
+                        (projFull as any).adresse,
+                        [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
+                      ].filter(Boolean).join("\n");
+                      if (projAdresse) {
+                        setForm(prev => prev.ausfuehrungsort
+                          ? prev
+                          : ({ ...prev, ausfuehrungsort: projAdresse } as any));
+                      }
+                    }
                     const custId = projFull?.customer_id || (projects.find(p => p.id === projectId) as any)?.customer_id;
                     if (custId) {
                       const { data: cust } = await supabase
@@ -3489,7 +3504,30 @@ export default function InvoiceDetail() {
                   <Switch
                     id="allgemeine-angaben-aktiv"
                     checked={form.allgemeine_angaben_aktiv}
-                    onCheckedChange={(v) => updateField("allgemeine_angaben_aktiv", v)}
+                    onCheckedChange={async (v) => {
+                      updateField("allgemeine_angaben_aktiv", v);
+                      // Beim Aktivieren: Ausführungsort aus dem zugeordneten
+                      // Projekt vorbefüllen, falls noch leer. So muss der User
+                      // die Adresse nicht abtippen, nachdem er die Tabelle
+                      // sichtbar geschaltet hat.
+                      if (v && !form.ausfuehrungsort && form.project_id) {
+                        const { data: projFull } = await (supabase.from("projects" as never) as any)
+                          .select("adresse, plz, ort")
+                          .eq("id", form.project_id)
+                          .maybeSingle();
+                        if (projFull) {
+                          const projAdresse = [
+                            (projFull as any).adresse,
+                            [(projFull as any).plz, (projFull as any).ort].filter(Boolean).join(" "),
+                          ].filter(Boolean).join("\n");
+                          if (projAdresse) {
+                            setForm(prev => prev.ausfuehrungsort
+                              ? prev
+                              : ({ ...prev, ausfuehrungsort: projAdresse } as any));
+                          }
+                        }
+                      }
+                    }}
                   />
                   <div className="space-y-0.5">
                     <Label htmlFor="allgemeine-angaben-aktiv" className="cursor-pointer">
