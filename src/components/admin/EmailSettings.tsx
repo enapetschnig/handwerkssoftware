@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Loader2, Save, Mail, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +25,9 @@ const DOC_TYPES: { value: string; label: string }[] = [
   { value: "anzahlungsrechnung", label: "Anzahlungsrechnung" },
   { value: "schlussrechnung", label: "Schlussrechnung" },
   { value: "gutschrift", label: "Gutschrift" },
+  { value: "mahnung_1", label: "Mahnung 1 (Zahlungserinnerung)" },
+  { value: "mahnung_2", label: "Mahnung 2" },
+  { value: "mahnung_3", label: "Mahnung 3 (letzte Aufforderung)" },
 ];
 
 export function EmailSettings() {
@@ -197,14 +200,19 @@ export function EmailSettings() {
             />
           </div>
           <div>
-            <Label>Body (HTML)</Label>
-            <Textarea
+            <Label>Body</Label>
+            <RichTextEditor
               rows={10}
               value={activeTemplate.body_html}
-              onChange={(e) => updateActiveField("body_html", e.target.value)}
-              className="font-mono text-xs"
-              placeholder="<p>Sehr geehrte Damen und Herren,</p>..."
+              onChange={(v) => updateActiveField("body_html", v)}
+              placeholder="Verfasse hier deine Vorlage …"
             />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Platzhalter werden beim Versand ersetzt:{" "}
+              <code>{`{{kunde_name}}`}</code>, <code>{`{{dokument_nr}}`}</code>,{" "}
+              <code>{`{{dokument_datum}}`}</code>, <code>{`{{betrag}}`}</code>, <code>{`{{firma}}`}</code>,{" "}
+              <code>{`{{mahnstufe}}`}</code>, <code>{`{{offen}}`}</code>.
+            </p>
           </div>
         </CardContent>
       </Card>

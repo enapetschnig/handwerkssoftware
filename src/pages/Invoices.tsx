@@ -20,6 +20,7 @@ import { de } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
 import { ExportInvoicesDialog } from "@/components/ExportInvoicesDialog";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
+import { SendEmailDialog } from "@/components/SendEmailDialog";
 import {
   Dialog,
   DialogContent,
@@ -112,6 +113,12 @@ export default function Invoices() {
   const [paymentDatum, setPaymentDatum] = useState(format(new Date(), "yyyy-MM-dd"));
   const [paymentNotiz, setPaymentNotiz] = useState("");
   const [existingPayments, setExistingPayments] = useState<{ betrag: number; datum: string; notizen: string | null; created_at: string }[]>([]);
+  // Mahnungs-Email-Versand: PDF + SendEmailDialog wiederverwendet,
+  // Mahnstufe wird erst nach erfolgreichem Send inkrementiert.
+  const [mahnungDialogOpen, setMahnungDialogOpen] = useState(false);
+  const [mahnungInvoice, setMahnungInvoice] = useState<Invoice | null>(null);
+  const [mahnungStufe, setMahnungStufe] = useState(0);
+  const [mahnungPdfBlob, setMahnungPdfBlob] = useState<Blob | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -143,7 +150,7 @@ export default function Invoices() {
   const fetchInvoices = async () => {
     const { data, error } = await supabase
       .from("invoices")
-      .select("id, typ, nummer, status, kunde_name, datum, brutto_summe, netto_summe, project_id, faellig_am, mahnstufe, gueltig_bis, bezahlt_betrag, archiviert, storno_nummer, storno_datum, kundennummer")
+      .select("id, typ, nummer, status, kunde_name, kunde_email, datum, brutto_summe, netto_summe, project_id, faellig_am, mahnstufe, gueltig_bis, bezahlt_betrag, archiviert, storno_nummer, storno_datum, kundennummer")
       .order("datum", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -1056,19 +1063,18 @@ export default function Invoices() {
                                           },
                                           stufe, 0, bank, logoUri, invoiceLayout
                                         );
-                                        await supabase.from("invoices").update({ mahnstufe: stufe }).eq("id", inv.id);
-                                        const url = URL.createObjectURL(pdfBlob);
-                                        const a = document.createElement("a"); a.href = url;
-                                        a.download = `Mahnung_${stufe}_${inv.nummer}.pdf`; a.click();
-                                        URL.revokeObjectURL(url);
-                                        toast({ title: `Mahnung ${stufe} erstellt` });
-                                        fetchInvoices();
+                                        // SendEmailDialog öffnen — Mahnstufe + DB-Update
+                                        // erst NACH erfolgreichem Versand (siehe onSent unten).
+                                        setMahnungInvoice(inv);
+                                        setMahnungStufe(stufe);
+                                        setMahnungPdfBlob(pdfBlob);
+                                        setMahnungDialogOpen(true);
                                       } catch (err: any) {
                                         toast({ variant: "destructive", title: "Fehler", description: err.message });
                                       }
                                     }}
                                   >
-                                    <AlertTriangle className="h-4 w-4 mr-2" /> Mahnung {Number(inv.mahnstufe || 0) + 1} erstellen
+                                    <AlertTriangle className="h-4 w-4 mr-2" /> Mahnung {Number(inv.mahnstufe || 0) + 1} per Email senden
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
@@ -1091,6 +1097,44 @@ export default function Invoices() {
           onClose={() => setExportDialogOpen(false)}
           bankData={{ kontoinhaber: bankKontoinhaber, iban: bankIban, bic: bankBic }}
         />
+        {/* Mahnung per Email — SendEmailDialog wiederverwendet, Mahnstufe wird
+            erst nach erfolgreichem Send inkrementiert. */}
+        {mahnungInvoice && (
+          <SendEmailDialog
+            open={mahnungDialogOpen}
+            onOpenChange={(o) => {
+              setMahnungDialogOpen(o);
+              if (!o) {
+                setMahnungInvoice(null);
+                setMahnungPdfBlob(null);
+                setMahnungStufe(0);
+              }
+            }}
+            invoice={{
+              id: mahnungInvoice.id,
+              typ: mahnungInvoice.typ,
+              nummer: mahnungInvoice.nummer,
+              datum: mahnungInvoice.datum,
+              kunde_name: mahnungInvoice.kunde_name,
+              kunde_email: (mahnungInvoice as any).kunde_email || "",
+              brutto_summe: Number(mahnungInvoice.brutto_summe),
+              bezahlt_betrag: Number(mahnungInvoice.bezahlt_betrag || 0),
+              mahnstufe: mahnungStufe,
+            }}
+            pdfBlob={mahnungPdfBlob}
+            templateTyp={`mahnung_${mahnungStufe}`}
+            pdfFilenameOverride={`Mahnung_${mahnungStufe}_${mahnungInvoice.nummer}.pdf`}
+            titleOverride={`Mahnung ${mahnungStufe} zu ${mahnungInvoice.nummer} per Email senden`}
+            onSent={async () => {
+              // Erst NACH erfolgreichem Versand: Mahnstufe in der DB
+              // hochsetzen + Liste neu laden.
+              if (!mahnungInvoice) return;
+              await supabase.from("invoices").update({ mahnstufe: mahnungStufe }).eq("id", mahnungInvoice.id);
+              toast({ title: `Mahnung ${mahnungStufe} versendet` });
+              fetchInvoices();
+            }}
+          />
+        )}
         {/* Create Project Dialog (when offer accepted) */}
         <CreateProjectDialog
           open={createProjectDialogOpen}

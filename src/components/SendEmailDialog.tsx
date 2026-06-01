@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Loader2, Send, Paperclip } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,8 @@ interface InvoiceLike {
   kunde_name?: string | null;
   kunde_email?: string | null;
   brutto_summe?: number | null;
+  bezahlt_betrag?: number | null;
+  mahnstufe?: number | null;
 }
 
 interface Props {
@@ -30,6 +32,13 @@ interface Props {
   invoice: InvoiceLike;
   pdfBlob?: Blob | null;
   onSent?: () => void;
+  // Override für den Template-Lookup. Default: invoice.typ. Bei
+  // Mahnungen z. B. "mahnung_1" / "mahnung_2" / "mahnung_3".
+  templateTyp?: string;
+  // Dateiname für PDF-Attachment. Default: <nummer>.pdf
+  pdfFilenameOverride?: string;
+  // Header-Titel-Override. Default: "<typLabel> <nummer> per Email senden"
+  titleOverride?: string;
 }
 
 const fmtCurrency = (n: number | null | undefined) => {
@@ -51,11 +60,16 @@ function applyVars(
   invoice: InvoiceLike,
   firma: string,
 ): string {
+  const brutto = Number(invoice.brutto_summe) || 0;
+  const bezahlt = Number(invoice.bezahlt_betrag) || 0;
+  const offen = Math.max(0, brutto - bezahlt);
   return template
     .replace(/{{kunde_name}}/g, invoice.kunde_name || "")
     .replace(/{{dokument_nr}}/g, invoice.nummer || "")
     .replace(/{{dokument_datum}}/g, fmtDateAT(invoice.datum))
-    .replace(/{{betrag}}/g, fmtCurrency(invoice.brutto_summe))
+    .replace(/{{betrag}}/g, fmtCurrency(brutto))
+    .replace(/{{offen}}/g, fmtCurrency(offen))
+    .replace(/{{mahnstufe}}/g, String(invoice.mahnstufe || 0))
     .replace(/{{firma}}/g, firma);
 }
 
@@ -73,7 +87,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }: Props) {
+export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent, templateTyp, pdfFilenameOverride, titleOverride }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -92,8 +106,9 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
     (async () => {
       setLoading(true);
       try {
+        const lookupTyp = templateTyp || invoice.typ;
         const [tplRes, settingsRes] = await Promise.all([
-          supabase.from("email_templates").select("subject, body_html").eq("typ", invoice.typ).maybeSingle(),
+          supabase.from("email_templates").select("subject, body_html").eq("typ", lookupTyp).maybeSingle(),
           supabase.from("app_settings").select("key, value").in("key", ["email_default_reply_to", "firmenname"]),
         ]);
         if (cancelled) return;
@@ -118,7 +133,8 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
       }
     })();
     return () => { cancelled = true; };
-  }, [open, invoice.typ, invoice.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, invoice.typ, invoice.id, templateTyp]);
 
   const handleSend = async () => {
     if (!to.trim()) {
@@ -131,7 +147,7 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
       let pdfFilename: string | null = null;
       if (attachPdf && pdfBlob) {
         pdfBase64 = await blobToBase64(pdfBlob);
-        pdfFilename = `${invoice.nummer || invoice.typ}.pdf`;
+        pdfFilename = pdfFilenameOverride || `${invoice.nummer || invoice.typ}.pdf`;
       }
       const ccList = cc.split(/[,;\s]+/).map(s => s.trim()).filter(s => s.includes("@"));
       const { data, error } = await supabase.functions.invoke("send-document-email", {
@@ -167,7 +183,7 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{typLabel} {invoice.nummer || ""} per Email senden</DialogTitle>
+          <DialogTitle>{titleOverride || `${typLabel} ${invoice.nummer || ""} per Email senden`}</DialogTitle>
           <DialogDescription>
             Empfänger, Betreff und Text sind editierbar. Beim Klick auf „Senden" wird
             die Email über Resend verschickt und im Versand-Protokoll dokumentiert.
@@ -195,16 +211,13 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
               <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
             </div>
             <div>
-              <Label>Nachricht (HTML erlaubt)</Label>
-              <Textarea
-                rows={10}
+              <Label>Nachricht</Label>
+              <RichTextEditor
                 value={bodyHtml}
-                onChange={(e) => setBodyHtml(e.target.value)}
-                className="font-mono text-xs"
+                onChange={setBodyHtml}
+                rows={10}
+                placeholder="Verfasse hier deine Nachricht …"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Tipp: HTML-Tags wie &lt;p&gt;, &lt;strong&gt;, &lt;br&gt; sind erlaubt.
-              </p>
             </div>
             {pdfBlob && (
               <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
@@ -215,7 +228,7 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent }
                 />
                 <Label htmlFor="attach-pdf" className="cursor-pointer text-sm flex items-center gap-1">
                   <Paperclip className="h-3.5 w-3.5" />
-                  PDF anhängen ({invoice.nummer || invoice.typ}.pdf)
+                  PDF anhängen ({pdfFilenameOverride || `${invoice.nummer || invoice.typ}.pdf`})
                 </Label>
               </div>
             )}
