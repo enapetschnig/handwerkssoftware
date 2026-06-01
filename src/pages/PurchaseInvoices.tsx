@@ -17,6 +17,7 @@ import { PurchaseInvoiceDetailDialog } from "@/components/PurchaseInvoiceDetailD
 type PurchaseInvoice = {
   id: string;
   project_id: string | null;
+  nummer: string | null;
   lieferant: string;
   rechnungsnummer: string | null;
   rechnungsdatum: string | null;
@@ -132,6 +133,7 @@ export default function PurchaseInvoices() {
       if (search) {
         const match =
           matchesSearch(inv.lieferant, search) ||
+          matchesSearch(inv.nummer, search) ||
           matchesSearch(inv.rechnungsnummer, search) ||
           matchesSearch(inv.projects?.name, search) ||
           matchesSearch(inv.notizen, search);
@@ -371,6 +373,11 @@ export default function PurchaseInvoices() {
                       onClick={() => setEditId(inv.id)}
                     >
                       <div className="flex items-center gap-2 flex-wrap">
+                        {inv.nummer && (
+                          <span className="text-xs font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                            {inv.nummer}
+                          </span>
+                        )}
                         <span className="font-semibold truncate">{inv.lieferant}</span>
                         {inv.rechnungsnummer && (
                           <span className="text-xs text-muted-foreground">#{inv.rechnungsnummer}</span>
