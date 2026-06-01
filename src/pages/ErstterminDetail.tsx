@@ -1144,11 +1144,30 @@ export default function ErstterminDetail() {
               size="sm"
               onClick={async () => {
                 if (!id || !projectId) return;
-                const res = await copyErstterminPhotosToProject(id, projectId);
-                toast({
-                  title: "Fotos-Übernahme abgeschlossen",
-                  description: `${res.copied} kopiert · ${res.skipped} übersprungen${res.failed ? ` · ${res.failed} fehlgeschlagen` : ""}`,
-                });
+                try {
+                  const res = await copyErstterminPhotosToProject(id, projectId);
+                  const lines: string[] = [
+                    `${res.copied} kopiert · ${res.skipped} übersprungen${res.failed ? ` · ${res.failed} fehlgeschlagen` : ""}`,
+                  ];
+                  if (res.errors.length > 0) {
+                    lines.push("");
+                    lines.push("Fehlerdetails:");
+                    res.errors.slice(0, 3).forEach(e => lines.push(`• ${e}`));
+                    if (res.errors.length > 3) lines.push(`… und ${res.errors.length - 3} weitere`);
+                  }
+                  toast({
+                    title: res.failed > 0 ? "Übernahme teilweise fehlgeschlagen" : "Fotos-Übernahme abgeschlossen",
+                    description: lines.join("\n"),
+                    variant: res.failed > 0 && res.copied === 0 ? "destructive" : "default",
+                    duration: res.failed > 0 ? 10000 : 4000,
+                  });
+                } catch (err) {
+                  toast({
+                    variant: "destructive",
+                    title: "Übernahme fehlgeschlagen",
+                    description: (err as Error).message || "Unbekannter Fehler",
+                  });
+                }
               }}
               className="gap-2"
             >
