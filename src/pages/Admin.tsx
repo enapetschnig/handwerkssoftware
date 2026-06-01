@@ -34,6 +34,7 @@ import { CustomerColorSettings } from "@/components/admin/CustomerColorSettings"
 import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
 import { VehicleManager } from "@/components/admin/VehicleManager";
+import { EmailSettings } from "@/components/admin/EmailSettings";
 import { listAllActiveProjects, getEmployeeAccessibleProjectIds, syncEmployeeProjectAccess, loadEmployeeProjectRelations, type ProjectLite, type EmployeeProjectRelation } from "@/lib/projectAccess";
 import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
@@ -704,6 +705,7 @@ export default function Admin() {
             <TabsTrigger value="konfiguration" className="flex-shrink-0">Konfiguration</TabsTrigger>
             <TabsTrigger value="berechtigungen" className="flex-shrink-0">Berechtigungen</TabsTrigger>
             <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
+            <TabsTrigger value="email" className="flex-shrink-0">Email-Versand</TabsTrigger>
             <TabsTrigger value="kalender" className="flex-shrink-0">Google Kalender</TabsTrigger>
           </TabsList>
 
@@ -1287,7 +1289,12 @@ export default function Admin() {
             <WhatsAppAdminSettings />
           </TabsContent>
 
-          {/* ===== TAB 8: GOOGLE KALENDER ===== */}
+          {/* ===== TAB 8: EMAIL-VERSAND ===== */}
+          <TabsContent value="email" className="space-y-6">
+            <EmailSettings />
+          </TabsContent>
+
+          {/* ===== TAB 9: GOOGLE KALENDER ===== */}
           <TabsContent value="kalender" className="space-y-6">
             <GoogleCalendarSettings />
           </TabsContent>

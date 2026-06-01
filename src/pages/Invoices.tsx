@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal, ChevronDown, Undo2 } from "lucide-react";
+import { FileText, Receipt, AlertTriangle, Download, Archive, ArchiveRestore, Trash2, FileDown, Printer, Settings, MoreHorizontal, ChevronDown, Undo2, Mail } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { matchesSearch } from "@/lib/searchUtils";
 import { loadInvoiceLogo } from "@/lib/logoLoader";
@@ -1022,6 +1022,12 @@ export default function Invoices() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => handlePrintPdf(inv.id, e as any)}>
                                   <Printer className="h-4 w-4 mr-2" /> Drucken
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/invoices/${inv.id}?send_email=1`);
+                                }}>
+                                  <Mail className="h-4 w-4 mr-2" /> Per Email senden
                                 </DropdownMenuItem>
                                 {PAYABLE_INVOICE_TYPES.has(inv.typ) && isOverdue(inv) && (
                                   <DropdownMenuItem

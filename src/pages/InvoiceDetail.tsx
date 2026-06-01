@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil, Undo2, MapPin } from "lucide-react";
+import { Plus, Trash2, Save, Download, Copy, ArrowRightLeft, AlertTriangle, Package, Ban, FileDown, TrendingUp, Eye, Import, FileText, Printer, Star, ChevronUp, ChevronDown, X, Pencil, Undo2, MapPin, Mail } from "lucide-react";
 import { InvoicePdfPreview } from "@/components/InvoicePdfPreview";
+import { SendEmailDialog } from "@/components/SendEmailDialog";
 import { ImportMaterialsDialog } from "@/components/ImportMaterialsDialog";
 import { ImportFromProjectDialog } from "@/components/ImportFromProjectDialog";
 import { ImportDisturbanceDialog } from "@/components/ImportDisturbanceDialog";
@@ -198,7 +199,7 @@ function nettofristToDropdown(nettofrist: number): string {
 
 export default function InvoiceDetail() {
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isNew = id === "new" || !id;
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -251,6 +252,9 @@ export default function InvoiceDetail() {
   const [verrechnungZielInvoice, setVerrechnungZielInvoice] = useState<string>("_none");
   const [verrechnungZielOptions, setVerrechnungZielOptions] = useState<Array<{ id: string; nummer: string; brutto_summe: number; bezahlt_betrag: number; status: string }>>([]);
   const [verrechnungSaving, setVerrechnungSaving] = useState(false);
+  // Email-Versand-Dialog (Phase 3b)
+  const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  const [sendEmailPdfBlob, setSendEmailPdfBlob] = useState<Blob | null>(null);
   const [fromAngebotId, setFromAngebotId] = useState<string | null>(null);
   const [importOfferOpen, setImportOfferOpen] = useState(false);
   const [importTimeOpen, setImportTimeOpen] = useState(false);
@@ -668,6 +672,21 @@ export default function InvoiceDetail() {
     }
     return () => { cancelled = true; };
   }, [id]);
+
+  // Auto-Open Email-Versand-Dialog wenn aus der Listenansicht mit
+  // ?send_email=1 navigiert wird (Phase 3b). Triggert sobald das
+  // Dokument geladen + invoiceId verfügbar ist.
+  useEffect(() => {
+    if (!invoiceId || isNew) return;
+    if (searchParams.get("send_email") !== "1") return;
+    // Param sofort entfernen, damit ein Reload nicht erneut triggert
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("send_email");
+    setSearchParams(newParams, { replace: true });
+    // PDF bauen + Dialog öffnen — handleOpenSendEmail kümmert sich
+    handleOpenSendEmail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId]);
 
 
   const fetchEmployees = async () => {
@@ -1752,6 +1771,22 @@ export default function InvoiceDetail() {
     } catch (err: any) {
       console.error("PDF-Fehler:", err);
       toast({ variant: "destructive", title: "PDF-Fehler", description: err.message || "PDF konnte nicht erstellt werden" });
+    }
+  };
+
+  // Öffnet den Email-Versand-Dialog. PDF wird vorab generiert (mit
+  // demselben Renderer wie Download/Vorschau) und als Blob übergeben.
+  const handleOpenSendEmail = async () => {
+    if (!invoiceId) {
+      toast({ variant: "destructive", title: "Erst speichern", description: "Bitte das Dokument zuerst speichern." });
+      return;
+    }
+    try {
+      const pdfBlob = await buildInvoicePdfBlob();
+      setSendEmailPdfBlob(pdfBlob);
+      setSendEmailOpen(true);
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: "PDF-Fehler", description: (err as Error).message || "PDF konnte nicht erstellt werden" });
     }
   };
 
@@ -4016,6 +4051,10 @@ export default function InvoiceDetail() {
                   <Printer className="w-4 h-4" />
                   Drucken
                 </Button>
+                <Button onClick={handleOpenSendEmail} variant="default" className="gap-2">
+                  <Mail className="w-4 h-4" />
+                  Per Email senden
+                </Button>
               </>
             ) : (
               <>
@@ -4028,6 +4067,10 @@ export default function InvoiceDetail() {
                     <Button onClick={handlePrintPdf} variant="outline" className="gap-2">
                       <Printer className="w-4 h-4" />
                       Drucken
+                    </Button>
+                    <Button onClick={handleOpenSendEmail} variant="outline" className="gap-2">
+                      <Mail className="w-4 h-4" />
+                      Email
                     </Button>
                   </>
                 )}
@@ -4198,6 +4241,24 @@ export default function InvoiceDetail() {
             </div>
           </DialogContent>
         </Dialog>
+        {/* Email-Versand-Dialog */}
+        <SendEmailDialog
+          open={sendEmailOpen}
+          onOpenChange={(o) => {
+            setSendEmailOpen(o);
+            if (!o) setSendEmailPdfBlob(null);
+          }}
+          invoice={{
+            id: invoiceId,
+            typ: form.typ,
+            nummer: form.nummer,
+            datum: form.datum,
+            kunde_name: form.kunde_name,
+            kunde_email: form.kunde_email,
+            brutto_summe: bruttoSumme,
+          }}
+          pdfBlob={sendEmailPdfBlob}
+        />
         {/* PDF Preview Dialog — works both before and after saving */}
         <InvoicePdfPreview
           open={previewOpen}
