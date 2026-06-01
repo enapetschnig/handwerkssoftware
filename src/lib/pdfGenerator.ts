@@ -376,13 +376,12 @@ export async function generateInvoicePdf(
         return Math.max(dims.h, lines.length * 4) + aaPaddingY * 2;
       });
       const aaTotalH = aaHeaderH + rowHeights.reduce((s, h) => s + h, 0);
-      // Page-Break-Check: wenn der Block plus Mindestplatz (40mm für
-      // Items-Tabelle-Anlauf) nicht mehr passt → neue Seite.
-      // Konservativer Footer-Höhen-Schätzwert (echtes footerH wird
-      // erst weiter unten in der Funktion berechnet — Reihenfolge
-      // beibehalten, um TDZ-Fehler zu vermeiden).
+      // Wenn der AA-Block nicht mehr auf die aktuelle Seite passt,
+      // verschieben wir ihn vorab auf eine neue Seite. Konservativer
+      // Footer-Schätzwert, weil das echte footerH erst weiter unten
+      // berechnet wird (Reihenfolge gegen TDZ beibehalten).
       const approxFooterH = 30;
-      if (y + aaTotalH + 40 > pageHeight - approxFooterH) {
+      if (y + aaTotalH + 10 > pageHeight - approxFooterH) {
         pdf.addPage();
         y = 20;
       }
@@ -430,6 +429,12 @@ export async function generateInvoicePdf(
       pdf.line(ml, y - aaTotalH, ml, y);
       pdf.line(ml + contentWidth, y - aaTotalH, ml + contentWidth, y);
       y += 6;
+      // User-Wunsch: Wenn "Allgemeine Angaben" angezeigt werden,
+      // beginnt die Positions-Tabelle IMMER auf einer neuen Seite,
+      // damit die AA-Tabelle auf S. 1 alleine steht und die Positionen
+      // auf S. 2 unangetastet durchlaufen können.
+      pdf.addPage();
+      y = 20;
     }
   }
 
@@ -573,7 +578,8 @@ export async function generateInvoicePdf(
   const footerH = 8 + footerLines.length * 4 + (L.footer.show_page_numbers ? 4 : 0);
 
   // Spaltenbreite für Beschreibungsspalte berechnen (für Höhen-Schätzung).
-  const fixedWidths = hidePrices ? 12 + 18 + 18 : 12 + 18 + 18 + 22 + 14 + 24;
+  // Werte synchron zu columnStyles weiter unten halten.
+  const fixedWidths = hidePrices ? 10 + 16 + 16 : 10 + 16 + 16 + 20 + 12 + 22;
   const descWidth = contentWidth - fixedWidths - 4; // grob; Padding/Border
   // autoTable rendert den Body. WICHTIG: margin.bottom reserviert nur den
   // Footer + einen kleinen Puffer – nicht den kompletten Closing-Bereich.
@@ -608,13 +614,13 @@ export async function generateInvoicePdf(
       valign: "top",
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 12, textColor: [0, 0, 0] },
-      1: { halign: "right", cellWidth: 18 },
-      2: { halign: "center", cellWidth: 18, textColor: [0, 0, 0] },
+      0: { halign: "center", cellWidth: 10, textColor: [0, 0, 0] },
+      1: { halign: "right", cellWidth: 16 },
+      2: { halign: "center", cellWidth: 16, textColor: [0, 0, 0] },
       3: { halign: "left" },
-      4: { halign: "right", cellWidth: 22 },
-      5: { halign: "right", cellWidth: 14 },
-      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+      4: { halign: "right", cellWidth: 20 },
+      5: { halign: "right", cellWidth: 12 },
+      6: { halign: "right", cellWidth: 22, fontStyle: "bold" },
     },
     didParseCell: (data: any) => {
       // minCellHeight für die komplette Row setzen, wenn Langtext

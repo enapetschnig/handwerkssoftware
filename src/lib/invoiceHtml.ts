@@ -536,13 +536,13 @@ ${(() => {
 <table class="items">
   <thead>
     <tr>
-      <th style="width:40px;text-align:center;">Pos.</th>
-      <th style="width:55px;text-align:right;">Menge</th>
-      <th style="width:45px;text-align:center;">Einh.</th>
+      <th style="width:35px;text-align:center;">Pos.</th>
+      <th style="width:48px;text-align:right;">Menge</th>
+      <th style="width:40px;text-align:center;">Einh.</th>
       <th style="text-align:left;">Beschreibung</th>
-      ${hidePrices ? "" : `<th style="width:75px;text-align:right;">Preis</th>
-      <th style="width:50px;text-align:right;">Rabatt</th>
-      <th style="width:85px;text-align:right;">Gesamt</th>`}
+      ${hidePrices ? "" : `<th style="width:68px;text-align:right;">Preis</th>
+      <th style="width:45px;text-align:right;">Rabatt</th>
+      <th style="width:78px;text-align:right;">Gesamt</th>`}
     </tr>
   </thead>
   <tbody>
