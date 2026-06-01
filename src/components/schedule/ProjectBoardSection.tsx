@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
-import { parseISO } from "date-fns";
+import { parseISO, format } from "date-fns";
 import type { BoardProject, Project } from "./scheduleTypes";
 import { isWeekendDay } from "./scheduleUtils";
 
@@ -10,6 +10,12 @@ interface Props {
   days: Date[];
   onAddClick?: () => void;
   onRemove?: (boardProjectId: string) => void;
+  // D&D-Verschieben: Parent liefert Start-Handler + aktuell laufende
+  // Drag-State; Tageszellen markieren wir mit data-cell-day für
+  // elementFromPoint-Lookup im Parent.
+  onDragStart?: (boardProjectId: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  dragBoardProjectId?: string | null;
+  dropStart?: string | null;
 }
 
 function darkenHex(hex: string, amount: number): string {
@@ -23,7 +29,7 @@ function darkenHex(hex: string, amount: number): string {
 
 const WEEKEND_BG = "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)";
 
-export function ProjectBoardSection({ boardProjects, projects, days, onAddClick, onRemove }: Props) {
+export function ProjectBoardSection({ boardProjects, projects, days, onAddClick, onRemove, onDragStart, dragBoardProjectId, dropStart }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
@@ -93,15 +99,24 @@ export function ProjectBoardSection({ boardProjects, projects, days, onAddClick,
 
             {/* Timeline */}
             <div className="flex-1 relative">
-              {/* Day grid */}
+              {/* Day grid — data-cell-day für D&D-Drop-Target */}
               <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(28px, 1fr))` }}>
-                {days.map((day) => (
-                  <div
-                    key={day.toISOString()}
-                    className="border-r border-gray-100"
-                    style={isWeekendDay(day) ? { background: WEEKEND_BG } : undefined}
-                  />
-                ))}
+                {days.map((day) => {
+                  const ymd = format(day, "yyyy-MM-dd");
+                  const isDropTarget = dragBoardProjectId === bp.id && dropStart === ymd;
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      data-cell-day={ymd}
+                      data-cell-bp={bp.id}
+                      className="border-r border-gray-100"
+                      style={{
+                        ...(isWeekendDay(day) ? { background: WEEKEND_BG } : {}),
+                        ...(isDropTarget ? { background: "rgba(59,130,246,0.15)" } : {}),
+                      }}
+                    />
+                  );
+                })}
               </div>
 
               {/* Bar */}
@@ -115,8 +130,15 @@ export function ProjectBoardSection({ boardProjects, projects, days, onAddClick,
                     backgroundColor: barColor,
                     border: `1px solid ${darkenHex(barColor, 0.12)}`,
                     color: "#1e293b",
+                    cursor: onDragStart ? "grab" : "default",
+                    opacity: dragBoardProjectId === bp.id ? 0.5 : 1,
+                    touchAction: onDragStart ? "none" : undefined,
                   }}
                   title={`${project.name}: ${bp.start_date} – ${bp.end_date}`}
+                  onPointerDown={onDragStart ? (e) => {
+                    e.stopPropagation();
+                    onDragStart(bp.id, e);
+                  } : undefined}
                 >
                   <span className="truncate">{project.name}</span>
                 </div>

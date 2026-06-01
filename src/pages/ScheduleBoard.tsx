@@ -370,6 +370,71 @@ export default function ScheduleBoard() {
     // DB-Trigger synct den Google-Termin automatisch — kein expliziter Aufruf nötig.
   };
 
+  // ─── Drag & Drop: Projekt-Bar verschieben ─────────
+  // Spiegelt das Einsatz-D&D-Muster auf board_projects. Drop-Target sind
+  // Tageszellen in ProjectBoardSection, markiert mit data-cell-day +
+  // data-cell-bp (= board_project-id, optional — wir benötigen nur den
+  // Tag, das Projekt wandert auf seiner eigenen Zeile).
+  type ProjectDragState = {
+    boardProjectId: string;
+    origStart: string;
+    origEnd: string;
+    durationDays: number;
+    dropStart: string | null;
+  };
+  const [projectDrag, setProjectDrag] = useState<ProjectDragState | null>(null);
+
+  const handleProjectDragStart = (boardProjectId: string, e: React.PointerEvent<HTMLDivElement>) => {
+    if (!canEdit) return;
+    const bp = boardProjects.find((x) => x.id === boardProjectId);
+    if (!bp || !bp.start_date || !bp.end_date) return;
+    const start = new Date(bp.start_date + "T12:00:00");
+    const end = new Date(bp.end_date + "T12:00:00");
+    const duration = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86_400_000));
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* tolerant */ }
+    setProjectDrag({
+      boardProjectId,
+      origStart: bp.start_date,
+      origEnd: bp.end_date,
+      durationDays: duration,
+      dropStart: null,
+    });
+  };
+
+  const handleProjectDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!projectDrag) return;
+    const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest<HTMLElement>("[data-cell-day]");
+    if (!cell) return;
+    const cellDay = cell.dataset.cellDay || null;
+    if (cellDay !== projectDrag.dropStart) {
+      setProjectDrag((prev) => prev ? { ...prev, dropStart: cellDay } : prev);
+    }
+  };
+
+  const handleProjectDragEnd = async () => {
+    if (!projectDrag) return;
+    const { boardProjectId, origStart, durationDays, dropStart } = projectDrag;
+    setProjectDrag(null);
+    if (!dropStart || dropStart === origStart) return;
+    const newStart = new Date(dropStart + "T12:00:00");
+    const newEnd = format(addDays(newStart, durationDays), "yyyy-MM-dd");
+    // Optimistic Update
+    setBoardProjects((prev) => prev.map((bp) =>
+      bp.id === boardProjectId
+        ? { ...bp, start_date: dropStart, end_date: newEnd }
+        : bp,
+    ));
+    const { error } = await (supabase.from("board_projects" as never) as any)
+      .update({ start_date: dropStart, end_date: newEnd })
+      .eq("id", boardProjectId);
+    if (error) {
+      toast({ variant: "destructive", title: "Verschieben fehlgeschlagen", description: error.message });
+      fetchData(weekStart, weekEnd, mode);
+    }
+  };
+
   if (loading || permLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -411,9 +476,9 @@ export default function ScheduleBoard() {
         {mode !== "year" ? (
           <div
             className="border rounded-lg overflow-x-auto bg-white mt-3"
-            onPointerMove={drag ? handleDragMove : undefined}
-            onPointerUp={drag ? handleDragEnd : undefined}
-            onPointerCancel={drag ? () => setDrag(null) : undefined}
+            onPointerMove={drag ? handleDragMove : (projectDrag ? handleProjectDragMove : undefined)}
+            onPointerUp={drag ? handleDragEnd : (projectDrag ? handleProjectDragEnd : undefined)}
+            onPointerCancel={drag ? () => setDrag(null) : (projectDrag ? () => setProjectDrag(null) : undefined)}
           >
             {/* Timeline Header */}
             <TimelineHeader days={weekDays} holidays={companyHolidays} />
@@ -425,6 +490,9 @@ export default function ScheduleBoard() {
               days={weekDays}
               onAddClick={canEdit ? () => setAddProjectOpen(true) : undefined}
               onRemove={canEdit ? handleRemoveBoardProject : undefined}
+              onDragStart={canEdit ? handleProjectDragStart : undefined}
+              dragBoardProjectId={projectDrag?.boardProjectId || null}
+              dropStart={projectDrag?.dropStart || null}
             />
 
             {/* Teams Section */}
