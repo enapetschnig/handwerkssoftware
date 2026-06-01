@@ -674,19 +674,20 @@ export default function InvoiceDetail() {
   }, [id]);
 
   // Auto-Open Email-Versand-Dialog wenn aus der Listenansicht mit
-  // ?send_email=1 navigiert wird (Phase 3b). Triggert sobald das
-  // Dokument geladen + invoiceId verfügbar ist.
+  // ?send_email=1 navigiert wird (Phase 3b). WICHTIG: erst feuern
+  // wenn loading === false. Vorher hat buildInvoicePdfBlob() das PDF
+  // aus dem leeren initial-Form gerendert (Datum=heute,
+  // Kundendaten leer) statt aus den geladenen DB-Werten.
   useEffect(() => {
-    if (!invoiceId || isNew) return;
+    if (!invoiceId || isNew || loading) return;
     if (searchParams.get("send_email") !== "1") return;
     // Param sofort entfernen, damit ein Reload nicht erneut triggert
     const newParams = new URLSearchParams(searchParams);
     newParams.delete("send_email");
     setSearchParams(newParams, { replace: true });
-    // PDF bauen + Dialog öffnen — handleOpenSendEmail kümmert sich
     handleOpenSendEmail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceId]);
+  }, [invoiceId, loading]);
 
 
   const fetchEmployees = async () => {
