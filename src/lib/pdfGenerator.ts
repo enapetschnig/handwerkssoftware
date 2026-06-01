@@ -514,6 +514,8 @@ export async function generateInvoicePdf(
   }, 0);
   const positionenBrutto = positionenNetto + itemRabattTotal; // = sum(menge * einzelpreis)
   const rabattWert = rabattProzent > 0 ? positionenNetto * (rabattProzent / 100) : rabattBetrag;
+  const nachlassBetrag = Number((invoice as any).nachlass_betrag) || 0;
+  const nachlassLabel = ((invoice as any).nachlass_bezeichnung || "").toString().trim() || "Nachlass";
   const bezahltBetrag = Number(invoice.bezahlt_betrag) || 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
 
@@ -534,6 +536,10 @@ export async function generateInvoicePdf(
     if (rabattWert > 0) {
       tableFoot.push(footRow("Zwischensumme", fmtCurrency(positionenNetto)));
       tableFoot.push(footRow(`Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}`, `- ${fmtCurrency(rabattWert)}`));
+    }
+    // Block 3: Zusätzlicher Nachlass-Posten mit User-Bezeichnung
+    if (nachlassBetrag > 0) {
+      tableFoot.push(footRow(nachlassLabel, `- ${fmtCurrency(nachlassBetrag)}`));
     }
     if (isReverseCharge) {
       tableFoot.push(footRow("Rechnungsbetrag", fmtCurrency(Number(invoice.netto_summe))));
@@ -704,7 +710,10 @@ export async function generateInvoicePdf(
     const label = row[3];
     const value = row[5];
     const isBrutto = label === "Bruttobetrag";
-    const isRabatt = label.startsWith("Rabatt") || label.startsWith("Anzahlungs-Abzug");
+    // Abzug-Zeilen (Rabatt, Anzahlungs-Abzug, User-Nachlass) werden
+    // rot gerendert. User-Bezeichnungen müssen das Wert-Vorzeichen
+    // tragen, daher prüfen wir auch ob der Wert mit "- " beginnt.
+    const isRabatt = label.startsWith("Rabatt") || label.startsWith("Anzahlungs-Abzug") || value.startsWith("- ");
 
     if (isBrutto) {
       pdf.setDrawColor(0, 0, 0);

@@ -185,6 +185,9 @@ export function buildInvoiceHtml(
   const hasRabatt = rabattWert > 0;
   const hasItemRabatt = itemRabattTotal > 0;
   const hasExempt = exemptBrutto !== 0;
+  const nachlassBetrag = Number((invoice as any).nachlass_betrag) || 0;
+  const nachlassLabel = ((invoice as any).nachlass_bezeichnung || "").toString().trim() || "Nachlass";
+  const hasNachlass = nachlassBetrag > 0;
   const restBetrag = Number(invoice.brutto_summe) - bezahltBetrag;
   const showPaymentInfo = showFaelligAm && bezahltBetrag > 0;
   const mahnstufe = Number(invoice.mahnstufe) || 0;
@@ -219,6 +222,9 @@ export function buildInvoiceHtml(
   if (hasRabatt) {
     totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Zwischensumme</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(positionenNetto)}</td></tr>`;
     totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">Rabatt${rabattProzent > 0 ? ` (${rabattProzent}%)` : ""}</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">- ${fmtCurrency(rabattWert)}</td></tr>`;
+  }
+  if (hasNachlass) {
+    totalsHtml += `<tr><td style="padding:5px 0;color:${accent};font-size:9.5pt;">${nachlassLabel}</td><td style="padding:5px 0;text-align:right;color:${accent};font-size:9.5pt;">- ${fmtCurrency(nachlassBetrag)}</td></tr>`;
   }
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">Nettobetrag</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.netto_summe))}</td></tr>`;
   totalsHtml += `<tr><td style="padding:5px 0;color:#666;font-size:9.5pt;">USt. ${Number(invoice.mwst_satz).toFixed(0)}%</td><td style="padding:5px 0;text-align:right;color:#333;font-size:9.5pt;">${fmtCurrency(Number(invoice.mwst_betrag))}</td></tr>`;

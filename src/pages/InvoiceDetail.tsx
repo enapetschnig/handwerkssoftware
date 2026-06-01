@@ -123,6 +123,10 @@ interface InvoiceData {
   gueltig_bis: string;
   rabatt_prozent: number;
   rabatt_betrag: number;
+  // Nachlass-Posten (Migration 20260601100000) — zusätzlicher Abzug
+  // mit User-Bezeichnung, getrennt vom regulären Rabatt.
+  nachlass_betrag: number;
+  nachlass_bezeichnung: string;
   mahnstufe: number;
   skonto_prozent: number;
   skonto_tage: number;
@@ -321,6 +325,8 @@ export default function InvoiceDetail() {
     gueltig_bis: defaultTyp === "angebot" ? format(addMonths(new Date(), 1), "yyyy-MM-dd") : "",
     rabatt_prozent: 0,
     rabatt_betrag: 0,
+    nachlass_betrag: 0,
+    nachlass_bezeichnung: "",
     mahnstufe: 0,
     skonto_prozent: 0,
     skonto_tage: 0,
@@ -418,6 +424,8 @@ export default function InvoiceDetail() {
         mwst_satz: Number(data.mwst_satz) || 20,
         rabatt_prozent: Number(data.rabatt_prozent) || 0,
         rabatt_betrag: Number(data.rabatt_betrag) || 0,
+        nachlass_betrag: Number((data as any).nachlass_betrag) || 0,
+        nachlass_bezeichnung: (data as any).nachlass_bezeichnung || "",
         skonto_prozent: Number(data.skonto_prozent) || 0,
         skonto_tage: Number(data.skonto_tage) || 0,
         kunde_anrede: data.kunde_anrede || "",
@@ -759,6 +767,8 @@ export default function InvoiceDetail() {
       gueltig_bis: (data as any).gueltig_bis || "",
       rabatt_prozent: Number((data as any).rabatt_prozent) || 0,
       rabatt_betrag: Number((data as any).rabatt_betrag) || 0,
+      nachlass_betrag: Number((data as any).nachlass_betrag) || 0,
+      nachlass_bezeichnung: (data as any).nachlass_bezeichnung || "",
       mahnstufe: Number((data as any).mahnstufe) || 0,
       skonto_prozent: Number((data as any).skonto_prozent) || 0,
       skonto_tage: Number((data as any).skonto_tage) || 0,
@@ -1036,7 +1046,8 @@ export default function InvoiceDetail() {
   const rabattWert = r2(form.rabatt_prozent > 0
     ? positionenNetto * (form.rabatt_prozent / 100)
     : form.rabatt_betrag);
-  const nettoSumme = r2(positionenNetto - rabattWert);
+  const nachlassWert = r2(Number(form.nachlass_betrag) || 0);
+  const nettoSumme = r2(positionenNetto - rabattWert - nachlassWert);
   const mwstBetrag = r2(nettoSumme * (form.mwst_satz / 100));
   const bruttoSumme = r2(nettoSumme + mwstBetrag + exemptBrutto);
   const restBetrag = r2(bruttoSumme - form.bezahlt_betrag);
@@ -1232,6 +1243,8 @@ export default function InvoiceDetail() {
         gueltig_bis: form.gueltig_bis || null,
         rabatt_prozent: form.rabatt_prozent,
         rabatt_betrag: form.rabatt_betrag,
+        nachlass_betrag: Number(form.nachlass_betrag) || 0,
+        nachlass_bezeichnung: form.nachlass_bezeichnung?.trim() || null,
         mahnstufe: form.mahnstufe,
         skonto_prozent: form.skonto_prozent || 0,
         skonto_tage: form.skonto_tage || 0,
@@ -1289,6 +1302,7 @@ export default function InvoiceDetail() {
       const allTolerantCols = [
         "leistungsdatum_bis", "allgemeine_angaben_aktiv",
         "verrechnet_mit_invoice_id", "verrechnet_am",
+        "nachlass_betrag", "nachlass_bezeichnung",
         ...aaFields,
       ];
       const isSchemaCacheMiss = (err: any) =>
@@ -1826,6 +1840,8 @@ export default function InvoiceDetail() {
           project_id: form.project_id || null,
           rabatt_prozent: form.rabatt_prozent,
           rabatt_betrag: form.rabatt_betrag,
+          nachlass_betrag: Number(form.nachlass_betrag) || 0,
+          nachlass_bezeichnung: form.nachlass_bezeichnung?.trim() || null,
           kunde_anrede: (form as any).kunde_anrede || null,
           kunde_titel: (form as any).kunde_titel || null,
           reverse_charge: (form as any).reverse_charge || false,
@@ -3454,6 +3470,33 @@ export default function InvoiceDetail() {
                   />
                 </div>
               </div>
+              {/* Zusätzlicher Nachlass-Posten mit User-Bezeichnung
+                  (z. B. "Nachlass für Eigenleistung"). Wird im PDF/HTML
+                  als eigene Zeile zwischen Rabatt und Nettobetrag
+                  gerendert und vom Netto subtrahiert. */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
+                <div className="md:col-span-2">
+                  <Label>Zusätzlicher Nachlass — Bezeichnung</Label>
+                  <Input
+                    type="text"
+                    value={form.nachlass_bezeichnung}
+                    onChange={(e) => updateField("nachlass_bezeichnung", e.target.value)}
+                    placeholder='z. B. "Nachlass für Eigenleistung"'
+                    maxLength={120}
+                  />
+                </div>
+                <div>
+                  <Label>Nachlass-Betrag (€)</Label>
+                  <Input
+                    type="number"
+                    value={form.nachlass_betrag}
+                    onChange={(e) => updateField("nachlass_betrag", Number(e.target.value) || 0)}
+                    min={0}
+                    step={0.01}
+                    className="w-32"
+                  />
+                </div>
+              </div>
             </CardContent>
             </fieldset>
           </Card>
@@ -4194,6 +4237,8 @@ export default function InvoiceDetail() {
             bezahlt_betrag: form.bezahlt_betrag,
             rabatt_prozent: form.rabatt_prozent,
             rabatt_betrag: form.rabatt_betrag,
+            nachlass_betrag: form.nachlass_betrag || 0,
+            nachlass_bezeichnung: form.nachlass_bezeichnung || "",
             mahnstufe: form.mahnstufe,
             skonto_prozent: form.skonto_prozent,
             skonto_tage: form.skonto_tage,
