@@ -26,6 +26,7 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
+  const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
   const [color, setColor] = useState(BOARD_COLORS[0]);
   const [customColor, setCustomColor] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,12 +44,32 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
       setStartDate("");
       setEndDate("");
       setBeschreibung("");
-      setColor(BOARD_COLORS[0]);
       setCustomColor("");
       setNewName("");
       setNewAdresse("");
       setNewPlz("");
       setNewOrt("");
+      // Admin-gepflegte Lieblings-Farben laden. Wenn vorhanden, wird
+      // die erste davon als Default vorausgewählt — sonst BOARD_COLORS[0].
+      (async () => {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", "plantafel_default_colors")
+          .maybeSingle();
+        let favs: string[] = [];
+        const raw = (data as { value?: string } | null)?.value;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              favs = parsed.filter((c): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c));
+            }
+          } catch { /* tolerant */ }
+        }
+        setFavoriteColors(favs);
+        setColor(favs[0] || BOARD_COLORS[0]);
+      })();
     }
   }, [open]);
 
@@ -110,7 +131,26 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
   const colorPicker = (
     <div>
       <Label>Farbe</Label>
-      <div className="flex flex-wrap gap-2 mt-2">
+      {favoriteColors.length > 0 && (
+        <>
+          <div className="text-[10px] text-muted-foreground uppercase mt-2 mb-1">Bevorzugt</div>
+          <div className="flex flex-wrap gap-2">
+            {favoriteColors.map(c => (
+              <button
+                key={`fav-${c}`}
+                type="button"
+                className="w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center"
+                style={{ backgroundColor: c, borderColor: color === c ? "#333" : "transparent" }}
+                onClick={() => { setColor(c); setCustomColor(""); }}
+              >
+                {color === c && <Check className="h-4 w-4 text-gray-700" />}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-muted-foreground uppercase mt-3 mb-1">Standard-Palette</div>
+        </>
+      )}
+      <div className={`flex flex-wrap gap-2 ${favoriteColors.length === 0 ? "mt-2" : ""}`}>
         {BOARD_COLORS.map(c => (
           <button
             key={c}

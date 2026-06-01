@@ -35,6 +35,7 @@ import { NumberRangeSettings } from "@/components/admin/NumberRangeSettings";
 import { ConfigOptionsManager } from "@/components/admin/ConfigOptionsManager";
 import { VehicleManager } from "@/components/admin/VehicleManager";
 import { EmailSettings } from "@/components/admin/EmailSettings";
+import { PlantafelDefaultColors } from "@/components/admin/PlantafelDefaultColors";
 import { listAllActiveProjects, getEmployeeAccessibleProjectIds, syncEmployeeProjectAccess, loadEmployeeProjectRelations, type ProjectLite, type EmployeeProjectRelation } from "@/lib/projectAccess";
 import { PermissionMatrix } from "@/components/admin/PermissionMatrix";
 import { useConfigOptions } from "@/hooks/useConfigOptions";
@@ -1264,6 +1265,7 @@ export default function Admin() {
             <ProjectStatusSettings />
             <CustomerColorSettings />
             <EmployeeColorSettings />
+            <PlantafelDefaultColors />
           </TabsContent>
 
           {/* ===== TAB 5: KONFIGURATION ===== */}
