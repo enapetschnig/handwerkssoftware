@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle, Camera, Receipt, Lock } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Image as ImageIcon, Search, Filter, Trash2, Download, Euro, Calendar, Building2, CheckCircle2, Clock as ClockIcon, XCircle, Camera, Receipt, Lock, FileSpreadsheet } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PurchaseInvoiceUploadDialog } from "@/components/PurchaseInvoiceUploadDialog";
 import { PurchaseInvoiceDetailDialog } from "@/components/PurchaseInvoiceDetailDialog";
+import { ExportPurchaseInvoicesDialog } from "@/components/ExportPurchaseInvoicesDialog";
 
 type PurchaseInvoice = {
   id: string;
@@ -65,6 +66,7 @@ export default function PurchaseInvoices() {
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [cameraFile, setCameraFile] = useState<File | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -238,6 +240,10 @@ export default function PurchaseInvoices() {
           <Button onClick={() => { setCameraFile(null); setUploadOpen(true); }} className="gap-2">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">Hochladen</span>
+          </Button>
+          <Button onClick={() => setExportOpen(true)} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span className="hidden sm:inline">Excel-Export</span>
           </Button>
           <input
             ref={cameraInputRef}
@@ -459,6 +465,12 @@ export default function PurchaseInvoices() {
         onUploaded={loadData}
         prefillProjectId={projectFilter}
         initialFile={cameraFile}
+      />
+
+      {/* Excel-Export */}
+      <ExportPurchaseInvoicesDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
       />
 
       {/* Edit detail */}
