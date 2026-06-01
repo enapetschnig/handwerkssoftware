@@ -52,6 +52,7 @@ interface TimeEntry {
 interface Profile {
   vorname: string;
   nachname: string;
+  hidden?: boolean;
 }
 
 interface Project {
@@ -76,6 +77,7 @@ export default function HoursReport() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [editForm, setEditForm] = useState({ start_time: "", end_time: "", pause_minutes: 0, stunden: 0, taetigkeit: "", location_type: "", project_id: "" });
@@ -132,13 +134,15 @@ export default function HoursReport() {
   };
 
   const fetchProfiles = async () => {
+    // Alle Profile holen (auch archivierte). Im UI filtert ein Admin-
+    // Toggle die archivierten Mitarbeiter aus dem Dropdown — RLS auf
+    // profiles erlaubt Admins ohnehin den Zugriff auf alle Einträge.
     const { data } = await (supabase.from("profiles" as never) as any)
-      .select("id, vorname, nachname")
-      .eq("hidden", false);
+      .select("id, vorname, nachname, hidden");
     if (data) {
       const profileMap: Record<string, Profile> = {};
-      data.forEach((p) => {
-        profileMap[p.id] = { vorname: p.vorname, nachname: p.nachname };
+      data.forEach((p: { id: string; vorname: string; nachname: string; hidden?: boolean }) => {
+        profileMap[p.id] = { vorname: p.vorname, nachname: p.nachname, hidden: !!p.hidden };
       });
       setProfiles(profileMap);
     }
@@ -705,18 +709,47 @@ export default function HoursReport() {
               
               <div className="flex flex-col sm:flex-row gap-3">
                 {isAdmin && (
-                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Mitarbeiter auswählen" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      {Object.entries(profiles).map(([id, profile]) => (
-                        <SelectItem key={id} value={id}>
-                          {profile.vorname} {profile.nachname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-col gap-1.5 flex-1 sm:max-w-xs">
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Mitarbeiter auswählen" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {/* Aktive Mitarbeiter zuerst */}
+                        {Object.entries(profiles)
+                          .filter(([, p]) => !p.hidden)
+                          .sort(([, a], [, b]) => `${a.nachname}${a.vorname}`.localeCompare(`${b.nachname}${b.vorname}`))
+                          .map(([id, profile]) => (
+                            <SelectItem key={id} value={id}>
+                              {profile.vorname} {profile.nachname}
+                            </SelectItem>
+                          ))}
+                        {/* Archivierte Mitarbeiter optional eingeblendet */}
+                        {showArchived && Object.entries(profiles).some(([, p]) => p.hidden) && (
+                          <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground border-t mt-1 pt-2">
+                            Archiviert
+                          </div>
+                        )}
+                        {showArchived && Object.entries(profiles)
+                          .filter(([, p]) => p.hidden)
+                          .sort(([, a], [, b]) => `${a.nachname}${a.vorname}`.localeCompare(`${b.nachname}${b.vorname}`))
+                          .map(([id, profile]) => (
+                            <SelectItem key={id} value={id}>
+                              {profile.vorname} {profile.nachname} <span className="text-[10px] text-muted-foreground ml-1">(archiviert)</span>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showArchived}
+                        onChange={(e) => setShowArchived(e.target.checked)}
+                        className="h-3.5 w-3.5"
+                      />
+                      Archivierte Mitarbeiter einblenden
+                    </label>
+                  </div>
                 )}
                 <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
                   <SelectTrigger className="h-11">
