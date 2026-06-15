@@ -1999,7 +1999,11 @@ export default function Admin() {
             <AlertDialogDescription>
               Möchten Sie {userToDelete?.vorname} {userToDelete?.nachname} wirklich löschen?
               <br /><br />
-              <strong>Hinweis:</strong> Alle Arbeitszeiterfassungen und Dokumente bleiben vorerst gespeichert.
+              <strong>Daten-Schutz:</strong> Vor der Löschung wird ein Snapshot in der
+              Archiv-Tabelle <code>deleted_users_archive</code> angelegt. Alle Stunden-
+              aufzeichnungen, Plantafel-Einsätze, Dokumente und Berichte bleiben mit
+              Verweis auf den Snapshot bestehen — Sie können sie jederzeit wieder
+              einsehen. Nur der Login-Account wird endgültig entfernt.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2015,20 +2019,15 @@ export default function Admin() {
                 if (!userToDelete) return;
 
                 try {
-                  // Zeiteinträge: Namen in Notizen sichern bevor user_id null wird
+                  // Edge Function delete-user (seit Migration 20260615120000):
+                  // 1) Snapshot in deleted_users_archive
+                  // 2) historische Tabellen bekommen archived_user_id-Bezug
+                  // 3) auth.users via CASCADE — Daten bleiben (SET NULL).
+                  // Der frühere Notizen-Sichern-Schritt ist überflüssig:
+                  // Name + Telefon + Adresse liegen jetzt im Archiv.
                   const userName = `${userToDelete.vorname} ${userToDelete.nachname}`;
-                  const { data: existingEntries } = await supabase.from("time_entries")
-                    .select("id, notizen").eq("user_id", userToDelete.id);
-                  if (existingEntries?.length) {
-                    for (const entry of existingEntries) {
-                      const note = entry.notizen ? `${entry.notizen} | Mitarbeiter: ${userName}` : `Mitarbeiter: ${userName}`;
-                      await supabase.from("time_entries").update({ notizen: note }).eq("id", entry.id);
-                    }
-                  }
-
-                  // Edge Function räumt employees, user_roles, profiles UND auth.users auf
                   const { data: dData, error: dErr } = await supabase.functions.invoke("delete-user", {
-                    body: { user_id: userToDelete.id },
+                    body: { user_id: userToDelete.id, notiz: "via Admin-UI" },
                   });
                   if (dErr) {
                     let detail = dErr.message;

@@ -1,0 +1,31 @@
+﻿
+Mitarbeiter;Manfred Bettger
+Status;verwaist (profile geloescht, Daten aus DB wiederhergestellt)
+Austrittsdatum;08.05.2026
+Telefon;+436641278356
+User-ID;4e1290ed-92df-4ab2-a346-d8241796e9c1
+Export-Datum;2026-06-15
+
+Datum;Wochentag;Tätigkeit;Stunden;Start;Ende;Pause (Min);Projekt;Ort/Typ;Wetterschicht (h);Notizen;nachgetragen am;erfasst am;Eintrags-ID
+20.04.2026;Mo;Kasten Demontage;1,00;08:00;09:00;0;Portas/Gurker WN;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-22 16:10;2cff4e64-8535-4daa-9551-30c02f01328e
+20.04.2026;Mo;Malerarbeiten;9,00;09:00;18:30;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;2026-04-23 15:46;2026-04-23 15:46;c1f09669-a104-4ceb-ae5c-c44c5e74e891
+21.04.2026;Di;Malerarbeiten;8,00;08:00;16:30;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-21 14:35;43ba8a11-3507-402f-9e2a-fc89d3f60015
+22.04.2026;Mi;Allgemeine Arbeiten;7,50;07:00;15:00;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-22 16:10;6c20ab32-1ab1-4c15-b5d5-1508f28a3302
+22.04.2026;Mi;Malerarbeiten;2,00;15:30;17:30;0;Martina;baustelle;;Mitarbeiter: Manfred Bettger;2026-04-23 15:47;2026-04-23 15:47;3a9f5016-617f-4976-9e97-2fb80e61d0fe
+24.04.2026;Fr;Allgemeine Arbeiten;10,00;07:30;17:00;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-24 18:12;dc769c11-4ad8-42b1-8627-da4fab524f63
+27.04.2026;Mo;Allgemeine Arbeiten;11,50;07:00;19:00;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-27 18:37;b8cdf241-f8ee-48ff-acd6-73cbf60a74c1
+28.04.2026;Di;Allgemeine Arbeiten;6,00;07:00;13:00;0;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-28 18:19;d43e5706-5264-489f-a524-dc4e5e27039c
+28.04.2026;Di;Montage;3,50;13:00;17:00;30;Martina;baustelle;;Mitarbeiter: Manfred Bettger;2026-04-29 05:48;2026-04-29 05:48;5bb3dbd7-44db-4561-bbbb-4624f9def560
+29.04.2026;Mi;Versiegeln;5,00;08:00;13:30;30;Portas/Hobinger Pottendorf;baustelle;;Mitarbeiter: Manfred Bettger;;2026-04-29 19:30;04eb66f9-a7d4-40bf-85dc-cdc66ad22832
+30.04.2026;Do;Allgemeine Arbeiten;5,50;07:00;13:00;30;;werkstatt;;Mitarbeiter: Manfred Bettger;;2026-04-30 20:21;ef39d080-9bf7-49a2-9d7d-75d6e3fd70b8
+30.04.2026;Do;Montage;3,00;13:00;16:00;0;Martina;baustelle;;Mitarbeiter: Manfred Bettger;2026-05-04 04:23;2026-05-04 04:23;b6885ff2-9393-454c-abfe-87cb9f1b34de
+30.04.2026;Do;Montage;2,50;16:00;18:30;0;Malermeisterin Nina Schauer;baustelle;;Mitarbeiter: Manfred Bettger;2026-05-04 04:24;2026-05-04 04:24;a4063228-08d9-41a3-81a9-39cfc7558944
+02.05.2026;Sa;Allgemeine Arbeiten;6,50;07:00;14:00;30;Andreas Hirmann;baustelle;;Mitarbeiter: Manfred Bettger;;2026-05-02 14:02;c823eacf-303e-42d4-afc9-fa59e14467df
+02.05.2026;Sa;Allgemeine Arbeiten;2,00;14:00;16:00;0;;werkstatt;;Mitarbeiter: Manfred Bettger;;2026-05-02 14:02;d2d4fafb-022e-4650-a617-74c4c5cd2e8a
+04.05.2026;Mo;Allgemeine Arbeiten;8,00;07:30;16:00;30;Portas/Mikes Pernitz;baustelle;;Mitarbeiter: Manfred Bettger;;2026-05-04 17:12;897f2d4d-e5bb-4852-8553-a91c7b82ce51
+04.05.2026;Mo;Allgemeine Arbeiten;3,00;16:00;19:00;0;Martina;baustelle;;Mitarbeiter: Manfred Bettger;;2026-05-04 17:12;5b50d3e9-6cb3-4765-ab6b-f7276978c8f2
+18.06.2026;Do;Urlaub;8,50;07:00;16:00;30;;werkstatt;;Mitarbeiter: Manfred Bettger;;2026-05-02 14:09;d3fe888a-c9ed-4418-825e-5b5b6f429e9a
+
+Summe Stunden;102,50
+Anzahl Einträge;18
+Export erstellt am;15.06.2026 13:43
