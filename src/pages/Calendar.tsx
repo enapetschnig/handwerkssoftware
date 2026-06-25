@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { metaFor } from "@/lib/calendarCategories";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RefreshCw, Plus, Calendar as CalIcon, Clock, MapPin, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, isSameDay, isSameMonth } from "date-fns";
 import { de } from "date-fns/locale";
@@ -84,6 +85,9 @@ export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  // Oesterreichische Feiertage (yyyy-MM-dd → Bezeichnung) — Hintergrund-
+  // markierung in der Kalender-Grid + Hover-Tooltip mit dem Namen.
+  const { holidayMap } = useAustrianHolidays();
 
   // Event dialog state
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
@@ -492,6 +496,7 @@ export default function Calendar() {
                   const isCurrentMonth = isSameMonth(d, currentMonth);
                   const isSelected = selectedDate && isSameDay(d, selectedDate);
                   const hasItems = dayAssignments.length > 0 || dayEvents.length > 0;
+                  const atHoliday = holidayMap[format(d, "yyyy-MM-dd")];
 
                   return (
                     <div
@@ -499,14 +504,21 @@ export default function Calendar() {
                       className={`min-h-[60px] sm:min-h-[80px] border-b border-r p-1 cursor-pointer transition-colors
                         ${!isCurrentMonth ? "bg-muted/30 text-muted-foreground" : ""}
                         ${isToday ? "bg-primary/5" : ""}
+                        ${atHoliday ? "bg-red-50" : ""}
                         ${isSelected ? "ring-2 ring-primary ring-inset" : ""}
                         ${hasItems ? "hover:bg-accent/10" : "hover:bg-muted/50"}
                       `}
                       onClick={() => setSelectedDate(d)}
+                      title={atHoliday || undefined}
                     >
-                      <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-primary font-bold" : ""}`}>
+                      <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-primary font-bold" : atHoliday ? "text-red-700" : ""}`}>
                         {format(d, "d")}
                       </div>
+                      {atHoliday && isCurrentMonth && (
+                        <div className="text-[9px] text-red-700 truncate font-medium mb-0.5" title={atHoliday}>
+                          🎉 {atHoliday}
+                        </div>
+                      )}
                       {/* Event indicators */}
                       <div className="space-y-0.5">
                         {dayAssignments.slice(0, 2).map((a) => {

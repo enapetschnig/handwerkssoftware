@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2, TrendingUp, Wallet } from "lucide-react";
 import { getTotalWorkingHours } from "@/lib/workingHours";
-import { aggregateByDay, totalAutoSaldo, formatSaldo } from "@/lib/hoursAccounting";
+import { aggregateByDay, totalAutoSaldo, formatSaldo, SONDER_TAETIGKEITEN } from "@/lib/hoursAccounting";
+import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -36,6 +37,7 @@ const MyHours = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
+  const { holidaySet } = useAustrianHolidays();
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -68,13 +70,14 @@ const MyHours = () => {
       ]);
       if (cancelled) return;
       setManualSaldo(Number((acc as any)?.balance_hours) || 0);
-      setAutoSaldoAll(totalAutoSaldo((allEntries as any[]) || []));
+      setAutoSaldoAll(totalAutoSaldo((allEntries as any[]) || [], holidaySet));
     })();
     return () => { cancelled = true; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holidaySet]);
 
   // Tages-Aggregation des aktuell angezeigten Monats (für Tagessaldo-Spalte).
-  const dayBalances = useMemo(() => aggregateByDay(entries as any), [entries]);
+  const dayBalances = useMemo(() => aggregateByDay(entries as any, holidaySet), [entries, holidaySet]);
   const dayBalanceMap = useMemo(() => new Map(dayBalances.map(d => [d.datum, d])), [dayBalances]);
   const effektiv = autoSaldoAll + manualSaldo;
 
@@ -263,8 +266,8 @@ const MyHours = () => {
                     const day = date.getDay();
                     if (day === 0 || day === 6) continue; // Weekend
                     const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    if (absenceDates.has(dateStr)) { sollTotal += getTotalWorkingHours(date); continue; }
-                    sollTotal += getTotalWorkingHours(date);
+                    if (absenceDates.has(dateStr)) { sollTotal += getTotalWorkingHours(date, holidaySet); continue; }
+                    sollTotal += getTotalWorkingHours(date, holidaySet);
                   }
                   const diff = totalHours - sollTotal;
                   return (
@@ -331,7 +334,11 @@ const MyHours = () => {
                               ) : null}
                               <TableCell className="text-sm">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span>{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</span>
+                                  {SONDER_TAETIGKEITEN.has(entry.taetigkeit) ? (
+                                    <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    <span>{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</span>
+                                  )}
                                   {entry.nachgetragen_von && (
                                     <span
                                       className="inline-flex items-center px-1 py-0 text-[9px] rounded border border-amber-400 text-amber-700 bg-amber-50"

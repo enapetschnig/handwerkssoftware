@@ -7,6 +7,9 @@ import { isCompanyHoliday } from "./scheduleUtils";
 interface Props {
   days: Date[];
   holidays: CompanyHoliday[];
+  // Oeffentliche oesterreichische Feiertage (yyyy-MM-dd → Bezeichnung).
+  // Werden zusaetzlich zu Firmen-Feiertagen visuell hervorgehoben.
+  austrianHolidays?: Record<string, string>;
 }
 
 /** Group consecutive days that share a key into spans with start index and count. */
@@ -26,7 +29,7 @@ function groupSpans(
   return spans;
 }
 
-export function TimelineHeader({ days, holidays }: Props) {
+export function TimelineHeader({ days, holidays, austrianHolidays }: Props) {
   const monthSpans = useMemo(
     () =>
       groupSpans(days, (d) => format(d, "LLLL yyyy", { locale: de })),
@@ -78,34 +81,46 @@ export function TimelineHeader({ days, holidays }: Props) {
           const weekend = isWeekend(day);
           const today = isToday(day);
           const holiday = isCompanyHoliday(holidays, day);
+          const ymd = format(day, "yyyy-MM-dd");
+          const atHoliday = austrianHolidays?.[ymd];
+
+          // Hintergrund: Wochenende-Streifen UND AT-Feiertag-Tinte
+          // koennen kombiniert auftreten (z.B. 1.1. faellt auf Sa) —
+          // wir nehmen den Feiertag-Hintergrund vor dem Wochenende-Pattern.
+          let bgStyle: React.CSSProperties | undefined;
+          if (atHoliday) {
+            bgStyle = { background: "rgba(239, 68, 68, 0.10)" };
+          } else if (weekend) {
+            bgStyle = {
+              background:
+                "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)",
+            };
+          }
 
           return (
             <div
               key={i}
               className="flex items-center justify-center py-1 border-r border-gray-100"
-              style={
-                weekend
-                  ? {
-                      background:
-                        "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)",
-                    }
-                  : undefined
-              }
+              style={bgStyle}
               title={
-                holiday
-                  ? holiday.bezeichnung || "Feiertag"
-                  : format(day, "EEEE, d. MMMM yyyy", { locale: de })
+                atHoliday
+                  ? `${atHoliday} — ${format(day, "EEEE, d. MMMM yyyy", { locale: de })}`
+                  : holiday
+                    ? holiday.bezeichnung || "Feiertag"
+                    : format(day, "EEEE, d. MMMM yyyy", { locale: de })
               }
             >
               <span
                 className={`text-xs leading-none ${
                   today
                     ? "bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-semibold"
-                    : holiday
-                      ? "text-red-400 font-medium"
-                      : weekend
-                        ? "text-gray-400"
-                        : "text-gray-600"
+                    : atHoliday
+                      ? "text-red-600 font-semibold"
+                      : holiday
+                        ? "text-red-400 font-medium"
+                        : weekend
+                          ? "text-gray-400"
+                          : "text-gray-600"
                 }`}
               >
                 {format(day, "d")}

@@ -10,8 +10,18 @@ export interface WorkTimePreset {
 /**
  * Regelarbeitszeit pro Werktag.
  * Mo-Do: 10h (07:00-17:30, Pause 12:00-12:30). Fr/Sa/So: arbeitsfrei.
+ *
+ * Optionales holidaySet (YYYY-MM-DD-Strings) — wenn der Tag in dem Set
+ * enthalten ist, wird 0 zurueckgegeben (oeffentlicher Feiertag = arbeitsfrei).
+ * Hook fuer das Set: useAustrianHolidays.
  */
-export function getNormalWorkingHours(date: Date): number {
+export function getNormalWorkingHours(date: Date, holidaySet?: Set<string>): number {
+  if (holidaySet) {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    if (holidaySet.has(`${yyyy}-${mm}-${dd}`)) return 0;
+  }
   const dayOfWeek = date.getDay();
   if (dayOfWeek >= 1 && dayOfWeek <= 4) return 10;
   return 0;
@@ -30,8 +40,8 @@ export function getFridayOvertime(_date: Date): number {
  * Deckungsgleich mit getNormalWorkingHours, da es keine automatischen
  * Überstundenanteile mehr gibt.
  */
-export function getTotalWorkingHours(date: Date): number {
-  return getNormalWorkingHours(date);
+export function getTotalWorkingHours(date: Date, holidaySet?: Set<string>): number {
+  return getNormalWorkingHours(date, holidaySet);
 }
 
 /**

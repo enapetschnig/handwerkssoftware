@@ -27,7 +27,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getNormalWorkingHours } from "@/lib/workingHours";
-import { aggregateByDay, totalAutoSaldo, formatSaldo, type DayBalance } from "@/lib/hoursAccounting";
+import { aggregateByDay, totalAutoSaldo, formatSaldo, type DayBalance, SONDER_TAETIGKEITEN } from "@/lib/hoursAccounting";
+import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 
 interface TimeEntry {
   id: string;
@@ -259,8 +260,10 @@ export default function HoursReport() {
   };
 
   // Tages-Saldo aus dem zentralen Helper — pro Tag aggregiert,
-  // Sonderzeiten neutral, Minusstunden möglich.
-  const dayBalances = useMemo(() => aggregateByDay(timeEntries as any), [timeEntries]);
+  // Sonderzeiten neutral, Minusstunden möglich. Feiertage aus
+  // austrian_holidays werden ebenfalls neutral (Soll 0) gerechnet.
+  const { holidaySet } = useAustrianHolidays();
+  const dayBalances = useMemo(() => aggregateByDay(timeEntries as any, holidaySet), [timeEntries, holidaySet]);
   const dayBalanceMap = useMemo(() => new Map(dayBalances.map(d => [d.datum, d])), [dayBalances]);
   // Erste Eintrags-ID pro Tag — damit "Überstunden" und Soll nur in
   // der ersten Zeile pro Tag gezeigt werden (vermeidet Doppelzählung).
@@ -319,7 +322,7 @@ export default function HoursReport() {
       ]);
       if (cancelled) return;
       setManualBalance(Number((acc as any)?.balance_hours) || 0);
-      setAutoBalanceAll(totalAutoSaldo((allEntries as any[]) || []));
+      setAutoBalanceAll(totalAutoSaldo((allEntries as any[]) || [], holidaySet));
     })();
     return () => { cancelled = true; };
   }, [selectedUserId]);
@@ -394,8 +397,11 @@ export default function HoursReport() {
           const lunchBreak = calculateLunchBreak(entry);
           const project = projects[entry.project_id];
           
-          // Ort-Spalte: Baustelle oder Werkstatt
-          const ortText = entry.location_type === "baustelle" ? "Baustelle" : "Werkstatt";
+          // Ort-Spalte: Baustelle / Werkstatt — bei Sonderzeiten (Feiertag,
+          // Urlaub, …) bewusst leer, weil "Baustelle" dort irreführend ist.
+          const ortText = SONDER_TAETIGKEITEN.has(entry.taetigkeit)
+            ? ""
+            : entry.location_type === "baustelle" ? "Baustelle" : "Werkstatt";
           
           // Projekt-Spalte: Urlaub/Krankenstand/Weiterbildung, Störung oder Projektname
           const isAbsence = ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag"].includes(entry.taetigkeit);
@@ -889,8 +895,12 @@ export default function HoursReport() {
                               // Tagessaldo aus Helper — pro-Tag, nur in 1. Zeile anzeigen.
                               const dayBal = getDayBal(entry.datum);
                               const project = projects[entry.project_id];
-                              const ortIcon = entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏢" : "";
-                              const ortText = entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Firma" : "";
+                              // Bei Sonderzeiten (Feiertag, Urlaub, …) Ort leer lassen —
+                              // location_type ist dort oft "baustelle" (Default), was visuell
+                              // verwirrend ist.
+                              const isSonderzeit = SONDER_TAETIGKEITEN.has(entry.taetigkeit);
+                              const ortIcon = isSonderzeit ? "" : entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏢" : "";
+                              const ortText = isSonderzeit ? "" : entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Firma" : "";
                               const projektName = entry.taetigkeit === "Urlaub" || entry.taetigkeit === "Krankenstand"
                                 ? entry.taetigkeit
                                 : (project?.name || "");

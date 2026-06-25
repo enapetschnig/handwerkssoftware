@@ -18,6 +18,7 @@ import type { Einsatz, ScheduleMode } from "@/components/schedule/scheduleTypes"
 import { getUnteamedProfiles } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
+import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
 import { TimelineHeader } from "@/components/schedule/TimelineHeader";
 import { ProjectBoardSection } from "@/components/schedule/ProjectBoardSection";
@@ -53,6 +54,9 @@ export default function ScheduleBoard() {
     loading,
     fetchData,
   } = useScheduleData();
+  // AT-Feiertage (yyyy-MM-dd → Bezeichnung). Visuell rote Markierung in
+  // TimelineHeader, geht ausserdem in HoursReport-Saldo ein.
+  const { holidayMap } = useAustrianHolidays();
 
   const {
     userId,
@@ -481,7 +485,7 @@ export default function ScheduleBoard() {
             onPointerCancel={drag ? () => setDrag(null) : (projectDrag ? () => setProjectDrag(null) : undefined)}
           >
             {/* Timeline Header */}
-            <TimelineHeader days={weekDays} holidays={companyHolidays} />
+            <TimelineHeader days={weekDays} holidays={companyHolidays} austrianHolidays={holidayMap} />
 
             {/* Projekte Section */}
             <ProjectBoardSection

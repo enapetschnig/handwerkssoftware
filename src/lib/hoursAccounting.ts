@@ -42,7 +42,7 @@ export const SONDER_TAETIGKEITEN = new Set([
  * Aggregiert beliebige time_entries nach Datum und liefert je Tag
  * Ist-, Soll- und Saldo-Stunden. Sortiert aufsteigend nach Datum.
  */
-export function aggregateByDay(entries: TimeEntryLite[]): DayBalance[] {
+export function aggregateByDay(entries: TimeEntryLite[], holidaySet?: Set<string>): DayBalance[] {
   const grouped = new Map<string, TimeEntryLite[]>();
   for (const e of entries) {
     if (!e?.datum) continue;
@@ -56,18 +56,21 @@ export function aggregateByDay(entries: TimeEntryLite[]): DayBalance[] {
     const istSonderzeit = dayEntries.some(
       (e) => !!e.taetigkeit && SONDER_TAETIGKEITEN.has(e.taetigkeit),
     );
-    const soll = istSonderzeit
+    // Soll: an Sonderzeit-Tagen (Feiertag, Urlaub, …) oder an
+    // austrian_holidays-Tagen ist das Soll 0 → Saldo bleibt neutral.
+    const isHoliday = holidaySet?.has(datum) === true;
+    const soll = istSonderzeit || isHoliday
       ? 0
       : getNormalWorkingHours(new Date(datum + "T12:00:00"));
-    const saldo = istSonderzeit ? 0 : ist - soll;
-    out.push({ datum, ist, soll, saldo, istSonderzeit });
+    const saldo = istSonderzeit || isHoliday ? 0 : ist - soll;
+    out.push({ datum, ist, soll, saldo, istSonderzeit: istSonderzeit || isHoliday });
   }
   return out.sort((a, b) => a.datum.localeCompare(b.datum));
 }
 
 /** Saldo-Summe über die gegebenen Einträge — Auto-Saldo aus time_entries. */
-export function totalAutoSaldo(entries: TimeEntryLite[]): number {
-  return aggregateByDay(entries).reduce((s, d) => s + d.saldo, 0);
+export function totalAutoSaldo(entries: TimeEntryLite[], holidaySet?: Set<string>): number {
+  return aggregateByDay(entries, holidaySet).reduce((s, d) => s + d.saldo, 0);
 }
 
 /**
