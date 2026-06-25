@@ -516,9 +516,13 @@ export default function Invoices() {
       // Sub-Filter innerhalb der Rechnungen (normale / AR / SR / GS)
       if (matchTyp && filterSubTyp !== "alle") matchTyp = i.typ === filterSubTyp;
     } else if (filterTyp === "angebot") {
-      matchTyp = ANGEBOT_LIKE_TYPES.has(i.typ);
-      // Sub-Filter innerhalb der Angebote (Angebot / AB)
+      // "Angebote"-Tab zeigt jetzt NUR noch Angebote — Auftragsbestätigungen
+      // haben einen eigenen Tab. Der Sub-Filter bleibt erhalten, falls die
+      // User-Vorlieben mal anders sind.
+      matchTyp = i.typ === "angebot";
       if (matchTyp && filterSubTyp !== "alle") matchTyp = i.typ === filterSubTyp;
+    } else if (filterTyp === "auftragsbestaetigung") {
+      matchTyp = i.typ === "auftragsbestaetigung";
     } else if (filterTyp === "lieferschein") {
       matchTyp = i.typ === "lieferschein";
     } else {
@@ -551,7 +555,9 @@ export default function Invoices() {
     ? rechnungStatuses
     : filterTyp === "angebot"
       ? angebotStatuses
-      : [...new Set([...rechnungStatuses, ...angebotStatuses])];
+      : filterTyp === "auftragsbestaetigung"
+        ? abStatuses
+        : [...new Set([...rechnungStatuses, ...angebotStatuses])];
 
   return (
     <div className="min-h-screen bg-background">
@@ -588,7 +594,11 @@ export default function Invoices() {
             <div className="grid grid-cols-3 gap-3 mb-4">
               <Card>
                 <CardContent className="p-3">
-                  <p className="text-xs text-muted-foreground">{filterTyp === "rechnung" ? "Rechnungen" : "Angebote"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {filterTyp === "rechnung" ? "Rechnungen" :
+                     filterTyp === "auftragsbestaetigung" ? "Auftragsbestätigungen" :
+                     "Angebote"}
+                  </p>
                   <p className="text-xl font-bold">{count}</p>
                 </CardContent>
               </Card>
@@ -631,9 +641,16 @@ export default function Invoices() {
                 <button
                   onClick={() => { setFilterTyp("angebot"); setFilterSubTyp("alle"); }}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "angebot" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                  title="Angebote + Auftragsbestätigungen"
+                  title="Angebote"
                 >
                   Angebote
+                </button>
+                <button
+                  onClick={() => { setFilterTyp("auftragsbestaetigung"); setFilterSubTyp("alle"); }}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-l ${filterTyp === "auftragsbestaetigung" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                  title="Auftragsbestätigungen"
+                >
+                  Auftragsbestätigungen
                 </button>
                 <button
                   onClick={() => { setFilterTyp("storno"); setFilterSubTyp("alle"); }}
@@ -655,13 +672,25 @@ export default function Invoices() {
                       {/* Haupt-Button: Default-Aktion je nach aktuellem Tab */}
                       <Button
                         onClick={() =>
-                          navigate(filterTyp === "angebot" ? "/invoices/new?typ=angebot" : "/invoices/new?typ=rechnung")
+                          navigate(
+                            filterTyp === "angebot" ? "/invoices/new?typ=angebot" :
+                            filterTyp === "auftragsbestaetigung" ? "/invoices/new?typ=auftragsbestaetigung" :
+                            "/invoices/new?typ=rechnung"
+                          )
                         }
                         variant="default"
                         className="gap-2 rounded-r-none"
                       >
-                        {filterTyp === "angebot" ? <FileText className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                        {filterTyp === "angebot" ? "Neues Angebot" : "Neue Rechnung"}
+                        {filterTyp === "angebot"
+                          ? <FileText className="w-4 h-4" />
+                          : filterTyp === "auftragsbestaetigung"
+                            ? <FileText className="w-4 h-4" />
+                            : <Receipt className="w-4 h-4" />}
+                        {filterTyp === "angebot"
+                          ? "Neues Angebot"
+                          : filterTyp === "auftragsbestaetigung"
+                            ? "Neue Auftragsbestätigung"
+                            : "Neue Rechnung"}
                       </Button>
                       {/* Chevron: öffnet Dropdown mit allen weiteren Belegtypen */}
                       <DropdownMenuTrigger asChild>
