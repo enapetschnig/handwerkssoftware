@@ -12,6 +12,7 @@ interface CatalogItem {
   einheit: string;
   netto_preis: number;
   produktgruppe: string | null;
+  art: string | null;  // Migration 20260615210000: 'material' | 'leistung' | NULL
 }
 
 interface SelectedEntry {
@@ -40,10 +41,12 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
     }
   }, [open]);
 
+  const [artTab, setArtTab] = useState<"material" | "leistung">("material");
+
   const fetchItems = async () => {
     setLoading(true);
     const { data } = await supabase.from("invoice_templates")
-      .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie")
+      .select("id, name, kurzbezeichnung, einheit, einzelpreis, kategorie, art")
       .order("kategorie")
       .order("name")
       .limit(5000);
@@ -55,16 +58,24 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
         einheit: d.einheit || "Stk.",
         netto_preis: Number(d.einzelpreis) || 0,
         produktgruppe: d.kategorie || "Allgemein",
+        art: (d as any).art || null,
       })));
     }
     setLoading(false);
   };
 
   const s = search.toLowerCase();
+  // Tab-Filter: Materialien (inkl. ohne art = Bestand) vs. Arbeitsleistungen
   const filtered = items.filter(i => {
+    const matchArt = artTab === "material"
+      ? (i.art === "material" || !i.art)  // Bestand bei Material zählen lassen
+      : i.art === "leistung";
+    if (!matchArt) return false;
     if (!s) return true;
     return (i.kurzbezeichnung || "").toLowerCase().includes(s) || i.name.toLowerCase().includes(s) || (i.produktgruppe || "").toLowerCase().includes(s);
   });
+  const countMaterial = items.filter(i => i.art === "material" || !i.art).length;
+  const countLeistung = items.filter(i => i.art === "leistung").length;
 
   const grouped = new Map<string, CatalogItem[]>();
   filtered.forEach(i => {
@@ -112,6 +123,31 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
         </DialogHeader>
 
         <div className="flex flex-col flex-1 overflow-hidden px-5 pb-5 gap-3">
+          {/* Tabs Materialien / Arbeitsleistungen */}
+          <div className="flex gap-2 border-b -mb-1">
+            <button
+              type="button"
+              onClick={() => setArtTab("material")}
+              className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                artTab === "material"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              📦 Materialien ({countMaterial})
+            </button>
+            <button
+              type="button"
+              onClick={() => setArtTab("leistung")}
+              className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                artTab === "leistung"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              🛠️ Arbeitsleistungen ({countLeistung})
+            </button>
+          </div>
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -119,7 +155,7 @@ export function MaterialCatalogDialog({ open, onClose, onSelect }: MaterialCatal
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Material suchen..."
+              placeholder={artTab === "material" ? "Material suchen..." : "Arbeitsleistung suchen..."}
               className="pl-9"
               autoFocus
             />

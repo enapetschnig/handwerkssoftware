@@ -31,6 +31,8 @@ interface Template {
   einheit: string;
   einzelpreis: number;
   kategorie: string;
+  // Migration 20260615210000: Material vs Arbeitsleistung
+  art: string | null;
   artikelnummer: string | null;
   produktnummer: string | null;
   produktgruppe: string | null;
@@ -59,8 +61,12 @@ export default function InvoiceTemplates() {
   const [editId, setEditId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterKategorie, setFilterKategorie] = useState<string>("alle");
+  // Material vs Arbeitsleistung Filter (Migration 20260615210000).
+  // "unbestimmt" = Bestand ohne art-Zuordnung; Default beim ersten
+  // Aufruf, damit der User das Backlog kategorisieren kann.
+  const [filterArt, setFilterArt] = useState<string>("alle");
   const [form, setForm] = useState({
-    name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
+    name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", art: "material", artikelnummer: "",
     produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
     ist_lagerartikel: false, lieferant: "", produktgruppe: "",
     foto_path: null as string | null,
@@ -161,8 +167,16 @@ export default function InvoiceTemplates() {
       (t.langbezeichnung && t.langbezeichnung.toLowerCase().includes(s)) ||
       (t.lieferant && t.lieferant.toLowerCase().includes(s));
     const matchesKategorie = filterKategorie === "alle" || t.kategorie === filterKategorie;
-    return matchesSearch && matchesKategorie;
+    const matchesArt = filterArt === "alle"
+      ? true
+      : filterArt === "unbestimmt"
+        ? !t.art
+        : t.art === filterArt;
+    return matchesSearch && matchesKategorie && matchesArt;
   });
+  const countMaterial = templates.filter(t => t.art === "material").length;
+  const countLeistung = templates.filter(t => t.art === "leistung").length;
+  const countUnbestimmt = templates.filter(t => !t.art).length;
 
   const grouped = filtered.reduce<Record<string, Template[]>>((acc, t) => {
     (acc[t.kategorie] = acc[t.kategorie] || []).push(t);
@@ -172,7 +186,11 @@ export default function InvoiceTemplates() {
   const openNew = () => {
     setEditId(null);
     setForm({
-      name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein", artikelnummer: "",
+      name: "", beschreibung: "", einheit: "Stk.", einzelpreis: 0, kategorie: "Allgemein",
+      // Default beim Anlegen: nutze den aktuell aktiven Filter, falls
+      // "material" oder "leistung" — sonst "material" als sicherer Default
+      art: filterArt === "leistung" ? "leistung" : "material",
+      artikelnummer: "",
       produktnummer: "", kurzbezeichnung: "", langbezeichnung: "", netto_preis: 0, brutto_preis: 0, ust_satz: 20,
       ist_lagerartikel: false, lieferant: "", produktgruppe: "",
       foto_path: null, ist_set: false,
@@ -188,7 +206,8 @@ export default function InvoiceTemplates() {
     setEditId(t.id);
     setForm({
       name: t.name, beschreibung: t.beschreibung, einheit: t.einheit, einzelpreis: t.einzelpreis,
-      kategorie: t.kategorie, artikelnummer: t.artikelnummer || "",
+      kategorie: t.kategorie, art: t.art || "material",
+      artikelnummer: t.artikelnummer || "",
       produktnummer: t.produktnummer || "", kurzbezeichnung: t.kurzbezeichnung || t.name,
       langbezeichnung: t.langbezeichnung || t.beschreibung, netto_preis: t.netto_preis,
       brutto_preis: t.brutto_preis, ust_satz: t.ust_satz, ist_lagerartikel: t.ist_lagerartikel,
@@ -297,6 +316,7 @@ export default function InvoiceTemplates() {
       einheit: form.ist_set && form.bezugseinheit ? form.bezugseinheit : form.einheit,
       einzelpreis: vkEffective,
       kategorie: form.produktgruppe || form.kategorie,
+      art: form.art || "material",
       artikelnummer: form.produktnummer || form.artikelnummer || null,
       produktnummer: form.produktnummer || null,
       produktgruppe: form.produktgruppe || null,
@@ -395,7 +415,43 @@ export default function InvoiceTemplates() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Art-Filter (Material / Leistung) — Chips als Buttons */}
+            <Button
+              size="sm"
+              variant={filterArt === "alle" ? "default" : "outline"}
+              onClick={() => setFilterArt("alle")}
+              className="h-8"
+            >
+              Alle ({templates.length})
+            </Button>
+            <Button
+              size="sm"
+              variant={filterArt === "material" ? "default" : "outline"}
+              onClick={() => setFilterArt("material")}
+              className="h-8"
+            >
+              Materialien ({countMaterial})
+            </Button>
+            <Button
+              size="sm"
+              variant={filterArt === "leistung" ? "default" : "outline"}
+              onClick={() => setFilterArt("leistung")}
+              className="h-8"
+            >
+              Arbeitsleistungen ({countLeistung})
+            </Button>
+            {countUnbestimmt > 0 && (
+              <Button
+                size="sm"
+                variant={filterArt === "unbestimmt" ? "default" : "outline"}
+                onClick={() => setFilterArt("unbestimmt")}
+                className="h-8 text-amber-700 hover:text-amber-700"
+              >
+                Unbestimmt ({countUnbestimmt})
+              </Button>
+            )}
+            <span className="text-muted-foreground mx-1">·</span>
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterKategorie} onValueChange={setFilterKategorie}>
               <SelectTrigger className="w-[160px]">
@@ -629,6 +685,19 @@ export default function InvoiceTemplates() {
                       </Button>
                     )}
                   </div>
+                </div>
+              </div>
+              {/* Art-Auswahl: Material vs Arbeitsleistung (Migration 20260615210000) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-1">
+                  <Label>Art *</Label>
+                  <Select value={form.art || "material"} onValueChange={(v) => setForm(f => ({ ...f, art: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="material">📦 Material</SelectItem>
+                      <SelectItem value="leistung">🛠️ Arbeitsleistung</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
