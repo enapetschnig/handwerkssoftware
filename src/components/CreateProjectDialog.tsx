@@ -55,6 +55,11 @@ interface CreateProjectDialogProps {
   defaultUidNummer?: string;
   defaultAnrede?: string;
   defaultTitel?: string;
+  // Haupt-/Unterprojekt-Workflow (Migration 20260615200000):
+  // Wenn der Dialog aus einem Hauptprojekt heraus geöffnet wird,
+  // gibt das Hauptprojekt seine ID + den Wert "unterprojekt" mit.
+  defaultProjektTyp?: string;
+  defaultParentProjectId?: string | null;
 }
 
 interface UploadedFile {
@@ -78,6 +83,8 @@ export function CreateProjectDialog({
   defaultUidNummer = "",
   defaultAnrede = "",
   defaultTitel = "",
+  defaultProjektTyp = "",
+  defaultParentProjectId = null,
 }: CreateProjectDialogProps) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -136,7 +143,8 @@ export function CreateProjectDialog({
   const [kategorie, setKategorie] = useState<string>("");  // Geschäftsbereich → Google Calendar
 
   // --- Section 4: Projektinhalt ---
-  const [projektTyp, setProjektTyp] = useState("");
+  const [projektTyp, setProjektTyp] = useState(defaultProjektTyp);
+  const [parentProjectId, setParentProjectId] = useState<string | null>(defaultParentProjectId);
   const [projektart, setProjektart] = useState("");
   const [prioritaet, setPrioritaet] = useState("normal");
   const [leistungsarten, setLeistungsarten] = useState<string[]>([]);
@@ -428,6 +436,7 @@ export function CreateProjectDialog({
           wegbeschreibung: wegbeschreibung.trim() || null,
           // Projektinhalt
           projekt_typ: projektTyp || null,
+          parent_project_id: projektTyp === "unterprojekt" ? (parentProjectId || null) : null,
           projektart: projektart || null,
           prioritaet: prioritaet || "normal",
           leistungsarten: leistungsarten.length > 0 ? leistungsarten : null,

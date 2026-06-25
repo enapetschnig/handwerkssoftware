@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -710,7 +710,11 @@ export default function InvoiceDetail() {
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name, customer_id").not("status", "eq", "Abgeschlossen").order("name");
+    const { data } = await supabase
+      .from("projects")
+      .select("id, name, customer_id, projekt_typ, parent_project_id")
+      .not("status", "eq", "Abgeschlossen")
+      .order("name");
     if (data) setProjects(data);
   };
 
@@ -2944,9 +2948,34 @@ export default function InvoiceDetail() {
                   <SelectTrigger><SelectValue placeholder="Kein Projekt" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Kein Projekt</SelectItem>
-                    {projects.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
+                    {/* Hierarchie: Hauptprojekte zuerst, Unterprojekte eingerueckt
+                        darunter; Einzelprojekte am Ende. */}
+                    {(() => {
+                      const haupt = projects.filter(p => (p as any).projekt_typ === "hauptprojekt");
+                      const einzel = projects.filter(p => !(p as any).projekt_typ || (p as any).projekt_typ === "einzelprojekt");
+                      const orphan = projects.filter(p => (p as any).projekt_typ === "unterprojekt" && !haupt.some(h => h.id === (p as any).parent_project_id));
+                      return (
+                        <>
+                          {haupt.map(h => {
+                            const subs = projects.filter(p => (p as any).parent_project_id === h.id);
+                            return (
+                              <Fragment key={h.id}>
+                                <SelectItem value={h.id}>📁 {h.name}</SelectItem>
+                                {subs.map(s => (
+                                  <SelectItem key={s.id} value={s.id} className="pl-8">↳ {s.name}</SelectItem>
+                                ))}
+                              </Fragment>
+                            );
+                          })}
+                          {einzel.map(e => (
+                            <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                          ))}
+                          {orphan.map(o => (
+                            <SelectItem key={o.id} value={o.id} className="text-muted-foreground">↳ {o.name} (verwaist)</SelectItem>
+                          ))}
+                        </>
+                      );
+                    })()}
                   </SelectContent>
                 </Select>
                 {form.project_id && form.customer_id && (

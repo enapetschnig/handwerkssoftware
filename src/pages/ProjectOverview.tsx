@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown, UserPlus } from "lucide-react";
+import { ArrowLeft, FileText, Camera, ImagePlus, Lock, Pencil, Check, Settings, ClipboardList, MessageSquare, Download, FileDown, UserPlus, Plus, FolderTree, ExternalLink } from "lucide-react";
+import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { getDocConfig } from "@/lib/documentTypes";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
@@ -37,6 +38,11 @@ const ProjectOverview = () => {
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  // Unterprojekt-Anlegen-Dialog (nur bei Hauptprojekten relevant)
+  const [createSubProjectOpen, setCreateSubProjectOpen] = useState(false);
+  // Geschwister-Projekte (Sub-Liste bei Hauptprojekten, Parent-Anzeige bei Unterprojekten)
+  const [childProjects, setChildProjects] = useState<{ id: string; name: string; status: string | null }[]>([]);
+  const [parentProjectInfo, setParentProjectInfo] = useState<{ id: string; name: string } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const { options: projektartOptions } = useConfigOptions("projektart");
   const { options: prioritaetOptions } = useConfigOptions("prioritaet");
@@ -58,8 +64,14 @@ const ProjectOverview = () => {
     projektart: "", prioritaet: "normal", geplanter_start: "", geplantes_ende: "",
     budget: "", auftragsvolumen: "", bauleiter_id: "",
     zugewiesene_mitarbeiter: [] as string[],
+    // Haupt-/Unterprojekt
+    projekt_typ: "einzelprojekt",
+    parent_project_id: null as string | null,
   });
   const [customers, setCustomers] = useState<{ id: string; name: string; plz: string | null; ort: string | null }[]>([]);
+  // Liste aller verfügbaren Hauptprojekte für den parent-Picker im Edit-Dialog.
+  // Self-Reference ist nicht möglich (eigener id wird ausgefiltert).
+  const [availableParentProjects, setAvailableParentProjects] = useState<{ id: string; name: string }[]>([]);
   const [customerData, setCustomerData] = useState<any>(null);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -197,6 +209,14 @@ const ProjectOverview = () => {
     const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
     setCustomers(custs || []);
     setEmployees(((emps as any[]) || []).filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
+    // Hauptprojekte für den parent-Picker laden — eigenes Projekt ausschließen
+    // (kein Self-Reference) sowie nur Hauptprojekte zur Auswahl anbieten.
+    const { data: parentProjs } = await (supabase.from("projects" as never) as any)
+      .select("id, name")
+      .eq("projekt_typ", "hauptprojekt")
+      .neq("id", proj.id)
+      .order("name");
+    setAvailableParentProjects(((parentProjs as { id: string; name: string }[]) || []));
     setEditForm({
       name: proj.name || "",
       beschreibung: proj.beschreibung || "",
@@ -230,6 +250,9 @@ const ProjectOverview = () => {
       zugewiesene_mitarbeiter: Array.isArray((proj as any).zugewiesene_mitarbeiter)
         ? ((proj as any).zugewiesene_mitarbeiter as string[])
         : [],
+      // Haupt-/Unterprojekt-Verknüpfung (Migration 20260615200000)
+      projekt_typ: (proj as any).projekt_typ || "einzelprojekt",
+      parent_project_id: (proj as any).parent_project_id || null,
     });
     setEditDialogOpen(true);
   };
@@ -280,6 +303,10 @@ const ProjectOverview = () => {
       zugewiesene_mitarbeiter: editForm.zugewiesene_mitarbeiter.length > 0
         ? editForm.zugewiesene_mitarbeiter
         : [],
+      projekt_typ: editForm.projekt_typ || "einzelprojekt",
+      parent_project_id: editForm.projekt_typ === "unterprojekt"
+        ? (editForm.parent_project_id || null)
+        : null,
     } as any).eq("id", projectId);
     // Update or create customer
     if (editForm.customer_id && editForm.kunde_name.trim()) {
@@ -377,6 +404,28 @@ const ProjectOverview = () => {
       setProjectName(data.name);
       setProjectData(data);
 
+      // Haupt-/Unterprojekt-Verknüpfung laden
+      const dProjektTyp = (data as any).projekt_typ;
+      const dParent = (data as any).parent_project_id;
+      if (dProjektTyp === "hauptprojekt") {
+        const { data: kids } = await (supabase.from("projects" as never) as any)
+          .select("id, name, status")
+          .eq("parent_project_id", projectId)
+          .order("name");
+        setChildProjects(((kids as { id: string; name: string; status: string | null }[]) || []));
+        setParentProjectInfo(null);
+      } else if (dParent) {
+        const { data: parent } = await (supabase.from("projects" as never) as any)
+          .select("id, name")
+          .eq("id", dParent)
+          .maybeSingle();
+        setParentProjectInfo(parent ? { id: parent.id, name: parent.name } : null);
+        setChildProjects([]);
+      } else {
+        setChildProjects([]);
+        setParentProjectInfo(null);
+      }
+
       // Kundendaten für Rechnungsadresse-Anzeige
       if ((data as any).customer_id) {
         const { data: cust } = await supabase
@@ -463,29 +512,25 @@ const ProjectOverview = () => {
   const fetchFileCounts = async () => {
     if (!projectId) return;
 
-    const bucketMap: Record<string, string> = {
-      plans: "project-plans",
-      reports: "project-reports",
-      photos: "project-photos",
-      chef: "project-chef",
-    };
-
+    // Counter laeuft jetzt ueber documents-Tabelle (statt storage.list,
+    // das auch Phantom-Ordner zaehlt → User sah "Fotos vorhanden" aber
+    // leere Galerie). Dadurch ist der Counter konsistent mit der Galerie
+    // (ProjectPhotoGallery.tsx liest ebenfalls aus documents).
     const updatedCategories = await Promise.all(
       categories.map(async (category) => {
         // Skip chef bucket for non-admins
         if (category.type === "chef" && !isAdmin) {
           return { ...category, count: 0 };
         }
-        
-        const bucket = bucketMap[category.type];
-        const { data } = await supabase
-          .storage
-          .from(bucket)
-          .list(projectId);
+
+        const { count } = await (supabase.from("documents" as never) as any)
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .eq("typ", category.type);
 
         return {
           ...category,
-          count: data?.length || 0,
+          count: count || 0,
         };
       })
     );
@@ -546,6 +591,18 @@ const ProjectOverview = () => {
                   <Settings className="h-3.5 w-3.5" />
                   Bearbeiten
                 </Button>
+                {/* Unterprojekt-Anlegen — nur bei Hauptprojekten sichtbar */}
+                {(projectData as any)?.projekt_typ === "hauptprojekt" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => setCreateSubProjectOpen(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Unterprojekt
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -664,6 +721,58 @@ const ProjectOverview = () => {
               {(projectData as any).prioritaet && (projectData as any).prioritaet !== "normal" && (
                 <div className="text-sm"><span className="text-muted-foreground">Priorität:</span> {(projectData as any).prioritaet}</div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Hauptprojekt-Verweis bei Unterprojekten */}
+        {parentProjectInfo && (
+          <Card className="mb-4 border-blue-200 bg-blue-50/40">
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm">
+                  <FolderTree className="h-4 w-4 text-blue-600" />
+                  <span className="text-muted-foreground">Dieses Unterprojekt gehört zu:</span>
+                  <span className="font-medium">{parentProjectInfo.name}</span>
+                </div>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate(`/projects/${parentProjectInfo.id}`)}>
+                  <ExternalLink className="h-3 w-3" />
+                  Hauptprojekt öffnen
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Unterprojekte-Liste bei Hauptprojekten */}
+        {(projectData as any)?.projekt_typ === "hauptprojekt" && childProjects.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderTree className="h-4 w-4" /> Unterprojekte ({childProjects.length})
+              </CardTitle>
+              <CardDescription>Direkt zugeordnete Teilbereiche dieses Hauptprojekts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {childProjects.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => navigate(`/projects/${c.id}`)}
+                    className="flex items-center justify-between p-2.5 rounded-md border bg-white hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-blue-600 font-mono text-xs">↳</span>
+                      <span className="truncate font-medium">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {c.status && <Badge variant="outline" className="text-[10px]">{c.status}</Badge>}
+                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1083,6 +1192,45 @@ const ProjectOverview = () => {
                   </Select>
                 </div>
               </div>
+              {/* Haupt-/Unterprojekt-Verknüpfung */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Art des Projekts</Label>
+                  <Select
+                    value={editForm.projekt_typ || "einzelprojekt"}
+                    onValueChange={(v) => setEditForm(f => ({
+                      ...f,
+                      projekt_typ: v,
+                      // Bei Wechsel weg von "unterprojekt" parent leeren
+                      parent_project_id: v === "unterprojekt" ? f.parent_project_id : null,
+                    }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="einzelprojekt">Einzelprojekt</SelectItem>
+                      <SelectItem value="hauptprojekt">Hauptprojekt (übergeordnet)</SelectItem>
+                      <SelectItem value="unterprojekt">Unterprojekt (zu einem Hauptprojekt)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editForm.projekt_typ === "unterprojekt" && (
+                  <div>
+                    <Label>Gehört zu Hauptprojekt</Label>
+                    <Select
+                      value={editForm.parent_project_id || "none"}
+                      onValueChange={(v) => setEditForm(f => ({ ...f, parent_project_id: v === "none" ? null : v }))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="— wählen —" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— (nicht zugeordnet) —</SelectItem>
+                        {availableParentProjects.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Geplanter Start</Label>
@@ -1324,6 +1472,31 @@ const ProjectOverview = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unterprojekt-anlegen-Dialog — Pre-set parent_project_id und
+          projekt_typ='unterprojekt'. Kundendaten werden vom
+          Hauptprojekt übernommen (vererbt). */}
+      <CreateProjectDialog
+        open={createSubProjectOpen}
+        onClose={() => setCreateSubProjectOpen(false)}
+        onCreated={(newProj) => {
+          setCreateSubProjectOpen(false);
+          // Liste sofort aktualisieren
+          setChildProjects(prev => [...prev, { id: newProj.id, name: newProj.name, status: null }]);
+          toast({ title: "Unterprojekt angelegt", description: newProj.name });
+        }}
+        defaultProjektTyp="unterprojekt"
+        defaultParentProjectId={projectId}
+        defaultCustomerId={(projectData as any)?.customer_id || null}
+        defaultCustomerName={(customerData as any)?.name || ""}
+        defaultAdresse={(customerData as any)?.adresse || ""}
+        defaultPlz={(customerData as any)?.plz || ""}
+        defaultOrt={(customerData as any)?.ort || ""}
+        defaultEmail={(customerData as any)?.email || ""}
+        defaultTelefon={(customerData as any)?.telefon || ""}
+        defaultAnrede={(customerData as any)?.anrede || ""}
+        defaultTitel={(customerData as any)?.titel || ""}
+      />
     </div>
   );
 };

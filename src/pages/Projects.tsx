@@ -38,6 +38,9 @@ type Project = {
   bauleiter_id: string | null;
   ort: string | null;
   kategorie?: string | null;
+  // Haupt-/Unterprojekt-Verknüpfung (Migration 20260615200000)
+  projekt_typ?: string | null;
+  parent_project_id?: string | null;
 };
 
 /** Geschäftsbereich → Google-Kalender. 7 Kategorien + Default. */
