@@ -34,9 +34,24 @@ export const SONDER_TAETIGKEITEN = new Set([
   "Urlaub",
   "Krankenstand",
   "Feiertag",
-  "Zeitausgleich",
   "Weiterbildung",
+  // Zeitausgleich BEWUSST nicht hier — eigene Behandlung in aggregateByDay.
+  // Begründung User (25.06.2026): bei 4-Tage-Woche (Mo-Do 10h) sollen ZA-
+  // Stunden vom Saldo abgezogen werden, weil die Gut-Stunden bereits an
+  // anderen Tagen erarbeitet wurden. Saldo eines ZA-Tags: -ist (negativ).
 ]);
+
+export const ZEITAUSGLEICH_TAETIGKEIT = "Zeitausgleich";
+
+/**
+ * Tätigkeiten, bei denen die Ort-Spalte in HoursReport/MyHours leer
+ * sein soll. Umfasst SONDER_TAETIGKEITEN + Zeitausgleich — denn auch
+ * an einem ZA-Tag ist "Baustelle" als Ort irreführend.
+ */
+export function ortAnzeigeAusblenden(taetigkeit: string | null | undefined): boolean {
+  if (!taetigkeit) return false;
+  return SONDER_TAETIGKEITEN.has(taetigkeit) || taetigkeit === ZEITAUSGLEICH_TAETIGKEIT;
+}
 
 /**
  * Aggregiert beliebige time_entries nach Datum und liefert je Tag
@@ -56,14 +71,34 @@ export function aggregateByDay(entries: TimeEntryLite[], holidaySet?: Set<string
     const istSonderzeit = dayEntries.some(
       (e) => !!e.taetigkeit && SONDER_TAETIGKEITEN.has(e.taetigkeit),
     );
-    // Soll: an Sonderzeit-Tagen (Feiertag, Urlaub, …) oder an
-    // austrian_holidays-Tagen ist das Soll 0 → Saldo bleibt neutral.
+    const istZeitausgleich = dayEntries.some(
+      (e) => e.taetigkeit === ZEITAUSGLEICH_TAETIGKEIT,
+    );
     const isHoliday = holidaySet?.has(datum) === true;
-    const soll = istSonderzeit || isHoliday
-      ? 0
-      : getNormalWorkingHours(new Date(datum + "T12:00:00"));
-    const saldo = istSonderzeit || isHoliday ? 0 : ist - soll;
-    out.push({ datum, ist, soll, saldo, istSonderzeit: istSonderzeit || isHoliday });
+
+    // Drei Fälle:
+    //   1) Zeitausgleich: Soll=0 (Tag ist frei), aber die ZA-Stunden zehren
+    //      vorher erarbeitete Gut-Stunden auf → Saldo = -ist (negativ).
+    //   2) Sonstige Sonderzeit (Urlaub, Krankenstand, Feiertag, Weiterbildung)
+    //      oder AT-Feiertag: Soll=0, Saldo=0 (neutral).
+    //   3) Normaler Arbeitstag: Soll = Wochentag-Regel, Saldo = ist - soll.
+    let soll: number;
+    let saldo: number;
+    if (istZeitausgleich) {
+      soll = 0;
+      saldo = -ist;
+    } else if (istSonderzeit || isHoliday) {
+      soll = 0;
+      saldo = 0;
+    } else {
+      soll = getNormalWorkingHours(new Date(datum + "T12:00:00"), holidaySet);
+      saldo = ist - soll;
+    }
+
+    out.push({
+      datum, ist, soll, saldo,
+      istSonderzeit: istSonderzeit || isHoliday || istZeitausgleich,
+    });
   }
   return out.sort((a, b) => a.datum.localeCompare(b.datum));
 }

@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getNormalWorkingHours } from "@/lib/workingHours";
-import { aggregateByDay, totalAutoSaldo, formatSaldo, type DayBalance, SONDER_TAETIGKEITEN } from "@/lib/hoursAccounting";
+import { aggregateByDay, totalAutoSaldo, formatSaldo, type DayBalance, ortAnzeigeAusblenden } from "@/lib/hoursAccounting";
 import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 
 interface TimeEntry {
@@ -399,7 +399,7 @@ export default function HoursReport() {
           
           // Ort-Spalte: Baustelle / Werkstatt — bei Sonderzeiten (Feiertag,
           // Urlaub, …) bewusst leer, weil "Baustelle" dort irreführend ist.
-          const ortText = SONDER_TAETIGKEITEN.has(entry.taetigkeit)
+          const ortText = ortAnzeigeAusblenden(entry.taetigkeit)
             ? ""
             : entry.location_type === "baustelle" ? "Baustelle" : "Werkstatt";
           
@@ -898,7 +898,7 @@ export default function HoursReport() {
                               // Bei Sonderzeiten (Feiertag, Urlaub, …) Ort leer lassen —
                               // location_type ist dort oft "baustelle" (Default), was visuell
                               // verwirrend ist.
-                              const isSonderzeit = SONDER_TAETIGKEITEN.has(entry.taetigkeit);
+                              const isSonderzeit = ortAnzeigeAusblenden(entry.taetigkeit);
                               const ortIcon = isSonderzeit ? "" : entry.location_type === "baustelle" ? "🏗️" : entry.location_type === "werkstatt" ? "🏢" : "";
                               const ortText = isSonderzeit ? "" : entry.location_type === "baustelle" ? "Baustelle" : entry.location_type === "werkstatt" ? "Firma" : "";
                               const projektName = entry.taetigkeit === "Urlaub" || entry.taetigkeit === "Krankenstand"

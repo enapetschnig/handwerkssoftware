@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock, Building2, Hammer, Pencil, Trash2, TrendingUp, Wallet } from "lucide-react";
 import { getTotalWorkingHours } from "@/lib/workingHours";
-import { aggregateByDay, totalAutoSaldo, formatSaldo, SONDER_TAETIGKEITEN } from "@/lib/hoursAccounting";
+import { aggregateByDay, totalAutoSaldo, formatSaldo, ortAnzeigeAusblenden } from "@/lib/hoursAccounting";
 import { useAustrianHolidays } from "@/hooks/useAustrianHolidays";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -227,7 +227,9 @@ const MyHours = () => {
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground mt-2">
-              Plus = Überstunden-Guthaben · Minus = Nachzuholende Stunden. Urlaub, Krankenstand, Feiertag und Zeitausgleich werden neutral gerechnet.
+              Plus = Überstunden-Guthaben · Minus = Nachzuholende Stunden. Urlaub, Krankenstand,
+              Feiertag und Weiterbildung werden neutral gerechnet. <strong>Zeitausgleich</strong>
+              zehrt vom Saldo ab — gebuchte ZA-Stunden reduzieren das Guthaben.
             </p>
           </CardContent>
         </Card>
@@ -324,6 +326,13 @@ const MyHours = () => {
                         const dateObj = new Date(datum + "T12:00:00");
                         // Tagessaldo aus dem zentralen Helper — Sonderzeiten neutral.
                         const dayBal = dayBalanceMap.get(datum);
+                        // Tages-Aggregate für die optionale Summen-Zeile bei
+                        // 2+ Einträgen (Z. 377-381). Vor diesem Fix waren die
+                        // Variablen referenziert aber nirgends deklariert →
+                        // ReferenceError → ErrorBoundary zeigt "Hoppla".
+                        const dayTotal = dayEntries.reduce((s, e) => s + Number(e.stunden || 0), 0);
+                        const sollH = getTotalWorkingHours(dateObj, holidaySet);
+                        const dayDiff = dayTotal - sollH;
                         dayEntries.forEach((entry, idx) => {
                           rows.push(
                             <TableRow key={entry.id} className={idx > 0 ? "border-t-0" : ""}>
@@ -334,7 +343,7 @@ const MyHours = () => {
                               ) : null}
                               <TableCell className="text-sm">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  {SONDER_TAETIGKEITEN.has(entry.taetigkeit) ? (
+                                  {ortAnzeigeAusblenden(entry.taetigkeit) ? (
                                     <span className="text-muted-foreground">—</span>
                                   ) : (
                                     <span>{entry.location_type === 'werkstatt' ? '🏢 Firma' : '🏗️ Baustelle'}</span>

@@ -105,16 +105,19 @@ export default function Admin() {
   const initialTab = searchParams.get("tab") || "benutzer";
 
   // Scroll zur Anchor-Sektion wenn Hash gesetzt (z.B. #nummernkreise)
+  // oder wenn ?pending=1 vom Dashboard-Banner kommt (Z. 314 in Index.tsx).
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "");
-    if (!hash) return;
+    const wantsPending = searchParams.get("pending") === "1";
+    const target = wantsPending ? "wartende-aktivierungen" : hash;
+    if (!target) return;
     const timer = setTimeout(() => {
-      const el = document.getElementById(hash);
+      const el = document.getElementById(target);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [searchParams]);
   const { toast } = useToast();
   
   // User roles states
@@ -727,7 +730,7 @@ export default function Admin() {
 
             {/* ===== WARTENDE AKTIVIERUNGEN ===== */}
             {profiles.filter(p => !p.is_active).length > 0 && (
-              <section>
+              <section id="wartende-aktivierungen">
                 <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
                   Wartende Aktivierungen
                   <span className="bg-destructive text-destructive-foreground text-sm px-2 py-1 rounded-full">

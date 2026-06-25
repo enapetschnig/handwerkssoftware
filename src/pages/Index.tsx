@@ -311,7 +311,7 @@ export default function Index() {
       {isAdmin && pendingUsersCount > 0 && (
         <div
           className="bg-amber-50 border-b border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors"
-          onClick={() => navigate("/admin")}
+          onClick={() => navigate("/admin?tab=benutzer&pending=1")}
         >
           <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3">
             <div className="flex items-center gap-3">

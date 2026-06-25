@@ -308,7 +308,12 @@ export default function InvoiceDetail() {
     kundennummer: "",
     reverse_charge: false,
     datum: format(new Date(), "yyyy-MM-dd"),
-    faellig_am: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
+    // Default: sofort fällig (Z. 322 setzt zahlungsbedingungen auf "sofort").
+    // User-Wunsch 25.06.2026: bei allen Rechnungs-Typen (insb. Anzahlungs-
+    // rechnungen) standardmäßig sofort fällig, weil sich Kunden am Fälligkeits-
+    // Datum orientieren. Beim Kunden-Wechsel überschreibt nettofrist > 0
+    // diesen Default automatisch.
+    faellig_am: format(new Date(), "yyyy-MM-dd"),
     leistungsdatum: format(new Date(), "yyyy-MM-dd"),
     leistungsdatum_bis: "",
     verrechnet_mit_invoice_id: null,
@@ -319,7 +324,7 @@ export default function InvoiceDetail() {
     ausfuehrungs_kw: "",
     ausfuehrende_firma: "",
     ausfuehrende_firma_freitext: "",
-    zahlungsbedingungen: "14 Tage",
+    zahlungsbedingungen: "sofort",
     notizen: "",
     betreff: "",
     mwst_satz: 20,
