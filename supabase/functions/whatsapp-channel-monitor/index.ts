@@ -73,20 +73,49 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const statusCode = health.status?.code ?? -1;
   const statusText = health.status?.text || "UNKNOWN";
   const channelId = health.channel_id || null;
-  const isHealthy = statusCode === 0 || statusText === "READY";
+  const hasLinkedUser = !!health.user?.id;
 
-  // 2. Letzten Snapshot lesen (für Spam-Schutz)
-  const { data: lastRows } = await supabase
+  // Whapi-Status-Codes:
+  //   0 / READY     → Channel komplett bereit, sendet sofort
+  //   4 / AUTH      → Authentifiziert, MIT verknüpftem user.id = healthy.
+  //                   AUTH ohne user.id = wartet auf Pairing → nicht healthy.
+  //   2 / LOADING, 3 / QR, 5 / CONFLICT, … → nicht healthy
+  const isHealthy =
+    statusCode === 0 ||
+    statusText === "READY" ||
+    ((statusCode === 4 || statusText === "AUTH") && hasLinkedUser);
+
+  // 2. Spam-Schutz: prüfe ob die laufende Outage-Serie schon gemeldet
+  // wurde. Wir suchen den letzten Eintrag mit alert_sent=true und prüfen,
+  // ob seither GAR KEIN healthy-Zwischenstand stand. Das verhindert,
+  // dass mehrere non-healthy Snapshots in Folge jeweils erneut alarmieren
+  // (Bug-Vorgänger: prüfte nur direkten Vorgänger, der konnte alert_sent=
+  // false haben → fälschlich als "noch nicht gewarnt" interpretiert).
+  const { data: recentRows } = await supabase
     .from("whatsapp_channel_health")
-    .select("status_text, alert_sent")
+    .select("status_code, status_text, alert_sent")
     .order("checked_at", { ascending: false })
-    .limit(1);
-  const last = (lastRows && lastRows[0]) as { status_text?: string; alert_sent?: boolean } | undefined;
-  const previouslyAlertedSameStatus =
-    !!last && last.alert_sent === true && last.status_text === statusText;
+    .limit(20);
+  const recent = (recentRows || []) as Array<{
+    status_code: number; status_text: string; alert_sent: boolean;
+  }>;
+
+  let outageAlreadyAlerted = false;
+  for (const row of recent) {
+    const rowHealthy = row.status_code === 0 ||
+      row.status_text === "READY" ||
+      ((row.status_code === 4 || row.status_text === "AUTH"));
+    if (rowHealthy) break; // Recovery dazwischen → neue Outage darf wieder alarmieren
+    if (row.alert_sent && row.status_text === statusText) {
+      outageAlreadyAlerted = true;
+      break;
+    }
+  }
 
   // 3. Snapshot schreiben
-  const shouldAlert = !isHealthy && !previouslyAlertedSameStatus;
+  const shouldAlert = !isHealthy && !outageAlreadyAlerted;
+  const last = recent[0];
+  const previouslyAlertedSameStatus = outageAlreadyAlerted;
   let alertEmailLogId: string | null = null;
 
   if (shouldAlert) {
