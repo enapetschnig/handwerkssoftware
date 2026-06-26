@@ -93,18 +93,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // false haben → fälschlich als "noch nicht gewarnt" interpretiert).
   const { data: recentRows } = await supabase
     .from("whatsapp_channel_health")
-    .select("status_code, status_text, alert_sent")
+    .select("status_code, status_text, alert_sent, user_id")
     .order("checked_at", { ascending: false })
     .limit(20);
   const recent = (recentRows || []) as Array<{
-    status_code: number; status_text: string; alert_sent: boolean;
+    status_code: number; status_text: string; alert_sent: boolean; user_id: string | null;
   }>;
 
   let outageAlreadyAlerted = false;
   for (const row of recent) {
+    // Konsistent mit isHealthy oben: AUTH zählt nur dann als healthy, wenn
+    // ein User verknüpft ist. AUTH ohne user_id = wartet auf Pairing.
+    const rowHasUser = !!row.user_id;
     const rowHealthy = row.status_code === 0 ||
       row.status_text === "READY" ||
-      ((row.status_code === 4 || row.status_text === "AUTH"));
+      ((row.status_code === 4 || row.status_text === "AUTH") && rowHasUser);
     if (rowHealthy) break; // Recovery dazwischen → neue Outage darf wieder alarmieren
     if (row.alert_sent && row.status_text === statusText) {
       outageAlreadyAlerted = true;

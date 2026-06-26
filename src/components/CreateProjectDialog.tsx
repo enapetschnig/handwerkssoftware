@@ -199,7 +199,8 @@ export function CreateProjectDialog({
       setZusatzinfos("");
       setWegbeschreibung("");
       setBereich("");
-      setProjektTyp("");
+      setProjektTyp(defaultProjektTyp);
+      setParentProjectId(defaultParentProjectId);
       setProjektart("");
       setPrioritaet("normal");
       setLeistungsarten([]);

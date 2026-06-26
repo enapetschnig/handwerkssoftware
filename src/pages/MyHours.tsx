@@ -255,23 +255,12 @@ const MyHours = () => {
               </div>
               <div className="text-sm sm:text-base space-y-0.5">
                 {(() => {
-                  // Calculate Soll hours for the month (only working days up to today or end of month)
-                  const [y, m] = selectedMonth.split('-').map(Number);
-                  const today = new Date();
-                  const lastDay = new Date(y, m, 0).getDate();
-                  const endDay = (y === today.getFullYear() && m === today.getMonth() + 1) ? today.getDate() : lastDay;
-                  let sollTotal = 0;
-                  // Get unique dates with entries (for absence days)
-                  const absenceDates = new Set(entries.filter(e => e.location_type === "urlaub" || e.location_type === "krankenstand" || e.location_type === "za").map(e => e.datum));
-                  for (let d = 1; d <= endDay; d++) {
-                    const date = new Date(y, m - 1, d);
-                    const day = date.getDay();
-                    if (day === 0 || day === 6) continue; // Weekend
-                    const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    if (absenceDates.has(dateStr)) { sollTotal += getTotalWorkingHours(date, holidaySet); continue; }
-                    sollTotal += getTotalWorkingHours(date, holidaySet);
-                  }
-                  const diff = totalHours - sollTotal;
+                  // Soll & Saldo aus derselben Logik wie die Auto-Saldo-Karte
+                  // (hoursAccounting.aggregateByDay) — verhindert die Inkonsistenz,
+                  // dass Header und Karte unterschiedliche Werte zeigen. ZA-Tage:
+                  // Soll=0, Saldo=-ist; Sonderzeit/Feiertag: Soll=0, Saldo=0.
+                  const sollTotal = dayBalances.reduce((s, d) => s + d.soll, 0);
+                  const saldoMonat = dayBalances.reduce((s, d) => s + d.saldo, 0);
                   return (
                     <>
                       <div>
@@ -281,9 +270,9 @@ const MyHours = () => {
                         <span className="font-medium">{sollTotal.toFixed(2)} Std.</span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Überstunden: </span>
-                        <span className={`font-bold ${diff >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)} Std.
+                        <span className="text-muted-foreground">Saldo Monat: </span>
+                        <span className={`font-bold ${saldoMonat >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {formatSaldo(saldoMonat)} Std.
                         </span>
                       </div>
                     </>

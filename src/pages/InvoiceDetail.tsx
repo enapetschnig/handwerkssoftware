@@ -1045,7 +1045,10 @@ export default function InvoiceDetail() {
   // darf der User das faellig_am-Feld direkt editieren und wir greifen
   // nicht ein.
   useEffect(() => {
-    if (form.typ !== "rechnung") return;
+    // Sync für alle echten Rechnungs-Typen — User-Feedback 25.06.2026:
+    // auch Anzahlungs- und Schlussrechnungen sollen das Fälligkeitsdatum
+    // automatisch aus zahlungsbedingungen + datum nachziehen.
+    if (!["rechnung", "anzahlungsrechnung", "schlussrechnung"].includes(form.typ)) return;
     const zb = (form.zahlungsbedingungen || "").trim();
     if (!zb || zb === "individuell") return;
     if (!form.datum) return;
@@ -3095,9 +3098,10 @@ export default function InvoiceDetail() {
                       // er ist der BKS-Sachbearbeiter und wird pro Dokument aus
                       // der Mitarbeiter-Liste gewählt.
                     };
-                    // Übernehme Skonto + Zahlungsfrist vom Kunden (nur bei Rechnungen)
+                    // Übernehme Skonto + Zahlungsfrist vom Kunden bei allen Rechnungs-Typen
+                    // (rechnung, anzahlungsrechnung, schlussrechnung) — User-Feedback 25.06.2026.
                     const hints: string[] = [];
-                    if (form.typ === "rechnung") {
+                    if (["rechnung", "anzahlungsrechnung", "schlussrechnung"].includes(form.typ)) {
                       const { data: fullCust } = await supabase.from("customers").select("skonto_prozent, skonto_tage, nettofrist").eq("id", customer.id).single();
                       if (fullCust) {
                         const custSkonto = Number(fullCust.skonto_prozent) || 0;

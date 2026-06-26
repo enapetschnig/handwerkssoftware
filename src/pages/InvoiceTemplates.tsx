@@ -206,7 +206,7 @@ export default function InvoiceTemplates() {
     setEditId(t.id);
     setForm({
       name: t.name, beschreibung: t.beschreibung, einheit: t.einheit, einzelpreis: t.einzelpreis,
-      kategorie: t.kategorie, art: t.art || "material",
+      kategorie: t.kategorie, art: t.art || "",
       artikelnummer: t.artikelnummer || "",
       produktnummer: t.produktnummer || "", kurzbezeichnung: t.kurzbezeichnung || t.name,
       langbezeichnung: t.langbezeichnung || t.beschreibung, netto_preis: t.netto_preis,
@@ -293,6 +293,13 @@ export default function InvoiceTemplates() {
       return;
     }
 
+    // Art muss explizit gewählt sein — verhindert Silent-Mutation
+    // von NULL-Bestand-Templates beim Bearbeiten zu "Material".
+    if (!form.art || (form.art !== "material" && form.art !== "leistung")) {
+      toast({ variant: "destructive", title: "Art fehlt", description: "Bitte 'Material' oder 'Arbeitsleistung' wählen." });
+      return;
+    }
+
     // H-4: Preise dürfen nicht negativ sein (DB-Constraint wirft sonst nur technische Meldung)
     const ek = Number(form.ek_netto) || 0;
     const vk = Number(form.vk_netto) || 0;
@@ -316,7 +323,7 @@ export default function InvoiceTemplates() {
       einheit: form.ist_set && form.bezugseinheit ? form.bezugseinheit : form.einheit,
       einzelpreis: vkEffective,
       kategorie: form.produktgruppe || form.kategorie,
-      art: form.art || "material",
+      art: form.art,
       artikelnummer: form.produktnummer || form.artikelnummer || null,
       produktnummer: form.produktnummer || null,
       produktgruppe: form.produktgruppe || null,
@@ -691,13 +698,16 @@ export default function InvoiceTemplates() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-1">
                   <Label>Art *</Label>
-                  <Select value={form.art || "material"} onValueChange={(v) => setForm(f => ({ ...f, art: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select value={form.art} onValueChange={(v) => setForm(f => ({ ...f, art: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Bitte wählen" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="material">📦 Material</SelectItem>
                       <SelectItem value="leistung">🛠️ Arbeitsleistung</SelectItem>
                     </SelectContent>
                   </Select>
+                  {!form.art && (
+                    <p className="text-xs text-amber-600 mt-1">Pflichtfeld — bitte Material oder Arbeitsleistung wählen.</p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
