@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, User, FileText, Clock, Mail, Phone, MapPin, FileSpreadsheet, Shirt } from "lucide-react";
+import { ArrowLeft, Plus, User, FileText, Clock, Mail, Phone, MapPin, FileSpreadsheet, Shirt, UserX, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import EmployeeDocumentsManager from "@/components/EmployeeDocumentsManager";
 
@@ -40,6 +41,20 @@ interface Employee {
   kleidungsgroesse: string | null;
   schuhgroesse: string | null;
   notizen: string | null;
+  aktiv?: boolean | null;
+}
+
+/** Ein Snapshot aus deleted_users_archive (hart gelöschte Ex-Mitarbeiter). */
+interface DeletedArchiveRow {
+  id: string;
+  vorname: string | null;
+  nachname: string | null;
+  email: string | null;
+  telefon: string | null;
+  austritt_datum: string | null;
+  rolle: string | null;
+  deleted_at: string;
+  notiz: string | null;
 }
 
 export default function Employees() {
@@ -51,11 +66,24 @@ export default function Employees() {
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [newEmployee, setNewEmployee] = useState({ vorname: "", nachname: "", email: "" });
   const [showSizesDialog, setShowSizesDialog] = useState(false);
+  // Reiter: aktive vs ausgeschiedene (archivierte) vs früher gelöschte MA.
+  const [viewTab, setViewTab] = useState<"aktiv" | "archiv" | "geloescht">("aktiv");
+  const [deletedArchive, setDeletedArchive] = useState<DeletedArchiveRow[]>([]);
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     checkAdminAccess();
     fetchEmployees();
+    fetchDeletedArchive();
   }, []);
+
+  const fetchDeletedArchive = async () => {
+    const { data } = await (supabase.from("deleted_users_archive" as never) as any)
+      .select("id, vorname, nachname, email, telefon, austritt_datum, rolle, deleted_at, notiz")
+      .order("deleted_at", { ascending: false });
+    setDeletedArchive(((data as DeletedArchiveRow[]) || []));
+  };
 
   const checkAdminAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -86,8 +114,12 @@ export default function Employees() {
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      const hiddenIds = new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id));
-      setEmployees((data || []).filter((e: any) => !e.user_id || !hiddenIds.has(e.user_id)));
+      // ALLE Mitarbeiter laden — die Trennung aktiv/ausgeschieden passiert in
+      // der UI. hiddenUserIds nur nutzen, um versteckte AKTIVE Konten (z.B.
+      // Demo-Accounts) aus dem Aktiv-Reiter fernzuhalten; ausgeschiedene
+      // (inaktive) MA werden IMMER gezeigt, damit sie auffindbar bleiben.
+      setHiddenUserIds(new Set(((hiddenProfs as any[]) || []).map((p: any) => p.id)));
+      setEmployees((data || []) as any);
     }
     setLoading(false);
   };
@@ -137,6 +169,55 @@ export default function Employees() {
     }
   };
 
+  // Mitarbeiter ausscheiden = archivieren (NICHT löschen). Alle Daten bleiben
+  // erhalten, der Login wird gesperrt. Jederzeit reaktivierbar.
+  const handleArchiveEmployee = async (emp: Employee) => {
+    setArchiving(true);
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { error } = await supabase
+        .from("employees")
+        .update({ aktiv: false, austritt_datum: emp.austritt_datum || today } as any)
+        .eq("id", emp.id);
+      if (error) throw error;
+      // Login sperren, falls ein Benutzerkonto verknüpft ist (Trigger hält
+      // employees.aktiv synchron).
+      if (emp.user_id) {
+        await supabase.from("profiles").update({ is_active: false } as any).eq("id", emp.user_id);
+      }
+      toast({ title: "Mitarbeiter ausgeschieden", description: "Ins Archiv verschoben — alle Daten bleiben erhalten." });
+      setSelectedEmployee(null);
+      fetchEmployees();
+    } catch (error: any) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  // Ausgeschiedenen Mitarbeiter wieder aktivieren. Setzt aktiv=true + entsperrt
+  // den Login (Rollen bleiben unverändert erhalten).
+  const handleReactivateEmployee = async (emp: Employee) => {
+    setArchiving(true);
+    try {
+      if (emp.user_id) {
+        await supabase.from("profiles").update({ is_active: true } as any).eq("id", emp.user_id);
+      }
+      const { error } = await supabase
+        .from("employees")
+        .update({ aktiv: true, austritt_datum: null } as any)
+        .eq("id", emp.id);
+      if (error) throw error;
+      toast({ title: "Mitarbeiter reaktiviert", description: "Wieder in der aktiven Liste." });
+      setSelectedEmployee(null);
+      fetchEmployees();
+    } catch (error: any) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedEmployee) {
       setFormData(selectedEmployee);
@@ -150,6 +231,13 @@ export default function Employees() {
       </div>
     );
   }
+
+  // Versteckte AKTIVE Konten (z.B. Demo-Accounts) bleiben aus dem Aktiv-Reiter
+  // ausgeblendet; ausgeschiedene (inaktive) MA werden immer angezeigt.
+  const isHiddenActive = (e: Employee) => !!e.user_id && hiddenUserIds.has(e.user_id);
+  const activeEmployees = employees.filter((e) => e.aktiv !== false && !isHiddenActive(e));
+  const archivedEmployees = employees.filter((e) => e.aktiv === false);
+  const visibleEmployees = viewTab === "archiv" ? archivedEmployees : activeEmployees;
 
   return (
     <div className="container mx-auto p-4">
@@ -173,11 +261,81 @@ export default function Employees() {
         </div>
       </div>
 
+      {/* Reiter: Aktive / Ausgeschieden / Früher gelöscht */}
+      <div className="mb-4 flex items-center gap-1 border-b">
+        <button
+          type="button"
+          onClick={() => setViewTab("aktiv")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            viewTab === "aktiv" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Aktive <span className="opacity-70">({activeEmployees.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewTab("archiv")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            viewTab === "archiv" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          🗄️ Ausgeschieden <span className="opacity-70">({archivedEmployees.length})</span>
+        </button>
+        {deletedArchive.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setViewTab("geloescht")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              viewTab === "geloescht" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Früher gelöscht <span className="opacity-70">({deletedArchive.length})</span>
+          </button>
+        )}
+      </div>
+
+      {viewTab === "geloescht" ? (
+        /* Read-only: hart gelöschte Ex-Mitarbeiter aus deleted_users_archive.
+           Reine Nachweis-Ansicht — eine Reaktivierung ist hier nicht möglich
+           (das Benutzerkonto müsste neu angelegt werden). */
+        <div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Diese Mitarbeiter wurden früher endgültig gelöscht. Die Daten sind als Nachweis erhalten,
+            eine Reaktivierung ist hier aber nicht möglich (Benutzerkonto müsste neu angelegt werden).
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {deletedArchive.map((d) => (
+              <Card key={d.id} className="opacity-90">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Avatar><AvatarFallback>{(d.vorname?.[0] || "?")}{(d.nachname?.[0] || "")}</AvatarFallback></Avatar>
+                    {d.vorname} {d.nachname}
+                  </CardTitle>
+                  <CardDescription>{d.rolle || "Mitarbeiter"}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-muted-foreground" />{d.email || "—"}</div>
+                    <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" />{d.telefon || "—"}</div>
+                    {d.austritt_datum && <div className="text-muted-foreground">Austritt: {format(new Date(d.austritt_datum), "dd.MM.yyyy")}</div>}
+                    <div className="text-muted-foreground">Gelöscht: {format(new Date(d.deleted_at), "dd.MM.yyyy")}</div>
+                    {d.notiz && <div className="text-xs text-muted-foreground italic">„{d.notiz}"</div>}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : visibleEmployees.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          {viewTab === "archiv" ? "Keine ausgeschiedenen Mitarbeiter." : "Keine aktiven Mitarbeiter."}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {employees.map((emp) => (
+        {visibleEmployees.map((emp) => (
           <Card
             key={emp.id}
-            className="cursor-pointer hover:shadow-lg transition-shadow"
+            className={`cursor-pointer hover:shadow-lg transition-shadow ${emp.aktiv === false ? "border-dashed opacity-90" : ""}`}
             onClick={() => setSelectedEmployee(emp)}
           >
             <CardHeader>
@@ -188,7 +346,10 @@ export default function Employees() {
                     {emp.nachname[0]}
                   </AvatarFallback>
                 </Avatar>
-                {emp.vorname} {emp.nachname}
+                <span className="flex-1">{emp.vorname} {emp.nachname}</span>
+                {emp.aktiv === false && (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300 shrink-0">Ausgeschieden</Badge>
+                )}
               </CardTitle>
               <CardDescription>{emp.position || "Mitarbeiter"}</CardDescription>
             </CardHeader>
@@ -210,13 +371,27 @@ export default function Employees() {
                 {emp.eintritt_datum && (
                   <div className="text-muted-foreground mt-2">
                     Seit: {format(new Date(emp.eintritt_datum), "dd.MM.yyyy")}
+                    {emp.aktiv === false && emp.austritt_datum && ` · Austritt: ${format(new Date(emp.austritt_datum), "dd.MM.yyyy")}`}
                   </div>
+                )}
+                {emp.aktiv === false && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2 gap-1"
+                    disabled={archiving}
+                    onClick={(e) => { e.stopPropagation(); handleReactivateEmployee(emp); }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reaktivieren
+                  </Button>
                 )}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+      )}
 
       {/* Detail-Dialog */}
       <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
@@ -477,11 +652,36 @@ export default function Employees() {
                     />
                   </div>
 
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setSelectedEmployee(null)}>
-                      Abbrechen
-                    </Button>
-                    <Button type="submit">Speichern</Button>
+                  <div className="flex flex-col sm:flex-row justify-between gap-2">
+                    {selectedEmployee?.aktiv === false ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                        disabled={archiving}
+                        onClick={() => selectedEmployee && handleReactivateEmployee(selectedEmployee)}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Reaktivieren
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                        disabled={archiving}
+                        onClick={() => selectedEmployee && handleArchiveEmployee(selectedEmployee)}
+                      >
+                        <UserX className="w-4 h-4" />
+                        Ausscheiden (archivieren)
+                      </Button>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setSelectedEmployee(null)}>
+                        Abbrechen
+                      </Button>
+                      <Button type="submit">Speichern</Button>
+                    </div>
                   </div>
                 </form>
               </ScrollArea>
@@ -586,7 +786,8 @@ export default function Employees() {
                   </tr>
                 </thead>
                 <tbody>
-                  {employees
+                  {activeEmployees
+                    .slice()
                     .sort((a, b) => a.nachname.localeCompare(b.nachname))
                     .map((emp, idx) => (
                       <tr 
@@ -628,10 +829,10 @@ export default function Employees() {
                 </tbody>
               </table>
             </div>
-            {employees.filter(e => !e.kleidungsgroesse && !e.schuhgroesse).length > 0 && (
+            {activeEmployees.filter(e => !e.kleidungsgroesse && !e.schuhgroesse).length > 0 && (
               <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  ℹ️ {employees.filter(e => !e.kleidungsgroesse && !e.schuhgroesse).length} Mitarbeiter 
+                  ℹ️ {activeEmployees.filter(e => !e.kleidungsgroesse && !e.schuhgroesse).length} Mitarbeiter
                   haben noch keine Größenangaben. Klicke auf einen Mitarbeiter um die Daten zu ergänzen.
                 </p>
               </div>
