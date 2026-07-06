@@ -175,16 +175,18 @@ export default function Employees() {
     setArchiving(true);
     try {
       const today = format(new Date(), "yyyy-MM-dd");
+      // Zuerst den Login sperren (falls Benutzerkonto verknüpft) — schlägt das
+      // fehl, brechen wir ab, bevor employees.aktiv geändert wird. So entsteht
+      // kein Zustand "archiviert, aber Login noch offen".
+      if (emp.user_id) {
+        const { error: pErr } = await supabase.from("profiles").update({ is_active: false } as any).eq("id", emp.user_id);
+        if (pErr) throw pErr;
+      }
       const { error } = await supabase
         .from("employees")
         .update({ aktiv: false, austritt_datum: emp.austritt_datum || today } as any)
         .eq("id", emp.id);
       if (error) throw error;
-      // Login sperren, falls ein Benutzerkonto verknüpft ist (Trigger hält
-      // employees.aktiv synchron).
-      if (emp.user_id) {
-        await supabase.from("profiles").update({ is_active: false } as any).eq("id", emp.user_id);
-      }
       toast({ title: "Mitarbeiter ausgeschieden", description: "Ins Archiv verschoben — alle Daten bleiben erhalten." });
       setSelectedEmployee(null);
       fetchEmployees();
@@ -201,7 +203,8 @@ export default function Employees() {
     setArchiving(true);
     try {
       if (emp.user_id) {
-        await supabase.from("profiles").update({ is_active: true } as any).eq("id", emp.user_id);
+        const { error: pErr } = await supabase.from("profiles").update({ is_active: true } as any).eq("id", emp.user_id);
+        if (pErr) throw pErr;
       }
       const { error } = await supabase
         .from("employees")

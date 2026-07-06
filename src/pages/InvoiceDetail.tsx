@@ -2273,10 +2273,14 @@ export default function InvoiceDetail() {
   //   Neues Angebot | Neuer Lieferschein | sonst: Neue <typ>
   const typArticle = form.typ === "angebot" ? "Neues" : form.typ === "lieferschein" ? "Neuer" : "Neue";
 
-  const groupedTemplates = templates.reduce<Record<string, TemplateItem[]>>((acc, t) => {
-    (acc[t.kategorie] = acc[t.kategorie] || []).push(t);
-    return acc;
-  }, {});
+  // Kategorie-Dropdown nur mit Kategorien des aktiven art-Tabs füllen, sonst
+  // führt eine leistungs-only Kategorie auf dem Material-Tab zu "nichts gefunden".
+  const groupedTemplates = templates
+    .filter((t) => templateArt === "leistung" ? (t as any).art === "leistung" : ((t as any).art === "material" || !(t as any).art))
+    .reduce<Record<string, TemplateItem[]>>((acc, t) => {
+      (acc[t.kategorie] = acc[t.kategorie] || []).push(t);
+      return acc;
+    }, {});
 
   // Stornierte Rechnung: Nur Stornobeleg anzeigen
   if (form.status === "storniert" && !isNew && invoiceId) {
@@ -4149,7 +4153,7 @@ export default function InvoiceDetail() {
             <div className="flex gap-2 border-b -mb-1">
               <button
                 type="button"
-                onClick={() => setTemplateArt("material")}
+                onClick={() => { setTemplateArt("material"); setTemplateFilter("alle"); }}
                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
                   templateArt === "material" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
@@ -4158,7 +4162,7 @@ export default function InvoiceDetail() {
               </button>
               <button
                 type="button"
-                onClick={() => setTemplateArt("leistung")}
+                onClick={() => { setTemplateArt("leistung"); setTemplateFilter("alle"); }}
                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
                   templateArt === "leistung" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}

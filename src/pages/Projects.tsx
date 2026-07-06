@@ -398,8 +398,24 @@ const Projects = () => {
   const activeProjects = projects.filter((p) => !isArchivedStatus(p.status));
   const archivedProjects = projects.filter((p) => isArchivedStatus(p.status));
   const tabProjects = archiveTab === "archiv" ? archivedProjects : activeProjects;
-  // Für Waisen-Erkennung: existiert das Hauptprojekt eines Unterprojekts noch?
-  const allProjectIds = new Set(projects.map((p) => p.id));
+
+  // Ein Unterprojekt wird nur dann als Top-Level-Karte AUSGEBLENDET, wenn sein
+  // Hauptprojekt IM SELBEN Reiter sichtbar ist (dann klappt es dort auf). Liegt
+  // das Hauptprojekt im anderen Reiter, ist es kein Hauptprojekt (mehr) oder
+  // fehlt ganz (Waise), erscheint das Unterprojekt als eigene Karte im
+  // passenden Reiter — sonst wäre es dort unauffindbar.
+  const hauptIdsInList = (list: Project[]) =>
+    new Set(list.filter((p) => p.projekt_typ === "hauptprojekt").map((p) => p.id));
+  const activeHauptIds = hauptIdsInList(activeProjects);
+  const archivedHauptIds = hauptIdsInList(archivedProjects);
+  const tabHauptIds = archiveTab === "archiv" ? archivedHauptIds : activeHauptIds;
+  const isTopLevel = (p: Project, hauptSet: Set<string>) =>
+    p.projekt_typ !== "unterprojekt" ||
+    !(p.parent_project_id && hauptSet.has(p.parent_project_id));
+  // Zähler = tatsächlich sichtbare Top-Level-Karten (nicht inkl. eingeklappter Subs).
+  const activeTopLevelCount = activeProjects.filter((p) => isTopLevel(p, activeHauptIds)).length;
+  const archivedTopLevelCount = archivedProjects.filter((p) => isTopLevel(p, archivedHauptIds)).length;
+  const tabTopLevel = tabProjects.filter((p) => isTopLevel(p, tabHauptIds));
 
   return (
     <div className="min-h-screen bg-background">
@@ -445,7 +461,7 @@ const Projects = () => {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Aktiv <span className="opacity-70">({activeProjects.length})</span>
+            Aktiv <span className="opacity-70">({activeTopLevelCount})</span>
           </button>
           <button
             type="button"
@@ -456,7 +472,7 @@ const Projects = () => {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            🗄️ Archiv <span className="opacity-70">({archivedProjects.length})</span>
+            🗄️ Archiv <span className="opacity-70">({archivedTopLevelCount})</span>
           </button>
         </div>
 
@@ -468,10 +484,10 @@ const Projects = () => {
             onClick={() => setStatusFilter("all")}
           >
             Alle
-            <span className="ml-1.5 opacity-70">({tabProjects.length})</span>
+            <span className="ml-1.5 opacity-70">({tabTopLevel.length})</span>
           </Badge>
           {projectStatuses.map((s) => {
-            const count = tabProjects.filter((p) => (p.status || "").toLowerCase() === s.name.toLowerCase()).length;
+            const count = tabTopLevel.filter((p) => (p.status || "").toLowerCase() === s.name.toLowerCase()).length;
             if (count === 0 && statusFilter !== s.name) return null;
             const isActive = statusFilter === s.name;
             return (
@@ -547,14 +563,10 @@ const Projects = () => {
         <div className="grid gap-3 sm:gap-4 lg:gap-6">
           {(() => {
             const filtered = tabProjects.filter((project) => {
-              // Unterprojekte NICHT als eigene Top-Level-Karte zeigen — sie
-              // erscheinen aufgeklappt unter ihrem Hauptprojekt. Ausnahme:
-              // verwaiste Unterprojekte (Hauptprojekt fehlt/gelöscht) bleiben
-              // sichtbar, damit nichts unauffindbar wird.
-              const isSub = project.projekt_typ === "unterprojekt";
-              const isOrphanSub =
-                isSub && (!project.parent_project_id || !allProjectIds.has(project.parent_project_id));
-              if (isSub && !isOrphanSub) return false;
+              // Unterprojekte nur ausblenden, wenn ihr Hauptprojekt IM SELBEN
+              // Reiter sichtbar ist (dann erscheinen sie dort aufgeklappt).
+              // Sonst als eigene Karte zeigen, damit nichts unauffindbar wird.
+              if (!isTopLevel(project, tabHauptIds)) return false;
 
               const q = searchQuery.toLowerCase();
               const matchesSearch =

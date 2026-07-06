@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -119,6 +119,25 @@ export default function ScheduleBoard() {
 
   const canEdit = isAdmin || isVorarbeiter;
   const unteamedProfiles = getUnteamedProfiles(profiles, teamMembers);
+
+  // Stabile Objekt-Referenz für den wiederverwendeten EinsatzDialog des
+  // Fremdfirma-Einsatzes — sonst würde ein neues Literal bei jedem Render den
+  // useEffect im Dialog erneut auslösen und Eingaben zurücksetzen.
+  const firmaEinsatzEdit = useMemo(
+    () => editFirmaEinsatz ? {
+      id: editFirmaEinsatz.id,
+      name: null,
+      project_id: editFirmaEinsatz.project_id,
+      adresse: null,
+      start_date: editFirmaEinsatz.start_date,
+      end_date: editFirmaEinsatz.end_date,
+      ganztaegig: editFirmaEinsatz.ganztaegig,
+      start_time: editFirmaEinsatz.start_time,
+      end_time: editFirmaEinsatz.end_time,
+      beschreibung: editFirmaEinsatz.beschreibung,
+    } : null,
+    [editFirmaEinsatz],
+  );
 
   // Available projects (not yet on board)
   const boardProjectIds = new Set(boardProjects.map((bp) => bp.project_id));
@@ -726,18 +745,7 @@ export default function ScheduleBoard() {
           if (!open) { setEditFirmaEinsatz(null); setPrefillFirmaStart(undefined); setPrefillFirmaEnd(undefined); }
         }}
         projects={projects}
-        editEinsatz={editFirmaEinsatz ? {
-          id: editFirmaEinsatz.id,
-          name: null,
-          project_id: editFirmaEinsatz.project_id,
-          adresse: null,
-          start_date: editFirmaEinsatz.start_date,
-          end_date: editFirmaEinsatz.end_date,
-          ganztaegig: editFirmaEinsatz.ganztaegig,
-          start_time: editFirmaEinsatz.start_time,
-          end_time: editFirmaEinsatz.end_time,
-          beschreibung: editFirmaEinsatz.beschreibung,
-        } : null}
+        editEinsatz={firmaEinsatzEdit}
         prefillStartDate={prefillFirmaStart}
         prefillEndDate={prefillFirmaEnd}
         onSave={handleSaveFirmaEinsatz}

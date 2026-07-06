@@ -58,7 +58,12 @@ export async function copyErstterminPhotosToProject(
     const srcPath = photo.file_path;
     const basename = (photo.file_name || srcPath.split("/").pop() || `foto_${Date.now()}.jpg`)
       .replace(/[^a-zA-Z0-9._-]/g, "_");
-    const destName = `ersttermin_${basename}`;
+    // photo.id in den Zielnamen aufnehmen — sonst kollidieren zwei
+    // verschiedene Fotos mit gleichem Dateinamen (z.B. IMG-…-WA0001.jpg,
+    // Kamera-Defaults) und das zweite würde still als "übersprungen"
+    // gezählt. Mit photo.id bleibt es idempotent (Re-Run → gleicher Name)
+    // und kollisionsfrei zwischen unterschiedlichen Fotos.
+    const destName = `ersttermin_${photo.id}_${basename}`;
     const destPath = `${projectId}/${destName}`;
 
     if (existingNames.has(destName)) {
