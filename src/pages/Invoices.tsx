@@ -15,7 +15,7 @@ import { formatDateShort } from "@/lib/dateFormat";
 import { EmptyState } from "@/components/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { format, parseISO, isBefore } from "date-fns";
+import { format, parseISO, isBefore, differenceInDays } from "date-fns";
 import { de } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
 import { ExportInvoicesDialog } from "@/components/ExportInvoicesDialog";
@@ -488,6 +488,10 @@ export default function Invoices() {
     inv.faellig_am &&
     (inv.status === "offen" || inv.status === "teilbezahlt") &&
     isBefore(parseISO(inv.faellig_am), today);
+
+  // Tage seit Fälligkeit (nur bei überfälligen Rechnungen sinnvoll).
+  const overdueDays = (inv: Invoice) =>
+    inv.faellig_am ? Math.max(0, differenceInDays(today, parseISO(inv.faellig_am))) : 0;
 
   const isExpiredOffer = (inv: Invoice) =>
     inv.typ === "angebot" &&
@@ -1011,10 +1015,17 @@ export default function Invoices() {
                                 inv.status === "teilbezahlt" ? "bg-yellow-500" :
                                 inv.status === "verrechnet" ? "bg-blue-500" :
                                 "bg-orange-500";
-                              // Warnungen als subtiler Sub-Text
-                              const warn = overdue ? "überfällig" : expired ? "abgelaufen" : inv.mahnstufe > 0 ? `Mahnung ${inv.mahnstufe}` : "";
+                              // Überfälligkeit UND Mahnstatus getrennt anzeigen —
+                              // beide können gleichzeitig gelten. (Früher verdeckte
+                              // "überfällig" den Mahnstatus, der dann erst nach
+                              // Bezahlung sichtbar wurde.)
+                              const days = overdue ? overdueDays(inv) : 0;
+                              const overdueText = overdue
+                                ? (days > 0 ? `überfällig seit ${days} ${days === 1 ? "Tag" : "Tagen"}` : "überfällig")
+                                : expired ? "abgelaufen" : "";
+                              const mahnText = inv.mahnstufe > 0 ? `Mahnung ${inv.mahnstufe}` : "";
                               return (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
                                   {inv.status === "storniert" ? (
                                     <span className="text-xs font-medium text-red-700">
@@ -1038,8 +1049,11 @@ export default function Invoices() {
                                       </SelectContent>
                                     </Select>
                                   )}
-                                  {warn && (
-                                    <span className="text-[10px] text-red-600 font-medium">{warn}</span>
+                                  {overdueText && (
+                                    <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">{overdueText}</span>
+                                  )}
+                                  {mahnText && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">{mahnText}</span>
                                   )}
                                 </div>
                               );
@@ -1159,6 +1173,12 @@ export default function Invoices() {
               // hochsetzen + Liste neu laden.
               if (!mahnungInvoice) return;
               await supabase.from("invoices").update({ mahnstufe: mahnungStufe }).eq("id", mahnungInvoice.id);
+              // Mahn-Historie mitschreiben (wie in InvoiceDetail) — sonst fehlt
+              // dieser Mahnlauf im Verlauf der Rechnung.
+              await supabase.from("mahnung_history").insert({
+                invoice_id: mahnungInvoice.id,
+                mahnstufe: mahnungStufe,
+              } as any);
               toast({ title: `Mahnung ${mahnungStufe} versendet` });
               fetchInvoices();
             }}
