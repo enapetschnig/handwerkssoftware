@@ -43,6 +43,14 @@ type Project = {
   parent_project_id?: string | null;
 };
 
+/**
+ * Status, bei denen ein Projekt als „archiviert" gilt und aus der aktiven
+ * Liste in den Archiv-Reiter wandert (User-Feedback 26.06.2026).
+ */
+const ARCHIVED_STATUSES = new Set(["abgeschlossen", "storniert"]);
+const isArchivedStatus = (status?: string | null) =>
+  ARCHIVED_STATUSES.has((status || "").toLowerCase());
+
 /** Geschäftsbereich → Google-Kalender. 7 Kategorien + Default. */
 const KATEGORIE_META: Record<string, { label: string; color: string; bg: string }> = {
   montipro:     { label: "Monti.pro",     color: "#166534", bg: "#dcfce7" },
@@ -80,6 +88,17 @@ const Projects = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [bereichFilter, setBereichFilter] = useState<string>("all");
+  // Reiter "Aktiv" vs "Archiv" (abgeschlossene/stornierte Projekte).
+  const [archiveTab, setArchiveTab] = useState<"aktiv" | "archiv">("aktiv");
+  // Aufgeklappte Hauptprojekte — zeigen ihre Unterprojekte inline.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) =>
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   // Sortierung der Projektliste — clientseitig (Daten sind eh schon geladen).
   // Default „created_desc" entspricht dem heutigen Server-Order.
   type SortKey = "created_desc" | "start_asc" | "start_desc" | "name_asc";
@@ -375,6 +394,13 @@ const Projects = () => {
     );
   }
 
+  // Aktiv- vs Archiv-Reiter: abgeschlossene/stornierte Projekte gehören ins Archiv.
+  const activeProjects = projects.filter((p) => !isArchivedStatus(p.status));
+  const archivedProjects = projects.filter((p) => isArchivedStatus(p.status));
+  const tabProjects = archiveTab === "archiv" ? archivedProjects : activeProjects;
+  // Für Waisen-Erkennung: existiert das Hauptprojekt eines Unterprojekts noch?
+  const allProjectIds = new Set(projects.map((p) => p.id));
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-50 shadow-sm">
@@ -408,7 +434,33 @@ const Projects = () => {
           </p>
         </div>
 
-        {/* Status-Filter */}
+        {/* Reiter: Aktiv / Archiv */}
+        <div className="mb-3 flex items-center gap-1 border-b">
+          <button
+            type="button"
+            onClick={() => { setArchiveTab("aktiv"); setStatusFilter("all"); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              archiveTab === "aktiv"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Aktiv <span className="opacity-70">({activeProjects.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setArchiveTab("archiv"); setStatusFilter("all"); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              archiveTab === "archiv"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            🗄️ Archiv <span className="opacity-70">({archivedProjects.length})</span>
+          </button>
+        </div>
+
+        {/* Status-Filter (nur Status, die im aktuellen Reiter vorkommen) */}
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge
             variant={statusFilter === "all" ? "default" : "outline"}
@@ -416,10 +468,10 @@ const Projects = () => {
             onClick={() => setStatusFilter("all")}
           >
             Alle
-            <span className="ml-1.5 opacity-70">({projects.length})</span>
+            <span className="ml-1.5 opacity-70">({tabProjects.length})</span>
           </Badge>
           {projectStatuses.map((s) => {
-            const count = projects.filter((p) => (p.status || "").toLowerCase() === s.name.toLowerCase()).length;
+            const count = tabProjects.filter((p) => (p.status || "").toLowerCase() === s.name.toLowerCase()).length;
             if (count === 0 && statusFilter !== s.name) return null;
             const isActive = statusFilter === s.name;
             return (
@@ -494,7 +546,16 @@ const Projects = () => {
 
         <div className="grid gap-3 sm:gap-4 lg:gap-6">
           {(() => {
-            const filtered = projects.filter((project) => {
+            const filtered = tabProjects.filter((project) => {
+              // Unterprojekte NICHT als eigene Top-Level-Karte zeigen — sie
+              // erscheinen aufgeklappt unter ihrem Hauptprojekt. Ausnahme:
+              // verwaiste Unterprojekte (Hauptprojekt fehlt/gelöscht) bleiben
+              // sichtbar, damit nichts unauffindbar wird.
+              const isSub = project.projekt_typ === "unterprojekt";
+              const isOrphanSub =
+                isSub && (!project.parent_project_id || !allProjectIds.has(project.parent_project_id));
+              if (isSub && !isOrphanSub) return false;
+
               const q = searchQuery.toLowerCase();
               const matchesSearch =
                 project.name.toLowerCase().includes(q) ||
@@ -552,9 +613,14 @@ const Projects = () => {
             return filtered.map((project) => {
               const sColor = findByName(project.status);
               const isClosed = (project.status || "").toLowerCase() === "abgeschlossen";
+              // Unterprojekte dieses Hauptprojekts (aus bereits geladenen Daten).
+              const children = project.projekt_typ === "hauptprojekt"
+                ? projects.filter((p) => p.parent_project_id === project.id)
+                : [];
+              const isExpanded = expandedParents.has(project.id);
               return (
+                <div key={project.id}>
                 <Card
-                  key={project.id}
                   className="border-2 hover:shadow-lg transition-all cursor-pointer"
                   onClick={() => navigate(`/projects/${project.id}`)}
                 >
@@ -569,7 +635,20 @@ const Projects = () => {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-base sm:text-xl truncate">{project.name}</CardTitle>
+                            {children.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(project.id); }}
+                                className="shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+                                title={isExpanded ? "Unterprojekte einklappen" : "Unterprojekte anzeigen"}
+                              >
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                {children.length} {children.length === 1 ? "Unterprojekt" : "Unterprojekte"}
+                              </button>
+                            )}
+                          </div>
                           {project.adresse && (
                             <CardDescription className="text-xs sm:text-sm">{project.adresse}</CardDescription>
                           )}
@@ -750,6 +829,32 @@ const Projects = () => {
                     </div>
                   </CardContent>
                 </Card>
+                {isExpanded && children.length > 0 && (
+                  <div className="ml-6 sm:ml-10 mt-1 mb-1 space-y-1 border-l-2 border-primary/20 pl-3">
+                    {children.map((child) => {
+                      const cColor = findByName(child.status);
+                      return (
+                        <div
+                          key={child.id}
+                          onClick={() => navigate(`/projects/${child.id}`)}
+                          className="flex items-center justify-between gap-2 rounded-md bg-muted/40 hover:bg-accent px-3 py-2 cursor-pointer"
+                        >
+                          <span className="text-sm truncate flex items-center gap-1.5 min-w-0">
+                            <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span className="truncate">{child.name}</span>
+                          </span>
+                          <Badge
+                            className="whitespace-nowrap text-xs border-0 shrink-0"
+                            style={cColor ? { backgroundColor: cColor.farbe_bg, color: cColor.farbe_text } : { backgroundColor: "#e5e7eb", color: "#374151" }}
+                          >
+                            {child.status || "–"}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                </div>
               );
             });
           })()}

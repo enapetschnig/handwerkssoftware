@@ -8,13 +8,20 @@ export interface CopyResult {
 }
 
 /**
- * Kopiert alle Fotos eines Ersttermins in den project-photos-Bucket des
- * verknüpften Projekts. Idempotent: Dateien, die bereits dort liegen
- * (gleicher Dateiname), werden übersprungen.
+ * Kopiert alle Fotos eines Ersttermins in das verknüpfte Projekt.
  *
- * Detailliertes Error-Logging pro Foto (siehe `errors`-Array im
- * Rückgabewert), damit der User im UI Fehler-Ursachen sieht statt
- * eines stillen Scheiterns.
+ * WICHTIG: Ein Projekt-Foto besteht aus ZWEI Teilen — der Datei im
+ * `project-photos`-Bucket UND einer Zeile in der `documents`-Tabelle
+ * (typ='photos'). Die Projekt-Galerie liest ausschließlich `documents`.
+ * Frühere Versionen luden nur in den Bucket → die Fotos tauchten nie im
+ * Projekt auf, und beim zweiten Klick meldete der Dedup „übersprungen",
+ * obwohl in der DB nichts existierte. Deshalb: Dedup + Zählung laufen
+ * jetzt über die `documents`-Tabelle, und pro Foto wird eine
+ * `documents`-Zeile angelegt.
+ *
+ * Idempotent: existiert bereits eine `documents`-Zeile mit gleichem
+ * Namen, wird übersprungen. Storage-Upload nutzt upsert=true, damit
+ * verwaiste Dateien aus alten Versuchen mitrepariert werden.
  */
 export async function copyErstterminPhotosToProject(
   erstterminId: string,
@@ -32,15 +39,20 @@ export async function copyErstterminPhotosToProject(
   }
   if (!photos?.length) return result;
 
-  // Vorhandene Dateien im Zielordner auflisten (für Dedup)
-  const { data: existing, error: listErr } = await supabase.storage
-    .from("project-photos")
-    .list(projectId);
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Bereits im Projekt vorhandene Foto-Dokumente laden (für Dedup).
+  // Die Galerie liest aus `documents`, also ist das die maßgebliche Quelle.
+  const { data: existingDocs, error: listErr } = await supabase
+    .from("documents")
+    .select("name")
+    .eq("project_id", projectId)
+    .eq("typ", "photos");
   if (listErr) {
     // Liste-Fehler ist nicht fatal — wir kopieren ohne Dedup weiter
-    result.errors.push(`Ziel-Ordner konnte nicht gelistet werden: ${listErr.message}`);
+    result.errors.push(`Vorhandene Projekt-Fotos konnten nicht geladen werden: ${listErr.message}`);
   }
-  const existingNames = new Set((existing || []).map((f) => f.name));
+  const existingNames = new Set(((existingDocs as { name: string }[]) || []).map((d) => d.name));
 
   for (const photo of photos as { id: string; file_path: string; file_name?: string }[]) {
     const srcPath = photo.file_path;
@@ -63,14 +75,34 @@ export async function copyErstterminPhotosToProject(
         result.errors.push(`${basename}: Download fehlgeschlagen — ${dlErr?.message || "leer"}`);
         continue;
       }
+      // upsert=true: repariert auch verwaiste Storage-Dateien aus alten
+      // Kopier-Versuchen, die noch keine documents-Zeile hatten.
       const { error: upErr } = await supabase.storage
         .from("project-photos")
-        .upload(destPath, blob, { upsert: false, contentType: blob.type || "image/jpeg" });
+        .upload(destPath, blob, { upsert: true, contentType: blob.type || "image/jpeg" });
       if (upErr) {
         result.failed++;
         result.errors.push(`${basename}: Upload fehlgeschlagen — ${upErr.message}`);
         continue;
       }
+      // documents-Zeile anlegen — sonst erscheint das Foto nie im Projekt.
+      const { data: urlData } = supabase.storage.from("project-photos").getPublicUrl(destPath);
+      const { error: dbErr } = await supabase.from("documents").insert({
+        project_id: projectId,
+        user_id: user?.id ?? null,
+        typ: "photos",
+        name: destName,
+        file_url: urlData.publicUrl,
+        beschreibung: "Aus Ersttermin übernommen",
+      } as any);
+      if (dbErr) {
+        // Rollback — verwaistes Storage-File wieder entfernen
+        await supabase.storage.from("project-photos").remove([destPath]);
+        result.failed++;
+        result.errors.push(`${basename}: DB-Eintrag fehlgeschlagen — ${dbErr.message}`);
+        continue;
+      }
+      existingNames.add(destName);
       result.copied++;
     } catch (err) {
       result.failed++;
