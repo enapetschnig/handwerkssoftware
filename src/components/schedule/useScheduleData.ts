@@ -14,6 +14,8 @@ import type {
   CompanyHoliday,
   EmployeeColor,
   ScheduleMode,
+  Fremdfirma,
+  FremdfirmaEinsatz,
 } from "./scheduleTypes";
 
 export function useScheduleData() {
@@ -28,6 +30,8 @@ export function useScheduleData() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>([]);
   const [employeeColors, setEmployeeColors] = useState<Record<string, EmployeeColor>>({});
+  const [fremdfirmen, setFremdfirmen] = useState<Fremdfirma[]>([]);
+  const [fremdfirmaEinsaetze, setFremdfirmaEinsaetze] = useState<FremdfirmaEinsatz[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(
@@ -74,6 +78,8 @@ export function useScheduleData() {
         { data: leave },
         { data: holidays },
         { data: colors },
+        { data: ffirmen },
+        { data: ffEins },
       ] = await Promise.all([
         (supabase.from("profiles" as never) as any)
           .select("id, vorname, nachname")
@@ -125,6 +131,17 @@ export function useScheduleData() {
           .gte("end_date", fromDate),
         supabase.from("company_holidays").select("id, datum, bezeichnung"),
         supabase.from("employee_schedule_colors").select("employee_id, bg_color, text_color"),
+        // Fremdfirmen (Stammdaten) + deren Einsätze im sichtbaren Zeitraum.
+        (supabase.from("fremdfirmen" as never) as any)
+          .select("id, firmenname, adresse, plz, ort, telefon, ansprechpartner, notizen, aktiv")
+          .eq("aktiv", true)
+          .order("firmenname"),
+        mode === "year"
+          ? Promise.resolve({ data: [] } as any)
+          : (supabase.from("fremdfirma_einsaetze" as never) as any)
+              .select("id, fremdfirma_id, project_id, beschreibung, start_date, end_date, ganztaegig, start_time, end_time")
+              .lte("start_date", toDate)
+              .gte("end_date", fromDate),
       ] as const);
 
       if (profs) setProfiles(profs);
@@ -137,6 +154,8 @@ export function useScheduleData() {
       if (targets) setDailyTargets(targets as DailyTarget[]);
       if (leave) setLeaveRequests(leave as LeaveRequest[]);
       if (holidays) setCompanyHolidays(holidays as CompanyHoliday[]);
+      if (ffirmen) setFremdfirmen(ffirmen as Fremdfirma[]);
+      if (ffEins) setFremdfirmaEinsaetze(ffEins as FremdfirmaEinsatz[]);
       if (colors) {
         // Die Tabelle speichert employee_id (=employees.id), der Renderer
         // arbeitet aber mit user_id (=profiles.id). Hier einmal mappen:
@@ -179,6 +198,10 @@ export function useScheduleData() {
     companyHolidays,
     setCompanyHolidays,
     employeeColors,
+    fremdfirmen,
+    setFremdfirmen,
+    fremdfirmaEinsaetze,
+    setFremdfirmaEinsaetze,
     loading,
     fetchData,
   };

@@ -147,6 +147,12 @@ export default function Calendar() {
       .lte("start_date", monthEnd)
       .order("start_date");
 
+    // Fetch Fremdfirma-Einsätze (Subfirmen auf Baustellen) im Monat.
+    const { data: ffEinsatzData } = await (supabase.from("fremdfirma_einsaetze" as never) as any)
+      .select("id, start_date, end_date, beschreibung, start_time, end_time, projects(name, kategorie), fremdfirmen(firmenname)")
+      .lte("start_date", monthEnd)
+      .gte("end_date", monthStart);
+
     // Fetch profile names for einsaetze
     const userIds = [...new Set((einsatzData || []).map((e: any) => e.user_id))];
     let profileMap: Record<string, { vorname: string; nachname: string }> = {};
@@ -183,6 +189,33 @@ export default function Calendar() {
         }
       }
     }
+    // Fremdfirma-Einsätze ebenfalls pro Tag expandieren — mit Firmenname
+    // im Label (🏢) und der Projekt-Kategorie für Farbe/Filter.
+    for (const e of (ffEinsatzData as any[]) || []) {
+      const s = new Date((e as any).start_date + "T12:00:00");
+      const end = new Date((e as any).end_date + "T12:00:00");
+      const firmenname = (e as any).fremdfirmen?.firmenname || "Fremdfirma";
+      const projName = (e as any).projects?.name || "?";
+      const kat = (e as any).projects?.kategorie || "default";
+      for (let d = new Date(s); d <= end; d.setDate(d.getDate() + 1)) {
+        const datum = d.toISOString().split("T")[0];
+        if (datum >= monthStart && datum <= monthEnd) {
+          expandedAssignments.push({
+            id: `ff_${(e as any).id}_${datum}`,
+            datum,
+            start_time: (e as any).start_time,
+            end_time: (e as any).end_time,
+            notizen: (e as any).beschreibung,
+            user_id: null,
+            google_event_id: null,
+            projects: { name: `🏢 ${firmenname} · ${projName}`, kategorie: kat },
+            profiles: null,
+            kategorie: kat,
+          });
+        }
+      }
+    }
+
     setAssignments(expandedAssignments);
 
     // Filter out calendar_events that are already shown as einsaetze

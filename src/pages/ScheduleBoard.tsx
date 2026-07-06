@@ -14,7 +14,7 @@ import {
   format,
 } from "date-fns";
 
-import type { Einsatz, ScheduleMode } from "@/components/schedule/scheduleTypes";
+import type { Einsatz, ScheduleMode, Fremdfirma, FremdfirmaEinsatz } from "@/components/schedule/scheduleTypes";
 import { getUnteamedProfiles } from "@/components/schedule/scheduleUtils";
 import { useScheduleData } from "@/components/schedule/useScheduleData";
 import { useSchedulePermissions } from "@/components/schedule/useSchedulePermissions";
@@ -24,8 +24,10 @@ import { TimelineHeader } from "@/components/schedule/TimelineHeader";
 import { ProjectBoardSection } from "@/components/schedule/ProjectBoardSection";
 import { TeamSection } from "@/components/schedule/TeamSection";
 import { MitarbeiterSection } from "@/components/schedule/MitarbeiterSection";
+import { FremdfirmaSection } from "@/components/schedule/FremdfirmaSection";
 import { AddProjectToBoardDialog } from "@/components/schedule/AddProjectToBoardDialog";
 import { CreateTeamDialog } from "@/components/schedule/CreateTeamDialog";
+import { CreateFremdfirmaDialog, type FremdfirmaFormData } from "@/components/schedule/CreateFremdfirmaDialog";
 import { EinsatzDialog } from "@/components/schedule/EinsatzDialog";
 import { CompanyHolidayManager } from "@/components/schedule/CompanyHolidayManager";
 import { YearPlanningView } from "@/components/schedule/YearPlanningView";
@@ -51,6 +53,10 @@ export default function ScheduleBoard() {
     leaveRequests,
     companyHolidays,
     employeeColors,
+    fremdfirmen,
+    setFremdfirmen,
+    fremdfirmaEinsaetze,
+    setFremdfirmaEinsaetze,
     loading,
     fetchData,
   } = useScheduleData();
@@ -89,6 +95,15 @@ export default function ScheduleBoard() {
   const [prefillUserIds, setPrefillUserIds] = useState<string[]>([]);
   const [prefillStartDate, setPrefillStartDate] = useState<string | undefined>();
   const [prefillEndDate, setPrefillEndDate] = useState<string | undefined>();
+  // Fremdfirmen: Stammdaten-Dialog + Einsatz-Dialog (eigene States, damit sie
+  // nicht mit dem Mitarbeiter-Einsatz-Dialog kollidieren).
+  const [createFremdfirmaOpen, setCreateFremdfirmaOpen] = useState(false);
+  const [editingFirma, setEditingFirma] = useState<Fremdfirma | null>(null);
+  const [firmaEinsatzDialogOpen, setFirmaEinsatzDialogOpen] = useState(false);
+  const [editFirmaEinsatz, setEditFirmaEinsatz] = useState<FremdfirmaEinsatz | null>(null);
+  const [prefillFirmaId, setPrefillFirmaId] = useState<string | undefined>();
+  const [prefillFirmaStart, setPrefillFirmaStart] = useState<string | undefined>();
+  const [prefillFirmaEnd, setPrefillFirmaEnd] = useState<string | undefined>();
 
   useEffect(() => {
     if (!permLoading && !isAdmin && !isVorarbeiter && !isExtern) {
@@ -296,6 +311,98 @@ export default function ScheduleBoard() {
     setEditEinsatz(einsatz);
     setPrefillUserId(einsatz.user_id);
     setEinsatzDialogOpen(true);
+  };
+
+  // ─── Fremdfirmen ─────────────────────────────────────────
+  const handleSaveFremdfirma = async (data: FremdfirmaFormData, id?: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const payload = {
+      firmenname: data.firmenname.trim(),
+      adresse: data.adresse || null,
+      plz: data.plz || null,
+      ort: data.ort || null,
+      telefon: data.telefon || null,
+      ansprechpartner: data.ansprechpartner || null,
+      notizen: data.notizen || null,
+    };
+    if (id) {
+      const { error } = await (supabase.from("fremdfirmen" as never) as any).update(payload).eq("id", id);
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      setFremdfirmen((prev) => prev.map((f) => f.id === id ? { ...f, ...payload } as Fremdfirma : f));
+    } else {
+      const { data: created, error } = await (supabase.from("fremdfirmen" as never) as any)
+        .insert({ ...payload, created_by: user.id }).select().single();
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      if (created) setFremdfirmen((prev) => [...prev, created as Fremdfirma]);
+    }
+    setCreateFremdfirmaOpen(false);
+    setEditingFirma(null);
+  };
+
+  const handleDeleteFremdfirma = async (id: string) => {
+    const { error } = await (supabase.from("fremdfirmen" as never) as any).delete().eq("id", id);
+    if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+    setFremdfirmen((prev) => prev.filter((f) => f.id !== id));
+    setFremdfirmaEinsaetze((prev) => prev.filter((e) => e.fremdfirma_id !== id));
+    setCreateFremdfirmaOpen(false);
+    setEditingFirma(null);
+    toast({ title: "Fremdfirma gelöscht" });
+  };
+
+  const handleFirmaCellClick = (firmaId: string, startDate: string, endDate: string) => {
+    setPrefillFirmaId(firmaId);
+    setPrefillFirmaStart(startDate);
+    setPrefillFirmaEnd(endDate);
+    setEditFirmaEinsatz(null);
+    setFirmaEinsatzDialogOpen(true);
+  };
+
+  const handleFirmaEinsatzClick = (einsatz: FremdfirmaEinsatz) => {
+    setEditFirmaEinsatz(einsatz);
+    setPrefillFirmaId(einsatz.fremdfirma_id);
+    setFirmaEinsatzDialogOpen(true);
+  };
+
+  // Reuse des EinsatzDialog — dessen name/adresse werden hier nicht genutzt,
+  // nur project_id + Zeitraum + Beschreibung landen in fremdfirma_einsaetze.
+  const handleSaveFirmaEinsatz = async (data: {
+    project_id: string; start_date: string; end_date: string;
+    ganztaegig: boolean; start_time: string; end_time: string; beschreibung: string; id?: string;
+  }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const payload = {
+      fremdfirma_id: prefillFirmaId,
+      project_id: data.project_id,
+      beschreibung: data.beschreibung || null,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      ganztaegig: data.ganztaegig,
+      start_time: data.ganztaegig ? null : (data.start_time || null),
+      end_time: data.ganztaegig ? null : (data.end_time || null),
+    };
+    if (data.id) {
+      const { error } = await (supabase.from("fremdfirma_einsaetze" as never) as any).update(payload).eq("id", data.id);
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      setFremdfirmaEinsaetze((prev) => prev.map((e) => e.id === data.id ? { ...e, ...payload } as FremdfirmaEinsatz : e));
+    } else {
+      const { data: created, error } = await (supabase.from("fremdfirma_einsaetze" as never) as any)
+        .insert({ ...payload, created_by: user.id }).select().single();
+      if (error) { toast({ variant: "destructive", title: "Fehler", description: error.message }); return; }
+      if (created) setFremdfirmaEinsaetze((prev) => [...prev, created as FremdfirmaEinsatz]);
+    }
+    setFirmaEinsatzDialogOpen(false);
+    setEditFirmaEinsatz(null);
+    setPrefillFirmaStart(undefined);
+    setPrefillFirmaEnd(undefined);
+  };
+
+  const handleDeleteFirmaEinsatz = async (id: string) => {
+    await (supabase.from("fremdfirma_einsaetze" as never) as any).delete().eq("id", id);
+    setFremdfirmaEinsaetze((prev) => prev.filter((e) => e.id !== id));
+    setFirmaEinsatzDialogOpen(false);
+    setEditFirmaEinsatz(null);
   };
 
   // ─── Drag & Drop: bestehenden Einsatz verschieben ─────────
@@ -542,6 +649,20 @@ export default function ScheduleBoard() {
               dropUserId={drag?.dropUserId ?? null}
               dropDay={drag?.dropStart ?? null}
             />
+
+            {/* Fremdfirmen Section */}
+            <FremdfirmaSection
+              fremdfirmen={fremdfirmen}
+              einsaetze={fremdfirmaEinsaetze}
+              boardProjects={boardProjects}
+              projects={projects}
+              days={weekDays}
+              holidays={companyHolidays}
+              onAddFirma={canEdit ? () => { setEditingFirma(null); setCreateFremdfirmaOpen(true); } : undefined}
+              onEditFirma={canEdit ? (firma) => { setEditingFirma(firma); setCreateFremdfirmaOpen(true); } : undefined}
+              onCellClick={canEdit ? handleFirmaCellClick : undefined}
+              onEinsatzClick={handleFirmaEinsatzClick}
+            />
           </div>
         ) : (
           <YearPlanningView
@@ -586,6 +707,41 @@ export default function ScheduleBoard() {
         prefillEndDate={prefillEndDate}
         onSave={handleSaveEinsatz}
         onDelete={handleDeleteEinsatz}
+      />
+
+      {/* Fremdfirma-Stammdaten */}
+      <CreateFremdfirmaDialog
+        open={createFremdfirmaOpen}
+        onOpenChange={(open) => { setCreateFremdfirmaOpen(open); if (!open) setEditingFirma(null); }}
+        editFirma={editingFirma}
+        onSave={handleSaveFremdfirma}
+        onDelete={editingFirma ? handleDeleteFremdfirma : undefined}
+      />
+
+      {/* Fremdfirma-Einsatz — EinsatzDialog wiederverwendet */}
+      <EinsatzDialog
+        open={firmaEinsatzDialogOpen}
+        onOpenChange={(open) => {
+          setFirmaEinsatzDialogOpen(open);
+          if (!open) { setEditFirmaEinsatz(null); setPrefillFirmaStart(undefined); setPrefillFirmaEnd(undefined); }
+        }}
+        projects={projects}
+        editEinsatz={editFirmaEinsatz ? {
+          id: editFirmaEinsatz.id,
+          name: null,
+          project_id: editFirmaEinsatz.project_id,
+          adresse: null,
+          start_date: editFirmaEinsatz.start_date,
+          end_date: editFirmaEinsatz.end_date,
+          ganztaegig: editFirmaEinsatz.ganztaegig,
+          start_time: editFirmaEinsatz.start_time,
+          end_time: editFirmaEinsatz.end_time,
+          beschreibung: editFirmaEinsatz.beschreibung,
+        } : null}
+        prefillStartDate={prefillFirmaStart}
+        prefillEndDate={prefillFirmaEnd}
+        onSave={handleSaveFirmaEinsatz}
+        onDelete={handleDeleteFirmaEinsatz}
       />
     </div>
   );

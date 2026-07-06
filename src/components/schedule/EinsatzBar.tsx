@@ -1,8 +1,9 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { Einsatz } from "./scheduleTypes";
 
 interface Props {
-  einsatz: Einsatz;
+  // Nur id + optional name werden gelesen — passt für Einsatz UND
+  // FremdfirmaEinsatz (der kein name-Feld hat).
+  einsatz: { id: string; name?: string | null };
   projectName: string;
   color: string;
   startCol: number;

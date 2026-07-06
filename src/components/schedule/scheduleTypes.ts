@@ -65,6 +65,32 @@ export type BoardProject = {
   beschreibung: string | null;
 };
 
+// NEU: Fremdfirma (Subfirma, kein Login/Mitarbeiter)
+export type Fremdfirma = {
+  id: string;
+  firmenname: string;
+  adresse: string | null;
+  plz: string | null;
+  ort: string | null;
+  telefon: string | null;
+  ansprechpartner: string | null;
+  notizen: string | null;
+  aktiv: boolean;
+};
+
+// NEU: Einsatz einer Fremdfirma auf einer Baustelle
+export type FremdfirmaEinsatz = {
+  id: string;
+  fremdfirma_id: string;
+  project_id: string;
+  beschreibung: string | null;
+  start_date: string;
+  end_date: string;
+  ganztaegig: boolean;
+  start_time: string | null;
+  end_time: string | null;
+};
+
 export type Resource = {
   id: string;
   project_id: string;
