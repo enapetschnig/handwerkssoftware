@@ -278,13 +278,48 @@ export function AdminTimeEntryDialog({
 
   const handleDelete = async () => {
     if (!entryId) return;
-    if (!window.confirm("Diesen Zeit-Eintrag endgültig löschen? KFZ-Daten werden mit entfernt.")) return;
+    const istZA = form.taetigkeit.trim() === "Zeitausgleich";
+    const confirmMsg = istZA
+      ? "Zeitausgleich entfernen? Das Zeitkonto wird entsprechend korrigiert (die abgezogenen Stunden kommen zurück)."
+      : "Diesen Zeit-Eintrag endgültig löschen? KFZ-Daten werden mit entfernt.";
+    if (!window.confirm(confirmMsg)) return;
     setSaving(true);
     try {
       // CASCADE entfernt time_entry_vehicles automatisch
       const { error } = await supabase.from("time_entries").delete().eq("id", entryId);
       if (error) throw error;
-      toast({ title: "Eintrag gelöscht" });
+
+      // Bei Zeitausgleich zusätzlich den Zeitkonto-Abzug rückgängig machen —
+      // ein ZA zieht die Stunden bei der Anlage vom time_accounts.balance_hours
+      // ("Manuell") ab; ohne diese Gegenbuchung bliebe der Saldo falsch.
+      if (istZA) {
+        const hours = Number(form.stunden) || 0;
+        if (hours > 0) {
+          const { data: { user } } = await supabase.auth.getUser();
+          const { data: acc } = await (supabase.from("time_accounts" as never) as any)
+            .select("balance_hours").eq("user_id", userId).maybeSingle();
+          const before = Number((acc as any)?.balance_hours) || 0;
+          const after = before + hours;
+          if (acc) {
+            await (supabase.from("time_accounts" as never) as any)
+              .update({ balance_hours: after, updated_at: new Date().toISOString() }).eq("user_id", userId);
+          } else {
+            await (supabase.from("time_accounts" as never) as any)
+              .insert({ user_id: userId, balance_hours: after });
+          }
+          await (supabase.from("time_account_transactions" as never) as any).insert({
+            user_id: userId,
+            changed_by: user?.id ?? null,
+            change_type: "za_storno",
+            hours: hours,
+            balance_before: before,
+            balance_after: after,
+            reason: `Zeitausgleich ${form.datum} storniert (Eintrag gelöscht)`,
+          });
+        }
+      }
+
+      toast({ title: istZA ? "Zeitausgleich entfernt" : "Eintrag gelöscht", description: istZA ? "Zeitkonto korrigiert." : undefined });
       onSaved();
       onClose();
     } catch (err: any) {

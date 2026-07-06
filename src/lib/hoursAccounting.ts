@@ -35,10 +35,13 @@ export const SONDER_TAETIGKEITEN = new Set([
   "Krankenstand",
   "Feiertag",
   "Weiterbildung",
-  // Zeitausgleich BEWUSST nicht hier — eigene Behandlung in aggregateByDay.
-  // Begründung User (25.06.2026): bei 4-Tage-Woche (Mo-Do 10h) sollen ZA-
-  // Stunden vom Saldo abgezogen werden, weil die Gut-Stunden bereits an
-  // anderen Tagen erarbeitet wurden. Saldo eines ZA-Tags: -ist (negativ).
+  // Zeitausgleich zählt hier als NEUTRAL (Saldo 0). Der eigentliche Abzug
+  // passiert genau EINMAL über das Zeitkonto (time_accounts.balance_hours =
+  // "Manuell"). Früher wurde der ZA-Tag zusätzlich mit saldo=-ist im "Auto"-
+  // Saldo verrechnet → 10h ZA senkten den Effektiv-Saldo um 20h statt 10h
+  // (Doppelzählung, User-Feedback 06.07.2026). Der Effektiv-Saldo
+  // (Auto + Manuell) sinkt weiterhin um genau die ZA-Stunden.
+  "Zeitausgleich",
 ]);
 
 export const ZEITAUSGLEICH_TAETIGKEIT = "Zeitausgleich";
@@ -71,23 +74,17 @@ export function aggregateByDay(entries: TimeEntryLite[], holidaySet?: Set<string
     const istSonderzeit = dayEntries.some(
       (e) => !!e.taetigkeit && SONDER_TAETIGKEITEN.has(e.taetigkeit),
     );
-    const istZeitausgleich = dayEntries.some(
-      (e) => e.taetigkeit === ZEITAUSGLEICH_TAETIGKEIT,
-    );
     const isHoliday = holidaySet?.has(datum) === true;
 
-    // Drei Fälle:
-    //   1) Zeitausgleich: Soll=0 (Tag ist frei), aber die ZA-Stunden zehren
-    //      vorher erarbeitete Gut-Stunden auf → Saldo = -ist (negativ).
-    //   2) Sonstige Sonderzeit (Urlaub, Krankenstand, Feiertag, Weiterbildung)
-    //      oder AT-Feiertag: Soll=0, Saldo=0 (neutral).
-    //   3) Normaler Arbeitstag: Soll = Wochentag-Regel, Saldo = ist - soll.
+    // Zwei Fälle:
+    //   1) Sonderzeit (Urlaub, Krankenstand, Feiertag, Weiterbildung,
+    //      Zeitausgleich) oder AT-Feiertag: Soll=0, Saldo=0 (neutral).
+    //      ZA wird separat über das Zeitkonto (Manuell) abgezogen — hier
+    //      neutral, um Doppelzählung zu vermeiden.
+    //   2) Normaler Arbeitstag: Soll = Wochentag-Regel, Saldo = ist - soll.
     let soll: number;
     let saldo: number;
-    if (istZeitausgleich) {
-      soll = 0;
-      saldo = -ist;
-    } else if (istSonderzeit || isHoliday) {
+    if (istSonderzeit || isHoliday) {
       soll = 0;
       saldo = 0;
     } else {
@@ -97,7 +94,7 @@ export function aggregateByDay(entries: TimeEntryLite[], holidaySet?: Set<string
 
     out.push({
       datum, ist, soll, saldo,
-      istSonderzeit: istSonderzeit || isHoliday || istZeitausgleich,
+      istSonderzeit: istSonderzeit || isHoliday,
     });
   }
   return out.sort((a, b) => a.datum.localeCompare(b.datum));

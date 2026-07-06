@@ -228,8 +228,8 @@ const MyHours = () => {
             </div>
             <p className="text-[11px] text-muted-foreground mt-2">
               Plus = Überstunden-Guthaben · Minus = Nachzuholende Stunden. Urlaub, Krankenstand,
-              Feiertag und Weiterbildung werden neutral gerechnet. <strong>Zeitausgleich</strong>
-              zehrt vom Saldo ab — gebuchte ZA-Stunden reduzieren das Guthaben.
+              Feiertag, Weiterbildung und Zeitausgleich werden im Auto-Saldo neutral gerechnet.
+              <strong> Zeitausgleich</strong> wird einmalig über das Zeitkonto (Manuell) abgezogen.
             </p>
           </CardContent>
         </Card>

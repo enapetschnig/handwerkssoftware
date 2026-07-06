@@ -183,7 +183,9 @@ const TimeTracking = () => {
       if (entries.length > 0 && !entries.some(e => ["Urlaub", "Krankenstand", "Weiterbildung", "Feiertag", "Zeitausgleich"].includes(e.taetigkeit))) {
         const lastEntry = entries[entries.length - 1];
         const [lastEndHours, lastEndMinutes] = lastEntry.end_time.split(':').map(Number);
-        const nextStartMinutes = lastEndHours * 60 + lastEndMinutes + 30;
+        // Neue Baustelle beginnt direkt an der Endzeit der vorigen (kein
+        // automatischer 30-Min-Puffer) — eine Pause nur, wenn manuell gewählt.
+        const nextStartMinutes = lastEndHours * 60 + lastEndMinutes;
         const suggestedStart = `${String(Math.floor(nextStartMinutes / 60)).padStart(2, '0')}:${String(nextStartMinutes % 60).padStart(2, '0')}`;
         
         setTimeBlocks([createDefaultBlock(suggestedStart)]);
@@ -364,7 +366,8 @@ const TimeTracking = () => {
     
     if (lastBlock.endTime) {
       const [endH, endM] = lastBlock.endTime.split(':').map(Number);
-      const nextMinutes = endH * 60 + endM + 30; // 30 min after last block ends
+      // Nächster Block beginnt an der Endzeit des vorigen (kein 30-Min-Puffer).
+      const nextMinutes = endH * 60 + endM;
       suggestedStart = `${String(Math.floor(nextMinutes / 60)).padStart(2, '0')}:${String(nextMinutes % 60).padStart(2, '0')}`;
     }
     
