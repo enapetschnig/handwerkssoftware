@@ -174,6 +174,14 @@ export default function Employees() {
   const handleArchiveEmployee = async (emp: Employee) => {
     setArchiving(true);
     try {
+      // Selbst-Ausscheiden blocken: sonst würde sich der Admin mitten in der
+      // Operation die eigene RLS-Berechtigung entziehen und der employees-
+      // Update schlüge still fehl (0 Zeilen, kein Error) → falscher Erfolg.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (emp.user_id && user?.id === emp.user_id) {
+        toast({ variant: "destructive", title: "Nicht möglich", description: "Du kannst dich nicht selbst ausscheiden — bitte von einem anderen Admin durchführen lassen." });
+        return;
+      }
       const today = format(new Date(), "yyyy-MM-dd");
       // Zuerst den Login sperren (falls Benutzerkonto verknüpft) — schlägt das
       // fehl, brechen wir ab, bevor employees.aktiv geändert wird. So entsteht
@@ -182,11 +190,14 @@ export default function Employees() {
         const { error: pErr } = await supabase.from("profiles").update({ is_active: false } as any).eq("id", emp.user_id);
         if (pErr) throw pErr;
       }
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("employees")
         .update({ aktiv: false, austritt_datum: emp.austritt_datum || today } as any)
-        .eq("id", emp.id);
+        .eq("id", emp.id)
+        .select("id");
       if (error) throw error;
+      // RLS-blockierte Updates liefern error=null + 0 Zeilen — das als Fehler behandeln.
+      if (!updated || updated.length === 0) throw new Error("Aktualisierung nicht möglich (Berechtigung oder Datensatz).");
       toast({ title: "Mitarbeiter ausgeschieden", description: "Ins Archiv verschoben — alle Daten bleiben erhalten." });
       setSelectedEmployee(null);
       fetchEmployees();
@@ -206,11 +217,13 @@ export default function Employees() {
         const { error: pErr } = await supabase.from("profiles").update({ is_active: true } as any).eq("id", emp.user_id);
         if (pErr) throw pErr;
       }
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("employees")
         .update({ aktiv: true, austritt_datum: null } as any)
-        .eq("id", emp.id);
+        .eq("id", emp.id)
+        .select("id");
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error("Aktualisierung nicht möglich (Berechtigung oder Datensatz).");
       toast({ title: "Mitarbeiter reaktiviert", description: "Wieder in der aktiven Liste." });
       setSelectedEmployee(null);
       fetchEmployees();
