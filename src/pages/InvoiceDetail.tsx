@@ -734,7 +734,7 @@ export default function InvoiceDetail() {
   const loadStoredPdfs = async (invId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.storage.from("invoice-pdfs").list(`${user.id}/${invId}`);
+    const { data } = await supabase.storage.from("hws-invoice-pdfs").list(`${user.id}/${invId}`);
     if (data) setStoredPdfs(data.map(f => ({ name: f.name, created_at: f.created_at || "" })));
   };
 

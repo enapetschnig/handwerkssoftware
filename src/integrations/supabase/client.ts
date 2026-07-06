@@ -13,5 +13,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  // App tables live in a dedicated `hws` schema inside the shared epowergmbh project.
+  db: { schema: 'hws' },
 });

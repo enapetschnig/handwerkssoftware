@@ -459,7 +459,7 @@ export default function Invoices() {
     let success = 0;
     for (const inv of toExport) {
       try {
-        const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
+        const { data, error } = await supabase.functions.invoke("hws-generate-invoice-pdf", {
           body: { invoiceId: inv.id },
         });
         if (error) continue;

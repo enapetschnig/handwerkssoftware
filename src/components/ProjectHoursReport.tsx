@@ -77,7 +77,7 @@ export default function ProjectHoursReport() {
       .channel('project-hours-changes')
       .on('postgres_changes', {
         event: '*',
-        schema: 'public',
+        schema: 'hws',
         table: 'time_entries',
         filter: `project_id=eq.${selectedProjectId}`
       }, () => {

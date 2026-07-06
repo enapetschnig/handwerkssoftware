@@ -51,7 +51,6 @@ const MENU_GROUPS: MenuGroup[] = [
       { title: "Rechnungen & Angebote", path: "/invoices", icon: Receipt, feature: "rechnungen" },
       { title: "Email-Versand", path: "/email-log", icon: Mail, feature: "rechnungen" },
       { title: "Eingangsrechnungen", path: "/eingangsrechnungen", icon: FileDown, feature: "eingangsrechnungen" },
-      { title: "Bautagesberichte", path: "/bautagesberichte", icon: ClipboardList, feature: "bautagesberichte" },
       { title: "Regieberichte", path: "/disturbances", icon: FileText, feature: "regieberichte" },
       { title: "Ersttermine", path: "/ersttermine", icon: UserPlus, feature: "ersttermine" },
       { title: "Protokolle", path: "/besprechungsprotokolle", icon: MessageSquare, feature: "protokolle" },

@@ -1,43 +1,43 @@
-project_id = "vcrkhmvhrszwbfpgdhhs"
+project_id = "xyhgckqxowqnzjtoblfs"
 
-[functions.send-disturbance-report]
+[functions.hws-send-disturbance-report]
 verify_jwt = false
 
-[functions.generate-invoice-pdf]
+[functions.hws-generate-invoice-pdf]
 verify_jwt = false
 
-[functions.send-invitation]
+[functions.hws-send-invitation]
 verify_jwt = false
 
-[functions.create-team-time-entries]
+[functions.hws-create-team-time-entries]
 verify_jwt = false
 
-[functions.whatsapp-webhook]
+[functions.hws-whatsapp-webhook]
 verify_jwt = false
 
-[functions.whatsapp-daily-reminder]
+[functions.hws-whatsapp-daily-reminder]
 verify_jwt = false
 
-[functions.create-user]
+[functions.hws-create-user]
 verify_jwt = false
 
-[functions.whatsapp-onboarding]
+[functions.hws-whatsapp-onboarding]
 verify_jwt = false
 
-[functions.whatsapp-cleanup]
+[functions.hws-whatsapp-cleanup]
 verify_jwt = false
 
-[functions.daily-error-digest]
+[functions.hws-daily-error-digest]
 verify_jwt = false
 
-[functions.delete-user]
+[functions.hws-delete-user]
 verify_jwt = false
 
-[functions.forgot-password-whatsapp]
+[functions.hws-forgot-password-whatsapp]
 verify_jwt = false
 
-[functions.sync-assignment-to-calendar]
+[functions.hws-sync-assignment-to-calendar]
 verify_jwt = false
 
-[functions.parse-invoice-document]
+[functions.hws-parse-invoice-document]
 verify_jwt = false

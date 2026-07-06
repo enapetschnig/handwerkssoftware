@@ -29,7 +29,7 @@ export function InvoiceLayoutEditor() {
 
   // Load existing logo URL
   useEffect(() => {
-    const { data } = supabase.storage.from("logos").getPublicUrl("logo.png");
+    const { data } = supabase.storage.from("hws-logos").getPublicUrl("logo.png");
     if (data?.publicUrl) {
       setLogoUrl(data.publicUrl);
     }
@@ -83,7 +83,7 @@ export function InvoiceLayoutEditor() {
 
       if (error) throw error;
 
-      const { data } = supabase.storage.from("logos").getPublicUrl(filePath);
+      const { data } = supabase.storage.from("hws-logos").getPublicUrl(filePath);
       setLogoUrl(data.publicUrl + "?t=" + Date.now());
 
       // Cache invalidieren damit das neue Logo sofort in allen PDFs verwendet wird

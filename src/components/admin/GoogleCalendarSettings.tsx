@@ -110,7 +110,7 @@ export function GoogleCalendarSettings() {
     }
     updateRow(idx, { testing: true, testResult: null, testError: undefined });
     try {
-      const { data, error } = await supabase.functions.invoke("google-calendar-sync", {
+      const { data, error } = await supabase.functions.invoke("hws-google-calendar-sync", {
         body: { action: "test_calendar_access", calendarId: id },
       });
       if (error) throw error;
@@ -138,7 +138,7 @@ export function GoogleCalendarSettings() {
     )) return;
     setBulkRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-assignment-to-calendar", {
+      const { data, error } = await supabase.functions.invoke("hws-sync-assignment-to-calendar", {
         body: { action: "sync_all_einsaetze" },
       });
       if (error) throw error;

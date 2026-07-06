@@ -289,7 +289,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData, prefi
         notizen: `Regie-Zuordnung: ${editData.id}`,
       }));
 
-      await supabase.functions.invoke("create-team-time-entries", {
+      await supabase.functions.invoke("hws-create-team-time-entries", {
         body: { entries: timeEntries, deleteDisturbanceId: editData.id },
       });
 
@@ -355,7 +355,7 @@ export const DisturbanceForm = ({ open, onOpenChange, onSuccess, editData, prefi
         notizen: `Regie-Zuordnung: ${newDisturbance.id}`,
       }));
 
-      await supabase.functions.invoke("create-team-time-entries", {
+      await supabase.functions.invoke("hws-create-team-time-entries", {
         body: { entries: timeEntries },
       });
 

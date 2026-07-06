@@ -263,7 +263,7 @@ export default function InvoiceTemplates() {
       // Eindeutiger Pfad: template-ID wenn vorhanden, sonst zufällige UUID
       const base = editId || crypto.randomUUID();
       const path = `material-fotos/${base}.${ext}`;
-      const { error } = await supabase.storage.from("project-materials")
+      const { error } = await supabase.storage.from("hws-project-materials")
         .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
       if (error) throw error;
       setForm(f => ({ ...f, foto_path: path }));
@@ -280,7 +280,7 @@ export default function InvoiceTemplates() {
 
   const handleFotoRemove = async () => {
     if (form.foto_path) {
-      try { await supabase.storage.from("project-materials").remove([form.foto_path]); } catch {}
+      try { await supabase.storage.from("hws-project-materials").remove([form.foto_path]); } catch {}
     }
     setForm(f => ({ ...f, foto_path: null }));
     setEditFotoUrl(null);

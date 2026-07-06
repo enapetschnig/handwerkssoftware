@@ -113,7 +113,7 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
 
       if (dbError) {
         // Clean up storage if db insert failed
-        await supabase.storage.from("disturbance-photos").remove([fileName]);
+        await supabase.storage.from("hws-disturbance-photos").remove([fileName]);
         toast({
           variant: "destructive",
           title: "Fehler",
@@ -141,7 +141,7 @@ export const DisturbancePhotos = ({ disturbanceId, canEdit }: DisturbancePhotosP
 
   const handleDelete = async (photo: DisturbancePhoto) => {
     // Delete from storage
-    await supabase.storage.from("disturbance-photos").remove([photo.file_path]);
+    await supabase.storage.from("hws-disturbance-photos").remove([photo.file_path]);
 
     // Delete from database
     const { error } = await supabase

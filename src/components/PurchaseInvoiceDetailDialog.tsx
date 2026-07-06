@@ -70,7 +70,7 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
   useEffect(() => {
     let cancelled = false;
     if (!form?.pdf_path) { setFileUrl(null); return; }
-    supabase.storage.from("purchase-invoices").createSignedUrl(form.pdf_path, 300).then(({ data }) => {
+    supabase.storage.from("hws-purchase-invoices").createSignedUrl(form.pdf_path, 300).then(({ data }) => {
       if (!cancelled) setFileUrl(data?.signedUrl || null);
     });
     return () => { cancelled = true; };
@@ -187,7 +187,7 @@ export function PurchaseInvoiceDetailDialog({ invoiceId, onClose, onUpdated }: P
 
   const openFile = async () => {
     if (!form?.pdf_path) return;
-    const { data } = await supabase.storage.from("purchase-invoices").createSignedUrl(form.pdf_path, 300);
+    const { data } = await supabase.storage.from("hws-purchase-invoices").createSignedUrl(form.pdf_path, 300);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 

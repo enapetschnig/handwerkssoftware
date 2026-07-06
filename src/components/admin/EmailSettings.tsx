@@ -116,7 +116,7 @@ export function EmailSettings() {
     try {
       const previewSubject = activeTemplate.subject || `Test: ${activeTyp}`;
       const previewBody = activeTemplate.body_html || `<p>Dies ist eine Test-Email für die ${activeTyp}-Vorlage.</p>`;
-      const { data, error } = await supabase.functions.invoke("send-document-email", {
+      const { data, error } = await supabase.functions.invoke("hws-send-document-email", {
         body: {
           invoice_id: null,
           to: testRecipient.trim(),

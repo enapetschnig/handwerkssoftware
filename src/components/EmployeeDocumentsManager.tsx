@@ -102,7 +102,7 @@ export default function EmployeeDocumentsManager({ employeeId, userId }: Props) 
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
         const filePath = `${userId || employeeId}/${type}/${Date.now()}_${file.name}`;
-        const { error } = await supabase.storage.from("employee-documents").upload(filePath, file);
+        const { error } = await supabase.storage.from("hws-employee-documents").upload(filePath, file);
 
         if (error) throw error;
       });

@@ -75,7 +75,7 @@ export function DictateButton({ value, onResult, compact, label = "Diktieren", d
           form.append("existingText", value || "");
           form.append("mode", value.trim() ? "append" : "polish");
 
-          const { data, error } = await supabase.functions.invoke("polish-text", {
+          const { data, error } = await supabase.functions.invoke("hws-polish-text", {
             body: form,
           });
 

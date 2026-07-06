@@ -232,7 +232,7 @@ export function CustomerForm({
                     setVatChecking(true);
                     setVatResult(null);
                     try {
-                      const { data, error } = await supabase.functions.invoke("check-vat", {
+                      const { data, error } = await supabase.functions.invoke("hws-check-vat", {
                         body: { vatNumber: form.uid_nummer.replace(/\s/g, "") },
                       });
                       if (error) throw error;

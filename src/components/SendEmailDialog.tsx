@@ -150,7 +150,7 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent, 
         pdfFilename = pdfFilenameOverride || `${invoice.nummer || invoice.typ}.pdf`;
       }
       const ccList = cc.split(/[,;\s]+/).map(s => s.trim()).filter(s => s.includes("@"));
-      const { data, error } = await supabase.functions.invoke("send-document-email", {
+      const { data, error } = await supabase.functions.invoke("hws-send-document-email", {
         body: {
           invoice_id: invoice.id || null,
           to: to.trim(),

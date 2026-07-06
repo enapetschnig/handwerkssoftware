@@ -90,7 +90,7 @@ export function MaterialFileImport({ open, onClose, onImported }: MaterialFileIm
       }
 
       for (let idx = 0; idx < chunks.length; idx++) {
-        const { data, error } = await supabase.functions.invoke("parse-material-file", {
+        const { data, error } = await supabase.functions.invoke("hws-parse-material-file", {
           body: { fileContent: chunks[idx], fileType },
         });
         if (error) {

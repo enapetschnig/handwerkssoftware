@@ -83,7 +83,7 @@ export default function Auth() {
     const username = (formData.get("reset-username") as string).trim().toLowerCase();
 
     try {
-      const { data, error } = await supabase.functions.invoke("forgot-password-whatsapp", {
+      const { data, error } = await supabase.functions.invoke("hws-forgot-password-whatsapp", {
         body: { username },
       });
       if (error) throw error;

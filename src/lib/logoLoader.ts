@@ -36,7 +36,7 @@ export async function loadInvoiceLogo(forceRefresh = false): Promise<string | un
   try {
     const extensions = ["png", "jpg", "jpeg", "webp"];
     for (const ext of extensions) {
-      const { data } = supabase.storage.from("logos").getPublicUrl(`logo.${ext}`);
+      const { data } = supabase.storage.from("hws-logos").getPublicUrl(`logo.${ext}`);
       if (!data?.publicUrl) continue;
       try {
         const res = await fetch(data.publicUrl, { cache: "no-cache" });

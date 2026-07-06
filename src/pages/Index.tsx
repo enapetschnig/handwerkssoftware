@@ -18,6 +18,9 @@ import {
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MeineEinteilung } from "@/components/MeineEinteilung";
+import KpiDashboard from "@/components/dashboard/KpiDashboard";
+import VoiceOfferDialog from "@/components/VoiceOfferDialog";
+import { Mic } from "lucide-react";
 
 type Project = {
   id: string;
@@ -52,6 +55,7 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const { handleRestartInstallGuide } = useOnboarding();
 
   const fetchProjects = async () => {
@@ -183,7 +187,7 @@ export default function Index() {
     // Realtime subscription for projects
     const projectsChannel = supabase
       .channel("dashboard-projects")
-      .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, () => {
+      .on("postgres_changes", { event: "*", schema: "hws", table: "projects" }, () => {
         fetchProjects();
       })
       .subscribe();
@@ -195,7 +199,7 @@ export default function Index() {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "hws",
           table: "time_entries",
           filter: user ? `user_id=eq.${user.id}` : undefined,
         },
@@ -345,6 +349,25 @@ export default function Index() {
           </p>
         </div>
 
+        {/* Angebot per Sprachnachricht — Headline-Feature */}
+        {canView('rechnungen') && (
+          <Card className="mb-6 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10 cursor-pointer hover:shadow-lg transition-all" onClick={() => setVoiceOpen(true)}>
+            <CardContent className="flex items-center gap-4 p-4 sm:p-5">
+              <div className="h-14 w-14 rounded-full bg-primary flex items-center justify-center shrink-0">
+                <Mic className="h-7 w-7 text-primary-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-base sm:text-lg">Angebot per Sprachnachricht erstellen</p>
+                <p className="text-sm text-muted-foreground">Kunde, Leistungen &amp; Preise einsprechen — die KI erstellt daraus ein fertiges Angebot</p>
+              </div>
+              <Button size="sm" className="shrink-0"><Mic className="h-4 w-4 mr-2" />Aufnehmen</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* KPI-Übersicht — alle Zahlen auf einen Blick (Admin) */}
+        {isAdmin && <KpiDashboard />}
+
         {/* Meine Einteilung — für Mitarbeiter und Vorarbeiter */}
         {user && !isAdmin && <MeineEinteilung userId={user.id} />}
 
@@ -416,18 +439,6 @@ export default function Index() {
               <CardDescription className="text-sm">Termine & Google Kalender Sync</CardDescription>
             </CardHeader>
             <CardContent><Button className="w-full" size="sm">Kalender öffnen</Button></CardContent>
-          </Card>
-          )}
-
-          {/* 4c. Bautagesberichte */}
-          {canView('bautagesberichte') && (
-          <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50" onClick={() => navigate("/bautagesberichte")}>
-            <CardHeader className="space-y-2 pb-3">
-              <div className="h-12 w-12 rounded-lg bg-emerald-500/10 flex items-center justify-center"><ClipboardList className="h-6 w-6 text-emerald-600" /></div>
-              <CardTitle className="text-lg sm:text-xl">Bautagesberichte</CardTitle>
-              <CardDescription className="text-sm">Tägliche Baustellendokumentation</CardDescription>
-            </CardHeader>
-            <CardContent><Button className="bg-emerald-600 hover:bg-emerald-700 w-full" size="sm">Berichte öffnen</Button></CardContent>
           </Card>
           )}
 
@@ -641,6 +652,7 @@ export default function Index() {
         )}
       </main>
 
+      <VoiceOfferDialog open={voiceOpen} onOpenChange={setVoiceOpen} />
     </div>
   );
 }

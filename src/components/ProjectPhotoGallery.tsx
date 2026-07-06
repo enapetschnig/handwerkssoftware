@@ -61,7 +61,7 @@ export function ProjectPhotoGallery({ projectId }: { projectId: string }) {
       toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: upErr.message });
       return;
     }
-    const { data: urlData } = supabase.storage.from("project-photos").getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from("hws-project-photos").getPublicUrl(filePath);
     const { error: dbErr } = await supabase.from("documents").insert({
       project_id: projectId,
       user_id: user.id,
@@ -72,7 +72,7 @@ export function ProjectPhotoGallery({ projectId }: { projectId: string }) {
     } as any);
     if (dbErr) {
       // Rollback — verwaistes Storage-File wieder entfernen
-      await supabase.storage.from("project-photos").remove([filePath]);
+      await supabase.storage.from("hws-project-photos").remove([filePath]);
       toast({ variant: "destructive", title: "Foto konnte nicht gespeichert werden", description: dbErr.message });
       return;
     }
@@ -97,7 +97,7 @@ export function ProjectPhotoGallery({ projectId }: { projectId: string }) {
     // Pfad aus der Public-URL extrahieren (letzten zwei Segmente)
     const urlParts = doc.file_url.split("/");
     const filePath = `${projectId}/${urlParts[urlParts.length - 1]}`;
-    await supabase.storage.from("project-photos").remove([filePath]);
+    await supabase.storage.from("hws-project-photos").remove([filePath]);
     const { error } = await supabase.from("documents").delete().eq("id", doc.id);
     if (error) {
       toast({ variant: "destructive", title: "Foto konnte nicht gelöscht werden", description: error.message });

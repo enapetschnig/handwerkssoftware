@@ -179,7 +179,7 @@ export function WhatsAppAdminSettings() {
     setWelcomingEmp(emp.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const { error } = await supabase.functions.invoke("whatsapp-onboarding", {
+      const { error } = await supabase.functions.invoke("hws-whatsapp-onboarding", {
         body: { employee_id: emp.id },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -246,7 +246,7 @@ export function WhatsAppAdminSettings() {
     setPreviewMsg("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const { data, error } = await supabase.functions.invoke("whatsapp-daily-reminder", {
+      const { data, error } = await supabase.functions.invoke("hws-whatsapp-daily-reminder", {
         body: { type, preview: true, user_id: session?.user?.id },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -273,7 +273,7 @@ export function WhatsAppAdminSettings() {
     try {
       // Statt Fetch auf hardcodete URL: supabase.functions.invoke nutzt die korrekte Projekt-URL automatisch
       const { data: { session } } = await supabase.auth.getSession();
-      const { data, error } = await supabase.functions.invoke("whatsapp-daily-reminder", {
+      const { data, error } = await supabase.functions.invoke("hws-whatsapp-daily-reminder", {
         body: { type, mode: "force" },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -305,7 +305,7 @@ export function WhatsAppAdminSettings() {
     setSendingMsg(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const { error } = await supabase.functions.invoke("whatsapp-send", {
+      const { error } = await supabase.functions.invoke("hws-whatsapp-send", {
         body: { to: phone, message },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });

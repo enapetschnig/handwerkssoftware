@@ -167,7 +167,7 @@ export default function PurchaseInvoices() {
 
   const openFile = async (inv: PurchaseInvoice) => {
     if (!inv.pdf_path) return;
-    const { data } = await supabase.storage.from("purchase-invoices").createSignedUrl(inv.pdf_path, 300);
+    const { data } = await supabase.storage.from("hws-purchase-invoices").createSignedUrl(inv.pdf_path, 300);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
@@ -187,7 +187,7 @@ export default function PurchaseInvoices() {
       return;
     }
     if (inv.pdf_path) {
-      await supabase.storage.from("purchase-invoices").remove([inv.pdf_path]);
+      await supabase.storage.from("hws-purchase-invoices").remove([inv.pdf_path]);
     }
     const { error } = await supabase.from("purchase_invoices").delete().eq("id", deleteId);
     if (error) {

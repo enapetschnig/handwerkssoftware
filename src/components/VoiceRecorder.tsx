@@ -82,7 +82,7 @@ export function VoiceRecorder({ typ, existingItems, onAccept, onCancel }: VoiceR
       }
       const audioBase64 = btoa(binary);
 
-      const { data, error } = await supabase.functions.invoke("parse-voice-material", {
+      const { data, error } = await supabase.functions.invoke("hws-parse-voice-material", {
         body: {
           audioBase64,
           typ,

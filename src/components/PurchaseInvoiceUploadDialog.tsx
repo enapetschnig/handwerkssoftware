@@ -201,7 +201,7 @@ export function PurchaseInvoiceUploadDialog({ open, onOpenChange, onUploaded, pr
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("parse-invoice-document", {
+      const { data, error } = await supabase.functions.invoke("hws-parse-invoice-document", {
         // imagesBase64 (Array, mehrere Seiten) wird bevorzugt; fallback imageBase64
         body: imagesBase64.length > 1
           ? { imagesBase64 }

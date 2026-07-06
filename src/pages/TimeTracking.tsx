@@ -244,7 +244,7 @@ const TimeTracking = () => {
 
     const channel = supabase
       .channel('projects-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'hws', table: 'projects' }, () => {
         fetchProjects();
       })
       .subscribe();
@@ -776,7 +776,7 @@ const TimeTracking = () => {
 
       // Call Edge Function to create entries (bypasses RLS for team members)
       const { data: result, error: functionError } = await supabase.functions.invoke(
-        "create-team-time-entries",
+        "hws-create-team-time-entries",
         {
           body: {
             mainEntry,

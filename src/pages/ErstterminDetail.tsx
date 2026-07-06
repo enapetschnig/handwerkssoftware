@@ -301,7 +301,7 @@ export default function ErstterminDetail() {
   };
 
   const getPhotoUrl = (filePath: string) =>
-    supabase.storage.from("ersttermin-photos").getPublicUrl(filePath).data.publicUrl;
+    supabase.storage.from("hws-ersttermin-photos").getPublicUrl(filePath).data.publicUrl;
 
   // Upload eines einzelnen Foto-Files (aus <PhotoGallery> — mit optional
   // mitgegebenem Kommentar aus dem Upload-Dialog). Vor dem ersten Save
@@ -316,7 +316,7 @@ export default function ErstterminDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const fileName = `${savedId}/${Date.now()}_${file.name}`;
-    const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, file);
+    const { error: upErr } = await supabase.storage.from("hws-ersttermin-photos").upload(fileName, file);
     if (upErr) return;
     const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
       .insert({
@@ -327,7 +327,7 @@ export default function ErstterminDetail() {
         beschreibung: comment || null,
       });
     if (dbErr) {
-      await supabase.storage.from("ersttermin-photos").remove([fileName]);
+      await supabase.storage.from("hws-ersttermin-photos").remove([fileName]);
       return;
     }
     fetchPhotos(savedId);
@@ -353,7 +353,7 @@ export default function ErstterminDetail() {
     let failedCount = 0;
     for (const pp of pendingPhotos as any[]) {
       const fileName = `${eid}/${Date.now()}_${pp.file.name}`;
-      const { error: upErr } = await supabase.storage.from("ersttermin-photos").upload(fileName, pp.file);
+      const { error: upErr } = await supabase.storage.from("hws-ersttermin-photos").upload(fileName, pp.file);
       if (upErr) { failedCount++; continue; }
       const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any)
         .insert({
@@ -364,7 +364,7 @@ export default function ErstterminDetail() {
           beschreibung: (pp.comment || "").trim() || null,
         });
       if (dbErr) {
-        await supabase.storage.from("ersttermin-photos").remove([fileName]);
+        await supabase.storage.from("hws-ersttermin-photos").remove([fileName]);
         failedCount++;
       }
     }
@@ -387,7 +387,7 @@ export default function ErstterminDetail() {
       return;
     }
     const real = p as ErstterminPhoto;
-    const { error: storageErr } = await supabase.storage.from("ersttermin-photos").remove([real.file_path]);
+    const { error: storageErr } = await supabase.storage.from("hws-ersttermin-photos").remove([real.file_path]);
     const { error: dbErr } = await (supabase.from("ersttermin_interessent_photos" as never) as any).delete().eq("id", real.id);
     if (storageErr || dbErr) {
       toast({ variant: "destructive", title: "Foto konnte nicht gelöscht werden", description: (storageErr || dbErr)?.message });

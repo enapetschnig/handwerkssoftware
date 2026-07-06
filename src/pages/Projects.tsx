@@ -127,7 +127,7 @@ const Projects = () => {
     // Realtime subscription
     const channel = supabase
       .channel('projects-list-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'hws', table: 'projects' }, () => {
         fetchProjects();
       })
       .subscribe();

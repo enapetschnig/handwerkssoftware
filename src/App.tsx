@@ -36,8 +36,6 @@ import Customers from "./pages/Customers";
 import OfferPackages from "./pages/OfferPackages";
 import ScheduleBoard from "./pages/ScheduleBoard";
 import Calendar from "./pages/Calendar";
-import Bautagesberichte from "./pages/Bautagesberichte";
-import BautagesberichtDetail from "./pages/BautagesberichtDetail";
 import Besprechungsprotokolle from "./pages/Besprechungsprotokolle";
 import BesprechungsprotokollDetail from "./pages/BesprechungsprotokollDetail";
 import FreelancerHours from "./pages/FreelancerHours";
@@ -115,8 +113,6 @@ function AppContent() {
           <Route path="/customers" element={<ProtectedRoute feature="kunden"><Customers /></ProtectedRoute>} />
           <Route path="/schedule" element={<ProtectedRoute feature="plantafel"><ScheduleBoard /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute feature="kalender"><Calendar /></ProtectedRoute>} />
-          <Route path="/bautagesberichte" element={<ProtectedRoute feature="bautagesberichte"><Bautagesberichte /></ProtectedRoute>} />
-          <Route path="/bautagesberichte/:id" element={<ProtectedRoute feature="bautagesberichte"><BautagesberichtDetail /></ProtectedRoute>} />
           <Route path="/besprechungsprotokolle" element={<ProtectedRoute feature="protokolle"><Besprechungsprotokolle /></ProtectedRoute>} />
           <Route path="/besprechungsprotokolle/:id" element={<ProtectedRoute feature="protokolle"><BesprechungsprotokollDetail /></ProtectedRoute>} />
           <Route path="/ersttermine" element={<ProtectedRoute feature="ersttermine"><Ersttermine /></ProtectedRoute>} />

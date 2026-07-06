@@ -652,9 +652,6 @@ const ProjectOverview = () => {
 
         {/* Quick-Actions: neues Dokument mit vorbelegter project_id */}
         <div className="flex flex-wrap gap-2 mb-4">
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/bautagesberichte/neu?project=${projectId}`)}>
-            <ClipboardList className="h-3.5 w-3.5" />Neuer Bautagesbericht
-          </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/besprechungsprotokolle/neu?project=${projectId}`)}>
             <MessageSquare className="h-3.5 w-3.5" />Neues Protokoll
           </Button>
@@ -852,17 +849,6 @@ const ProjectOverview = () => {
             </Card>
           )}
 
-          {/* Bautagesberichte */}
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/bautagesberichte?project=${projectId}`)}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <ClipboardList className="h-5 w-5 text-emerald-600" />
-              <div className="flex-1">
-                <p className="font-medium">Bautagesberichte</p>
-                <p className="text-xs text-muted-foreground">{btbCount} Berichte</p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Regieberichte */}
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/disturbances?project=${projectId}`)}>
             <CardContent className="flex items-center gap-3 p-4">
@@ -888,7 +874,7 @@ const ProjectOverview = () => {
                       key={pdf.id}
                       className="flex items-center gap-2 text-sm w-full text-left hover:bg-muted rounded px-2 py-1.5 transition-colors"
                       onClick={async () => {
-                        const { data } = await supabase.storage.from("regiebericht-pdfs").createSignedUrl(pdf.pdf_path, 300);
+                        const { data } = await supabase.storage.from("hws-regiebericht-pdfs").createSignedUrl(pdf.pdf_path, 300);
                         if (data?.signedUrl) window.open(data.signedUrl, "_blank");
                       }}
                     >

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const FEATURES = [
   'zeiterfassung','projekte','meine_stunden','regieberichte','rechnungen',
-  'kalender','plantafel','bautagesberichte','ersttermine','protokolle',
+  'kalender','plantafel','ersttermine','protokolle',
   'kunden','materialien','admin','stundenauswertung','eingangsrechnungen'
 ] as const;
 export type FeatureKey = typeof FEATURES[number];
@@ -16,7 +16,6 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   rechnungen: "Rechnungen & Angebote",
   kalender: "Kalender",
   plantafel: "Plantafel",
-  bautagesberichte: "Bautagesberichte",
   ersttermine: "Ersttermine",
   protokolle: "Besprechungsprotokolle",
   kunden: "Kunden",
@@ -35,7 +34,6 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
   '/invoices': 'rechnungen',
   '/calendar': 'kalender',
   '/schedule': 'plantafel',
-  '/bautagesberichte': 'bautagesberichte',
   '/ersttermine-interessent': 'ersttermine',
   '/ersttermine-projekt': 'ersttermine',
   '/besprechungsprotokolle': 'protokolle',
@@ -105,7 +103,7 @@ export function usePermissions() {
       .channel("perms-live")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "role_permissions" },
+        { event: "*", schema: "hws", table: "role_permissions" },
         () => load()
       )
       .subscribe();

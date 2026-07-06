@@ -148,7 +148,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
     try {
       const hasPhone = !!form.telefon.trim();
       const enableWhatsApp = hasPhone && whatsappAktiv;
-      const { data, error } = await supabase.functions.invoke("create-user", {
+      const { data, error } = await supabase.functions.invoke("hws-create-user", {
         body: { ...form, whatsapp_aktiv: enableWhatsApp, ist_freelancer: istFreelancer },
       });
       if (error) {
@@ -184,7 +184,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
           welcomeError = "employee_id fehlt (Mitarbeiter-Datensatz konnte nicht angelegt werden)";
         } else {
           try {
-            const { data: wData, error: wErr } = await supabase.functions.invoke("whatsapp-onboarding", {
+            const { data: wData, error: wErr } = await supabase.functions.invoke("hws-whatsapp-onboarding", {
               body: {
                 employee_id: data.employee_id,
                 username: form.username.trim().toLowerCase(),

@@ -2029,7 +2029,7 @@ export default function Admin() {
                   // Der frühere Notizen-Sichern-Schritt ist überflüssig:
                   // Name + Telefon + Adresse liegen jetzt im Archiv.
                   const userName = `${userToDelete.vorname} ${userToDelete.nachname}`;
-                  const { data: dData, error: dErr } = await supabase.functions.invoke("delete-user", {
+                  const { data: dData, error: dErr } = await supabase.functions.invoke("hws-delete-user", {
                     body: { user_id: userToDelete.id, notiz: "via Admin-UI" },
                   });
                   if (dErr) {

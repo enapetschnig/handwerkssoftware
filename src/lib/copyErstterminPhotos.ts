@@ -91,7 +91,7 @@ export async function copyErstterminPhotosToProject(
         continue;
       }
       // documents-Zeile anlegen — sonst erscheint das Foto nie im Projekt.
-      const { data: urlData } = supabase.storage.from("project-photos").getPublicUrl(destPath);
+      const { data: urlData } = supabase.storage.from("hws-project-photos").getPublicUrl(destPath);
       const { error: dbErr } = await supabase.from("documents").insert({
         project_id: projectId,
         user_id: user?.id ?? null,
@@ -102,7 +102,7 @@ export async function copyErstterminPhotosToProject(
       } as any);
       if (dbErr) {
         // Rollback — verwaistes Storage-File wieder entfernen
-        await supabase.storage.from("project-photos").remove([destPath]);
+        await supabase.storage.from("hws-project-photos").remove([destPath]);
         result.failed++;
         result.errors.push(`${basename}: DB-Eintrag fehlgeschlagen — ${dbErr.message}`);
         continue;

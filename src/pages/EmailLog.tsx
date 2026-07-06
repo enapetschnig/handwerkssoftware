@@ -118,7 +118,7 @@ export default function EmailLog() {
     if (!confirm(`Email an ${row.to_address} erneut senden?`)) return;
     setResendingId(row.id);
     try {
-      const { data, error } = await supabase.functions.invoke("send-document-email", {
+      const { data, error } = await supabase.functions.invoke("hws-send-document-email", {
         body: {
           invoice_id: row.invoice_id,
           to: row.to_address,

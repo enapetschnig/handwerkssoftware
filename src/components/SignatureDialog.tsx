@@ -164,7 +164,7 @@ export const SignatureDialog = ({
       }
 
       // Send email via edge function
-      const { data: sendData, error: sendError } = await supabase.functions.invoke("send-disturbance-report", {
+      const { data: sendData, error: sendError } = await supabase.functions.invoke("hws-send-disturbance-report", {
         body: {
           disturbance: {
             ...disturbance,
