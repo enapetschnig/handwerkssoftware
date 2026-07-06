@@ -154,6 +154,7 @@ interface TemplateItem {
   einheit: string;
   einzelpreis: number;
   kategorie: string;
+  art?: string | null;   // 'material' | 'leistung' | null (Migration 20260615210000)
   ist_favorit?: boolean;
   ist_set?: boolean;
 }
@@ -225,6 +226,8 @@ export default function InvoiceDetail() {
   // Aktive Mitarbeiter als Pool für den Ansprechpartner-Picker
   const [employees, setEmployees] = useState<{ id: string; vorname: string; nachname: string; telefon: string | null; email: string | null; position: string | null }[]>([]);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  // Aktiver Tab im Datenbank-Picker: Material vs Arbeitsleistung (art-Spalte).
+  const [templateArt, setTemplateArt] = useState<"material" | "leistung">("material");
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("alle");
   const [autocompleteIdx, setAutocompleteIdx] = useState<number | null>(null);
@@ -3772,9 +3775,13 @@ export default function InvoiceDetail() {
                   )}
                   <Button onClick={() => setImportTimeOpen(true)} variant="outline" size="sm" className="gap-1">
                     <FileText className="w-4 h-4" />
-                    Arbeitszeiten
+                    Zeiten aus Projekt
                   </Button>
-                  <Button onClick={() => setTemplateDialogOpen(true)} variant="outline" size="sm" className="gap-1">
+                  <Button onClick={() => { setTemplateArt("leistung"); setTemplateDialogOpen(true); }} variant="outline" size="sm" className="gap-1">
+                    <FileText className="w-4 h-4" />
+                    Arbeitsleistungen
+                  </Button>
+                  <Button onClick={() => { setTemplateArt("material"); setTemplateDialogOpen(true); }} variant="outline" size="sm" className="gap-1">
                     <Package className="w-4 h-4" />
                     Materialien
                   </Button>
@@ -4136,11 +4143,32 @@ export default function InvoiceDetail() {
         }}>
           <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Materialien einfügen</DialogTitle>
+              <DialogTitle>Aus Datenbank einfügen</DialogTitle>
             </DialogHeader>
+            {/* Tabs Material / Arbeitsleistung (invoice_templates.art) */}
+            <div className="flex gap-2 border-b -mb-1">
+              <button
+                type="button"
+                onClick={() => setTemplateArt("material")}
+                className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  templateArt === "material" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                📦 Materialien ({templates.filter(t => t.art === "material" || !t.art).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateArt("leistung")}
+                className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  templateArt === "leistung" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                🛠️ Arbeitsleistungen ({templates.filter(t => t.art === "leistung").length})
+              </button>
+            </div>
             <div className="flex gap-3 mb-3">
               <Input
-                placeholder="Suchen..."
+                placeholder={templateArt === "leistung" ? "Arbeitsleistung suchen..." : "Material suchen..."}
                 value={templateSearch}
                 onChange={(e) => setTemplateSearch(e.target.value)}
                 className="flex-1"
@@ -4159,11 +4187,15 @@ export default function InvoiceDetail() {
               {(() => {
                 const s = templateSearch.toLowerCase();
                 const filtered = templates.filter(t => {
+                  // art-Tab: Material zeigt auch unbestimmte (NULL) Altbestände.
+                  const matchArt = templateArt === "leistung"
+                    ? t.art === "leistung"
+                    : (t.art === "material" || !t.art);
                   const matchSearch = !s || t.name.toLowerCase().includes(s) || (t.beschreibung && t.beschreibung.toLowerCase().includes(s)) || ((t as any).kurzbezeichnung && (t as any).kurzbezeichnung.toLowerCase().includes(s));
                   const matchFilter = templateFilter === "alle" || t.kategorie === templateFilter;
-                  return matchSearch && matchFilter;
+                  return matchArt && matchSearch && matchFilter;
                 });
-                if (filtered.length === 0) return <p className="text-center text-muted-foreground py-8">Keine Materialien gefunden</p>;
+                if (filtered.length === 0) return <p className="text-center text-muted-foreground py-8">{templateArt === "leistung" ? "Keine Arbeitsleistungen gefunden" : "Keine Materialien gefunden"}</p>;
 
                 const favoriten = filtered.filter(t => t.ist_favorit);
                 const restliche = filtered.filter(t => !t.ist_favorit);
