@@ -11,6 +11,7 @@ import {
   isCompanyHoliday,
   isWeekendDay,
   getEinsatzColor,
+  getEinsatzTextColor,
 } from "./scheduleUtils";
 import type {
   Team,
@@ -80,6 +81,13 @@ export function TeamSection({
       projectMap.get(projectId),
       boardColorMap.get(projectId)?.board_color,
       projectId,
+    );
+  }
+
+  function getBarTextColor(projectId: string): string {
+    return getEinsatzTextColor(
+      boardColorMap.get(projectId)?.board_text_color,
+      getBarColor(projectId),
     );
   }
 
@@ -218,6 +226,7 @@ export function TeamSection({
                 einsatz={einsatz}
                 projectName={project?.name ?? "–"}
                 color={getBarColor(einsatz.project_id)}
+                textColor={getBarTextColor(einsatz.project_id)}
                 startCol={cols.startCol}
                 endCol={cols.endCol}
                 totalDays={days.length}

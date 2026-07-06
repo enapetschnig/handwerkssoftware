@@ -6,6 +6,8 @@ interface Props {
   einsatz: { id: string; name?: string | null };
   projectName: string;
   color: string;
+  /** Schriftfarbe des Balkens. Default = dunkles Slate. */
+  textColor?: string;
   startCol: number;
   endCol: number;
   totalDays: number;
@@ -39,6 +41,7 @@ export function EinsatzBar({
   einsatz,
   projectName,
   color,
+  textColor = "#1e293b",
   startCol,
   endCol,
   totalDays,
@@ -70,7 +73,7 @@ export function EinsatzBar({
         height: 28,
         backgroundColor: color,
         border: `1px solid ${borderColor}`,
-        color: "#1e293b",
+        color: textColor,
         minWidth: 0,
         cursor: draggable ? (isDragging ? "grabbing" : "grab") : (onClick ? "pointer" : "default"),
         opacity: isDragging ? 0.5 : 1,

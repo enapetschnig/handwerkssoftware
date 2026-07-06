@@ -12,11 +12,13 @@ import { useToast } from "@/hooks/use-toast";
 import { BOARD_COLORS } from "./scheduleTypes";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
+type FavColor = { bg: string; text: string };
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   availableProjects: { id: string; name: string; geplanter_start?: string | null; geplantes_ende?: string | null }[];
-  onSave: (projectId: string, color: string, startDate: string, endDate: string, beschreibung: string) => Promise<void>;
+  onSave: (projectId: string, color: string, textColor: string, startDate: string, endDate: string, beschreibung: string) => Promise<void>;
 }
 
 export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects, onSave }: Props) {
@@ -26,8 +28,9 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
-  const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
+  const [favoriteColors, setFavoriteColors] = useState<FavColor[]>([]);
   const [color, setColor] = useState(BOARD_COLORS[0]);
+  const [textColor, setTextColor] = useState(""); // "" = Auto-Kontrast
   const [customColor, setCustomColor] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -57,18 +60,26 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
           .select("value")
           .eq("key", "plantafel_default_colors")
           .maybeSingle();
-        let favs: string[] = [];
+        let favs: FavColor[] = [];
         const raw = (data as { value?: string } | null)?.value;
+        const isHex = (v: any) => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-              favs = parsed.filter((c): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c));
+              favs = parsed
+                .map((item: any): FavColor | null => {
+                  if (isHex(item)) return { bg: item, text: "" };        // Altformat
+                  if (item && typeof item === "object" && isHex(item.bg)) return { bg: item.bg, text: isHex(item.text) ? item.text : "" };
+                  return null;
+                })
+                .filter((c): c is FavColor => c !== null);
             }
           } catch { /* tolerant */ }
         }
         setFavoriteColors(favs);
-        setColor(favs[0] || BOARD_COLORS[0]);
+        setColor(favs[0]?.bg || BOARD_COLORS[0]);
+        setTextColor(favs[0]?.text || "");
       })();
     }
   }, [open]);
@@ -85,7 +96,7 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
     if (!projectId || !startDate || !endDate) return;
     setSaving(true);
     try {
-      await onSave(projectId, color, startDate, endDate, beschreibung);
+      await onSave(projectId, color, textColor, startDate, endDate, beschreibung);
     } finally {
       setSaving(false);
     }
@@ -120,7 +131,7 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
       }
 
       if (project) {
-        await onSave(project.id, color, startDate, endDate, beschreibung);
+        await onSave(project.id, color, textColor, startDate, endDate, beschreibung);
         toast({ title: "Projekt erstellt", description: newName.trim() });
       }
     } finally {
@@ -135,15 +146,20 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
         <>
           <div className="text-[10px] text-muted-foreground uppercase mt-2 mb-1">Bevorzugt</div>
           <div className="flex flex-wrap gap-2">
-            {favoriteColors.map(c => (
+            {favoriteColors.map((c, i) => (
               <button
-                key={`fav-${c}`}
+                key={`fav-${c.bg}-${i}`}
                 type="button"
-                className="w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center"
-                style={{ backgroundColor: c, borderColor: color === c ? "#333" : "transparent" }}
-                onClick={() => { setColor(c); setCustomColor(""); }}
+                className="w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center text-[10px] font-bold"
+                style={{
+                  backgroundColor: c.bg,
+                  color: c.text || "#1e293b",
+                  borderColor: color === c.bg ? "#333" : "transparent",
+                }}
+                title="Lieblingsfarbe (mit hinterlegter Schriftfarbe)"
+                onClick={() => { setColor(c.bg); setTextColor(c.text || ""); setCustomColor(""); }}
               >
-                {color === c && <Check className="h-4 w-4 text-gray-700" />}
+                {color === c.bg ? <Check className="h-4 w-4" /> : "A"}
               </button>
             ))}
           </div>
@@ -157,7 +173,7 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
             type="button"
             className="w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center"
             style={{ backgroundColor: c, borderColor: color === c ? "#333" : "transparent" }}
-            onClick={() => { setColor(c); setCustomColor(""); }}
+            onClick={() => { setColor(c); setTextColor(""); setCustomColor(""); }}
           >
             {color === c && <Check className="h-4 w-4 text-gray-700" />}
           </button>
@@ -167,10 +183,10 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
         <Input
           type="color"
           value={customColor || color}
-          onChange={e => { setCustomColor(e.target.value); setColor(e.target.value); }}
+          onChange={e => { setCustomColor(e.target.value); setColor(e.target.value); setTextColor(""); }}
           className="w-10 h-8 p-0.5 cursor-pointer"
         />
-        <span className="text-xs text-muted-foreground">Eigene Farbe</span>
+        <span className="text-xs text-muted-foreground">Eigene Farbe (Schrift automatisch)</span>
       </div>
     </div>
   );

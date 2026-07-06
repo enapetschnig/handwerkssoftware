@@ -87,6 +87,33 @@ export function getProjectColorClass(projectId: string): string {
   return `${c.bg} ${c.text} ${c.border}`;
 }
 
+/**
+ * Automatische Schriftfarbe (schwarz/weiß) passend zum Hintergrund über die
+ * relative Luminanz. Dunkler Hintergrund → weiße Schrift, heller → schwarze.
+ * Fallback #1e293b (dunkles Slate) bei unlesbarem/leerem Hex.
+ */
+export function autoContrastText(bgHex: string | null | undefined): string {
+  if (!bgHex || !/^#[0-9a-fA-F]{6}$/.test(bgHex)) return "#1e293b";
+  const r = parseInt(bgHex.slice(1, 3), 16);
+  const g = parseInt(bgHex.slice(3, 5), 16);
+  const b = parseInt(bgHex.slice(5, 7), 16);
+  // Wahrgenommene Helligkeit (0–255), Gewichtung nach sRGB-Luminanz.
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+  return luminance > 150 ? "#1e293b" : "#ffffff";
+}
+
+/**
+ * Textfarbe eines Plantafel-Balkens: explizit gesetzte board_text_color,
+ * sonst automatischer Kontrast zur Hintergrundfarbe.
+ */
+export function getEinsatzTextColor(
+  boardTextColor: string | null | undefined,
+  bgColor: string,
+): string {
+  if (boardTextColor && boardTextColor.trim()) return boardTextColor;
+  return autoContrastText(bgColor);
+}
+
 export const RESOURCE_SUGGESTIONS = [
   "Aluschalung",
   "Eisenschalung",

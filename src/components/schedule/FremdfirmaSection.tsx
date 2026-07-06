@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, Plus, Pencil, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { EinsatzBar } from "./EinsatzBar";
-import { getEinsatzColumns, isCompanyHoliday, isWeekendDay, getEinsatzColor } from "./scheduleUtils";
+import { getEinsatzColumns, isCompanyHoliday, isWeekendDay, getEinsatzColor, getEinsatzTextColor } from "./scheduleUtils";
 import type { Fremdfirma, FremdfirmaEinsatz, BoardProject, Project, CompanyHoliday } from "./scheduleTypes";
 
 const WEEKEND_BG = "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 6px)";
@@ -43,6 +43,10 @@ export function FremdfirmaSection({
 
   function getBarColor(projectId: string): string {
     return getEinsatzColor(projectMap.get(projectId), boardColorMap.get(projectId)?.board_color, projectId);
+  }
+
+  function getBarTextColor(projectId: string): string {
+    return getEinsatzTextColor(boardColorMap.get(projectId)?.board_text_color, getBarColor(projectId));
   }
 
   useEffect(() => {
@@ -119,6 +123,7 @@ export function FremdfirmaSection({
                 einsatz={{ id: einsatz.id }}
                 projectName={project?.name ?? "–"}
                 color={getBarColor(einsatz.project_id)}
+                textColor={getBarTextColor(einsatz.project_id)}
                 startCol={cols.startCol}
                 endCol={cols.endCol}
                 totalDays={days.length}

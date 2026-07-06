@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import { parseISO, format } from "date-fns";
 import type { BoardProject, Project } from "./scheduleTypes";
-import { isWeekendDay } from "./scheduleUtils";
+import { isWeekendDay, getEinsatzTextColor } from "./scheduleUtils";
 
 interface Props {
   boardProjects: BoardProject[];
@@ -61,6 +61,7 @@ export function ProjectBoardSection({ boardProjects, projects, days, onAddClick,
         if (!project) return null;
 
         const barColor = bp.board_color || "#A7C7E7";
+        const barTextColor = getEinsatzTextColor(bp.board_text_color, barColor);
 
         // Use board_projects dates
         let barStartIdx = -1;
@@ -129,7 +130,7 @@ export function ProjectBoardSection({ boardProjects, projects, days, onAddClick,
                     height: 24,
                     backgroundColor: barColor,
                     border: `1px solid ${darkenHex(barColor, 0.12)}`,
-                    color: "#1e293b",
+                    color: barTextColor,
                     cursor: onDragStart ? "grab" : "default",
                     opacity: dragBoardProjectId === bp.id ? 0.5 : 1,
                     touchAction: onDragStart ? "none" : undefined,

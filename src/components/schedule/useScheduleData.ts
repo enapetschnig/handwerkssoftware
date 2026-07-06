@@ -111,7 +111,7 @@ export function useScheduleData() {
           .order("sort_order"),
         supabase
           .from("board_projects")
-          .select("id, project_id, board_color, color_mode, sort_order, start_date, end_date, beschreibung")
+          .select("id, project_id, board_color, board_text_color, color_mode, sort_order, start_date, end_date, beschreibung")
           .order("sort_order"),
         supabase
           .from("assignment_resources")

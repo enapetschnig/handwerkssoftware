@@ -58,6 +58,7 @@ export type BoardProject = {
   id: string;
   project_id: string;
   board_color: string | null;
+  board_text_color: string | null;
   color_mode: "status" | "custom";
   sort_order: number;
   start_date: string | null;
