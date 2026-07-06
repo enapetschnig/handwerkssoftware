@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { BOARD_COLORS } from "./scheduleTypes";
+import { autoContrastText } from "./scheduleUtils";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 type FavColor = { bg: string; text: string };
@@ -153,7 +154,7 @@ export function AddProjectToBoardDialog({ open, onOpenChange, availableProjects,
                 className="w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center text-[10px] font-bold"
                 style={{
                   backgroundColor: c.bg,
-                  color: c.text || "#1e293b",
+                  color: c.text || autoContrastText(c.bg),
                   borderColor: color === c.bg ? "#333" : "transparent",
                 }}
                 title="Lieblingsfarbe (mit hinterlegter Schriftfarbe)"

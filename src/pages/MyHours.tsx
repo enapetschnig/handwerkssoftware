@@ -112,8 +112,33 @@ const MyHours = () => {
     return entryDate.getFullYear() === year && entryDate.getMonth() + 1 === month;
   };
 
+  // Stundenkonto (Manuell + Auto) neu laden — nach ZA-Storno nötig, damit die
+  // Karten oben sofort stimmen.
+  const refreshStundenkonto = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const [{ data: acc }, { data: allEntries }] = await Promise.all([
+      (supabase.from("time_accounts" as never) as any)
+        .select("balance_hours").eq("user_id", user.id).maybeSingle(),
+      supabase.from("time_entries").select("datum, stunden, taetigkeit").eq("user_id", user.id),
+    ]);
+    setManualSaldo(Number((acc as any)?.balance_hours) || 0);
+    setAutoSaldoAll(totalAutoSaldo((allEntries as any[]) || [], holidaySet));
+  };
+
   const handleUpdateEntry = async () => {
     if (!editingEntry || savingEdit) return;
+
+    // Zeitausgleich hängt am Zeitkonto — Bearbeiten hier würde die Bankstunden
+    // desynchronisieren. Nur Löschen (mit korrekter Rückbuchung) erlauben.
+    if (editingEntry.taetigkeit.trim() === "Zeitausgleich") {
+      toast({
+        variant: "destructive",
+        title: "Nicht möglich",
+        description: "Zeitausgleich kann hier nicht bearbeitet werden — bitte löschen und neu eintragen.",
+      });
+      return;
+    }
 
     setSavingEdit(true);
 
@@ -171,13 +196,41 @@ const MyHours = () => {
         description: "Eintrag konnte nicht gelöscht werden",
       });
     } else {
+      // Bei Zeitausgleich den Zeitkonto-Abzug rückgängig machen (analog Admin) —
+      // ein ZA dekrementiert bei Anlage balance_hours; ohne Gegenbuchung
+      // verlöre der Mitarbeiter Bankstunden UND den freien Tag.
+      let zaStorniert = false;
+      if (editingEntry && editingEntry.taetigkeit.trim() === "Zeitausgleich") {
+        const hours = Number(editingEntry.stunden) || 0;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && hours > 0) {
+          const { data: acc } = await (supabase.from("time_accounts" as never) as any)
+            .select("balance_hours").eq("user_id", user.id).maybeSingle();
+          const before = Number((acc as any)?.balance_hours) || 0;
+          const after = before + hours;
+          if (acc) {
+            await (supabase.from("time_accounts" as never) as any)
+              .update({ balance_hours: after, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+          } else {
+            await (supabase.from("time_accounts" as never) as any)
+              .insert({ user_id: user.id, balance_hours: after });
+          }
+          await (supabase.from("time_account_transactions" as never) as any).insert({
+            user_id: user.id, changed_by: user.id, change_type: "za_storno",
+            hours, balance_before: before, balance_after: after,
+            reason: `Zeitausgleich ${editingEntry.datum} storniert (Eintrag gelöscht)`,
+          });
+          zaStorniert = true;
+        }
+      }
       toast({
         title: "Erfolg",
-        description: "Eintrag wurde gelöscht",
+        description: zaStorniert ? "Zeitausgleich entfernt — Zeitkonto korrigiert." : "Eintrag wurde gelöscht",
       });
       setShowEditDialog(false);
       setEditingEntry(null);
       fetchEntries();
+      if (zaStorniert) refreshStundenkonto();
     }
   };
 
@@ -257,8 +310,9 @@ const MyHours = () => {
                 {(() => {
                   // Soll & Saldo aus derselben Logik wie die Auto-Saldo-Karte
                   // (hoursAccounting.aggregateByDay) — verhindert die Inkonsistenz,
-                  // dass Header und Karte unterschiedliche Werte zeigen. ZA-Tage:
-                  // Soll=0, Saldo=-ist; Sonderzeit/Feiertag: Soll=0, Saldo=0.
+                  // dass Header und Karte unterschiedliche Werte zeigen. Sonderzeit
+                  // (inkl. Zeitausgleich) und Feiertage: Soll=0, Saldo=0 (neutral;
+                  // der ZA-Abzug läuft einmalig über das Zeitkonto/Manuell).
                   const sollTotal = dayBalances.reduce((s, d) => s + d.soll, 0);
                   const saldoMonat = dayBalances.reduce((s, d) => s + d.saldo, 0);
                   return (
