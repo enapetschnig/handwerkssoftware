@@ -744,8 +744,8 @@ export default function Calendar() {
                 <SelectContent>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="chef">CHEF</SelectItem>
-                  <SelectItem value="montipro">Monti.pro</SelectItem>
-                  <SelectItem value="bks">BKS</SelectItem>
+                  <SelectItem value="montipro">ePower GmbH</SelectItem>
+                  <SelectItem value="bks">ePower</SelectItem>
                   <SelectItem value="gartenmacher">Gartenmacher</SelectItem>
                   <SelectItem value="fensterwerk">Fensterwerk</SelectItem>
                   <SelectItem value="ladenbau">Ladenbau</SelectItem>

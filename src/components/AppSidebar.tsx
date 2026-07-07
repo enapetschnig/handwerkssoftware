@@ -105,8 +105,8 @@ export function AppSidebar() {
       <SidebarHeader className="p-3 border-b">
         <Link to="/" className="flex items-center justify-center px-1">
           <img
-            src="/newmontilogo.png"
-            alt="BKS BauKomplettService"
+            src="/epower-logo.svg"
+            alt="ePower GmbH"
             className="h-10 w-auto object-contain"
           />
         </Link>

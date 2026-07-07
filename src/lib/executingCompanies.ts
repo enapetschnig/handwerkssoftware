@@ -18,16 +18,12 @@ export interface ExecutingCompany {
 }
 
 // Alle vier Firmen sitzen am gleichen Standort — gemeinsame Adresse.
-const SHARED_ADDRESS_LINES = [
-  "Wiener Neustädter Straße 1",
-  "2542 Kottingbrunn",
-];
+// Adresse leer lassen — die echte Firmenadresse kommt aus dem Briefkopf /
+// den Firmeneinstellungen (Admin → Einstellungen). Hier bei Bedarf ergänzen.
+const EPOWER_ADDRESS_LINES: string[] = [];
 
 export const EXECUTING_COMPANIES: ExecutingCompany[] = [
-  { id: "montipro",     name: "Monti.pro",             adressLines: SHARED_ADDRESS_LINES },
-  { id: "fensterwerk",  name: "Fensterwerk",           adressLines: SHARED_ADDRESS_LINES },
-  { id: "gartenmacher", name: "Gartenmacher",          adressLines: SHARED_ADDRESS_LINES },
-  { id: "bks",          name: "BKS-BauKomplettService", adressLines: SHARED_ADDRESS_LINES },
+  { id: "epower", name: "ePower GmbH", adressLines: EPOWER_ADDRESS_LINES },
 ];
 
 export function findExecutingCompany(id: string | null | undefined): ExecutingCompany | undefined {

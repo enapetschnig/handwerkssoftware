@@ -47,7 +47,7 @@ function buildOnboardingText(params: {
   const lines: string[] = [];
   lines.push(`Hallo ${vorname}!`);
   lines.push("");
-  lines.push("Willkommen bei BKS BauKomplettService.");
+  lines.push("Willkommen bei ePower GmbH.");
   lines.push("Hier deine Zugangsdaten:");
   lines.push("");
 
@@ -75,7 +75,7 @@ function buildOnboardingText(params: {
     lines.push("• Frage „wo bin ich heute eingeteilt\" → Plantafel-Info");
     lines.push("• Sprachnachrichten gehen auch — einfach reinreden.");
     lines.push("");
-    lines.push("Du bekommst gleich eine Willkommensnachricht vom BKS-Assistenten.");
+    lines.push("Du bekommst gleich eine Willkommensnachricht vom ePower-Assistenten.");
   } else {
     lines.push("📱 WhatsApp-Assistent");
     lines.push("Sobald wir deine Handynummer haben, bist du automatisch freigeschaltet");

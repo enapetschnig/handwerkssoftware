@@ -63,7 +63,7 @@ const Dashboard = () => {
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
             <div>
-              <h1 className="text-4xl font-bold text-foreground">BKS BauKomplettService</h1>
+              <h1 className="text-4xl font-bold text-foreground">ePower GmbH</h1>
               <p className="text-muted-foreground">Wir machen es komplett — Baustellendokumentation & Zeiterfassung</p>
             </div>
           </div>

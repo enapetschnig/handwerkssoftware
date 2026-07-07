@@ -53,8 +53,8 @@ const isArchivedStatus = (status?: string | null) =>
 
 /** Geschäftsbereich → Google-Kalender. 7 Kategorien + Default. */
 const KATEGORIE_META: Record<string, { label: string; color: string; bg: string }> = {
-  montipro:     { label: "Monti.pro",     color: "#166534", bg: "#dcfce7" },
-  bks:          { label: "BKS",           color: "#1e40af", bg: "#dbeafe" },
+  montipro:     { label: "ePower GmbH",     color: "#166534", bg: "#dcfce7" },
+  bks:          { label: "ePower",           color: "#1e40af", bg: "#dbeafe" },
   gartenmacher: { label: "Gartenmacher",  color: "#3f6212", bg: "#ecfccb" },
   fensterwerk:  { label: "Fensterwerk",   color: "#155e75", bg: "#cffafe" },
   ladenbau:     { label: "Ladenbau",      color: "#92400e", bg: "#fef3c7" },

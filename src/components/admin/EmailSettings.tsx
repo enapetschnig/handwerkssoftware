@@ -57,7 +57,7 @@ export function EmailSettings() {
         ]);
         if (cancelled) return;
         setTemplates(((tplRes.data as TemplateRow[]) || []));
-        setReplyTo((settingsRes.data as { value?: string } | null)?.value || "montage@monti.pro");
+        setReplyTo((settingsRes.data as { value?: string } | null)?.value || "office@epowergmbh.at");
         const userEmail = userRes.data.user?.email || "";
         setTestRecipient(userEmail);
       } finally {
@@ -162,7 +162,7 @@ export function EmailSettings() {
             <Input
               value={replyTo}
               onChange={(e) => setReplyTo(e.target.value)}
-              placeholder="montage@monti.pro"
+              placeholder="office@epowergmbh.at"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
               Antworten von Empfängern landen an dieser Adresse. Beim Versand kann sie überschrieben werden.
@@ -196,7 +196,7 @@ export function EmailSettings() {
             <Input
               value={activeTemplate.subject}
               onChange={(e) => updateActiveField("subject", e.target.value)}
-              placeholder="Ihr Beleg {{dokument_nr}} – BKS"
+              placeholder="Ihr Beleg {{dokument_nr}} – ePower"
             />
           </div>
           <div>

@@ -20,7 +20,7 @@ import { Save, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Loader2 } from "
 
 interface KategorieRow {
   key: string;         // "montipro" | "bks" | ... | "default"
-  label: string;       // "Monti.pro"
+  label: string;       // "ePower GmbH"
   settingKey: string;  // "google_calendar_id_montipro"
   calendarId: string;  // aktueller Wert
   testing: boolean;
@@ -29,8 +29,8 @@ interface KategorieRow {
 }
 
 const KATEGORIEN: Array<{ key: string; label: string }> = [
-  { key: "montipro",     label: "Monti.pro" },
-  { key: "bks",          label: "BKS-BauKomplettService" },
+  { key: "montipro",     label: "ePower GmbH" },
+  { key: "bks",          label: "ePower GmbH" },
   { key: "gartenmacher", label: "Gartenmacher" },
   { key: "fensterwerk",  label: "Fensterwerk" },
   { key: "ladenbau",     label: "Ladenbau" },

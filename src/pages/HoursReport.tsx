@@ -354,7 +354,7 @@ export default function HoursReport() {
 
     const worksheetData: any[][] = [
       // Firmendaten Header
-      ["BKS BauKomplettService — Wir machen es komplett", "", "", "", "", "", "", "", "", "", "", ""],
+      ["ePower GmbH — Wir machen es komplett", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],
       ["", "", "", "", "", "", "", "", "", "", "", ""],

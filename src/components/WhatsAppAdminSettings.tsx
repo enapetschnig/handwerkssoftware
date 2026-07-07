@@ -59,7 +59,7 @@ export function WhatsAppAdminSettings() {
     whatsapp_reminder_days: "mo,di,mi,do,fr",
     whatsapp_morning_enabled: "true",
     whatsapp_morning_time: "07:00",
-    whatsapp_bot_name: "BKS Assistent",
+    whatsapp_bot_name: "ePower Assistent",
     whatsapp_morning_template: "",
     whatsapp_evening_template: "",
     whatsapp_evening_done_template: "",
@@ -357,7 +357,7 @@ export function WhatsAppAdminSettings() {
             <Input
               value={settings.whatsapp_bot_name}
               onChange={(e) => updateSetting("whatsapp_bot_name", e.target.value)}
-              placeholder="BKS Assistent"
+              placeholder="ePower Assistent"
             />
           </div>
         </CardContent>

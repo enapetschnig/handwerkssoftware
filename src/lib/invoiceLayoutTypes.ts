@@ -52,7 +52,7 @@ export interface InvoiceLayoutSettings {
 
 export const DEFAULT_LAYOUT: InvoiceLayoutSettings = {
   company: {
-    name: "BKS BauKomplettService",
+    name: "ePower GmbH",
     slogan: "Wir machen es komplett",
     address_line1: "",
     address_line2: "",

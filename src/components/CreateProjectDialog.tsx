@@ -803,8 +803,8 @@ export function CreateProjectDialog({
                   <SelectTrigger><SelectValue placeholder="Default-Kalender" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— ohne Bereich (Default-Kalender)</SelectItem>
-                    <SelectItem value="montipro">Monti.pro</SelectItem>
-                    <SelectItem value="bks">BKS-BauKomplettService</SelectItem>
+                    <SelectItem value="montipro">ePower GmbH</SelectItem>
+                    <SelectItem value="bks">ePower GmbH</SelectItem>
                     <SelectItem value="gartenmacher">Gartenmacher</SelectItem>
                     <SelectItem value="fensterwerk">Fensterwerk</SelectItem>
                     <SelectItem value="ladenbau">Ladenbau</SelectItem>

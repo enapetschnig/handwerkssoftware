@@ -57,7 +57,7 @@ export async function loadInvoiceLogo(forceRefresh = false): Promise<string | un
 
   // 2. Fallback: Standard MONTI.PRO Logo
   try {
-    const res = await fetch("/newmontilogo.png");
+    const res = await fetch("/epower-logo.svg");
     const blob = await res.blob();
     const raw = await asDataUri(blob);
     const trimmed = await trimLogoPadding(raw);

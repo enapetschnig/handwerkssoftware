@@ -107,8 +107,8 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/newmontilogo.png" alt="BKS BauKomplettService" className="h-24 mx-auto mb-4" />
-          <CardTitle>BKS BauKomplettService</CardTitle>
+          <img src="/epower-logo.svg" alt="ePower GmbH" className="h-24 mx-auto mb-4" />
+          <CardTitle>ePower GmbH</CardTitle>
           <CardDescription>Wir machen es komplett</CardDescription>
         </CardHeader>
         <CardContent>

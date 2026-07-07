@@ -114,8 +114,8 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent, 
         if (cancelled) return;
         const tpl = tplRes.data as { subject?: string; body_html?: string } | null;
         const settings = (settingsRes.data || []) as { key: string; value: string }[];
-        const firma = settings.find(s => s.key === "firmenname")?.value || "BKS BauKomplettService";
-        const defaultReplyTo = settings.find(s => s.key === "email_default_reply_to")?.value || "montage@monti.pro";
+        const firma = settings.find(s => s.key === "firmenname")?.value || "ePower GmbH";
+        const defaultReplyTo = settings.find(s => s.key === "email_default_reply_to")?.value || "office@epowergmbh.at";
 
         const subjectTpl = tpl?.subject || `Ihr ${typLabel} {{dokument_nr}}`;
         const bodyTpl = tpl?.body_html || `<p>Sehr geehrte Damen und Herren,</p><p>anbei erhalten Sie unser/e ${typLabel} <strong>{{dokument_nr}}</strong>.</p><p>Mit freundlichen Grüßen<br>${firma}</p>`;
@@ -200,11 +200,11 @@ export function SendEmailDialog({ open, onOpenChange, invoice, pdfBlob, onSent, 
             </div>
             <div>
               <Label>CC (optional)</Label>
-              <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="kollege@bks.at, buero@bks.at" />
+              <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="kollege@epowergmbh.at, buero@epowergmbh.at" />
             </div>
             <div>
               <Label>Reply-To</Label>
-              <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="montage@monti.pro" />
+              <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="office@epowergmbh.at" />
             </div>
             <div>
               <Label>Betreff *</Label>

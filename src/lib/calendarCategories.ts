@@ -26,8 +26,8 @@ export interface KategorieMeta {
 }
 
 export const KATEGORIE_META: Record<ProjektKategorie | "default", KategorieMeta> = {
-  montipro:     { label: "Monti.pro",    fill: "#86efac", bg: "#dcfce7", text: "#166534", badgeClass: "bg-green-100 text-green-800",   barClass: "bg-green-500" },
-  bks:          { label: "BKS",          fill: "#93c5fd", bg: "#dbeafe", text: "#1e40af", badgeClass: "bg-blue-100 text-blue-800",     barClass: "bg-blue-500" },
+  montipro:     { label: "ePower GmbH",    fill: "#86efac", bg: "#dcfce7", text: "#166534", badgeClass: "bg-green-100 text-green-800",   barClass: "bg-green-500" },
+  bks:          { label: "ePower",          fill: "#93c5fd", bg: "#dbeafe", text: "#1e40af", badgeClass: "bg-blue-100 text-blue-800",     barClass: "bg-blue-500" },
   gartenmacher: { label: "Gartenmacher", fill: "#bef264", bg: "#ecfccb", text: "#3f6212", badgeClass: "bg-lime-100 text-lime-800",     barClass: "bg-lime-500" },
   fensterwerk:  { label: "Fensterwerk",  fill: "#67e8f9", bg: "#cffafe", text: "#155e75", badgeClass: "bg-cyan-100 text-cyan-800",     barClass: "bg-cyan-500" },
   ladenbau:     { label: "Ladenbau",     fill: "#fcd34d", bg: "#fef3c7", text: "#92400e", badgeClass: "bg-amber-100 text-amber-800",   barClass: "bg-amber-500" },

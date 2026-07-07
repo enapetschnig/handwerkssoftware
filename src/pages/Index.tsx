@@ -246,7 +246,7 @@ export default function Index() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <img src="/newmontilogo.png" alt="BKS BauKomplettService" className="h-20 mx-auto mb-4" />
+            <img src="/epower-logo.svg" alt="ePower GmbH" className="h-20 mx-auto mb-4" />
             <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
               <Clock className="h-8 w-8 text-amber-600" />
             </div>

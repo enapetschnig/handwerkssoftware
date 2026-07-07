@@ -15,32 +15,21 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg'],
       manifest: {
-        name: 'BKS BauKomplettService — Wir machen es komplett',
-        short_name: 'BKS',
-        description: 'Baustellendokumentation und Zeiterfassung',
-        theme_color: '#1F3A5F',
+        name: 'ePower GmbH — Elektrotechnik',
+        short_name: 'ePower',
+        description: 'Angebote, Rechnungen, Projekte & Zeiterfassung',
+        theme_color: '#0EA5E9',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
         icons: [
           {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
+            src: '/favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
             purpose: 'any maskable'
-          },
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/apple-touch-icon.png',
-            sizes: '180x180',
-            type: 'image/png'
           }
         ]
       },
