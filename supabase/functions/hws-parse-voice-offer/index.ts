@@ -16,9 +16,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { audioBase64, knownCustomers }: {
+    const { audioBase64, knownCustomers, mimeType }: {
       audioBase64: string;
       knownCustomers?: string[];
+      mimeType?: string;
     } = await req.json();
 
     if (!audioBase64) {
@@ -26,10 +27,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // 1) Whisper transcription (German)
+    // 1) Whisper transcription (German). Derive the file extension from the actual
+    // recorder mime type — iOS/Safari produces audio/mp4, Chrome/Android audio/webm.
+    const mt = (mimeType || "audio/webm").split(";")[0].trim();
+    const extMap: Record<string, string> = {
+      "audio/webm": "webm", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "m4a",
+      "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav",
+      "audio/ogg": "ogg", "audio/oga": "oga", "audio/flac": "flac",
+    };
+    const ext = extMap[mt] || "webm";
     const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
     const form = new FormData();
-    form.append("file", new Blob([audioBytes], { type: "audio/webm" }), "audio.webm");
+    form.append("file", new Blob([audioBytes], { type: mt }), `audio.${ext}`);
     form.append("model", "whisper-1");
     form.append("language", "de");
 

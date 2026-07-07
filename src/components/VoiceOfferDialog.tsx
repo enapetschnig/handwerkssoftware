@@ -33,6 +33,7 @@ export default function VoiceOfferDialog({ open, onOpenChange }: {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const mimeRef = useRef<string>("audio/webm");
 
   const cleanupStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -51,6 +52,7 @@ export default function VoiceOfferDialog({ open, onOpenChange }: {
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      mimeRef.current = mimeType;
       const rec = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -70,7 +72,7 @@ export default function VoiceOfferDialog({ open, onOpenChange }: {
 
   const processAudio = async () => {
     try {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      const blob = new Blob(chunksRef.current, { type: mimeRef.current });
       if (blob.size < 1000) { toast({ title: "Aufnahme zu kurz", variant: "destructive" }); setPhase("idle"); return; }
       const buffer = await blob.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -86,7 +88,7 @@ export default function VoiceOfferDialog({ open, onOpenChange }: {
       const knownCustomers = (custRows || []).map((c: { name: string }) => c.name).filter(Boolean);
 
       const { data, error } = await supabase.functions.invoke("hws-parse-voice-offer", {
-        body: { audioBase64, knownCustomers },
+        body: { audioBase64, knownCustomers, mimeType: mimeRef.current },
       });
       if (error) throw error;
       if (data?.error && !data?.offer) { toast({ title: "Konnte nicht verarbeiten", description: data.error, variant: "destructive" }); setPhase("idle"); return; }
